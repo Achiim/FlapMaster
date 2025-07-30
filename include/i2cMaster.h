@@ -28,6 +28,7 @@
 #define i2cMaster_h
 
 #include "freertos/semphr.h"
+#include "driver/i2c.h"
 #include <FlapGlobal.h>
 
 #define I2C_MASTER_NUM I2C_NUM_0                                                // for IC2 scanner
@@ -43,6 +44,7 @@ extern SemaphoreHandle_t g_i2c_mutex;                                           
 void        i2csetup();                                                         // initialize I2C Bus for Master access
 LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter);          // prepare I2C LongCommand from paramter
 void        i2cLongCommand(LongMessage mess, uint8_t slaveAddress);             // Long Command to slave, do not wait for answer
+esp_err_t   i2cMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size); // send mid command to slave
 int         check_slaveReady(uint8_t slaveAddress);                             // status check isf slave is ready/busy
 void        updateSlaveReadyInfo(int n, uint8_t slaveAddress,
                                  uint8_t* data);                                // evaluate and remember slave answer to check_slaveReady()
@@ -51,6 +53,12 @@ bool        takeI2CSemaphore();                                                 
 bool        giveI2CSemaphore();                                                 // release a semaphore
 esp_err_t   i2c_probe_device(uint8_t address);                                  // semaphore protected ping
 esp_err_t   pingI2Cslave(u_int8_t address);                                     // just ping on I2C if slave is still online
+
+i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size);
+void             logMidRequest(MidMessage cmd, uint8_t slaveAddress);
+void             logMidResponse(uint8_t* answer, int size);
+void             logMidError(MidMessage cmd, esp_err_t err);
+
 // --------------------------------
 
 #endif                                                                          // i2cMaster_h

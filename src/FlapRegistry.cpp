@@ -468,8 +468,21 @@ void FlapRegistry::registerUnregistered() {
                     Serial.println(nextFreeAddress, HEX);
                 #endif
             }
-            i2cLongCommand(i2cCommandParameter(ADDRESS, nextFreeAddress),
-                           I2C_BASE_ADDRESS);                                   // Send new I2C Address to new Slave
+
+            MidMessage midCmd;
+            midCmd.command   = CMD_NEW_ADDRESS;
+            midCmd.paramByte = getNextAddress();
+            uint8_t answer[4];
+            i2cMidCommand(midCmd, I2C_BASE_ADDRESS, answer, sizeof(answer));
+            #ifdef MASTERVERBOSE
+                uint32_t sn;
+                sn = ((uint32_t)answer[0]) | ((uint32_t)answer[1] << 8) | ((uint32_t)answer[2] << 16) | ((uint32_t)answer[3] << 24);
+                registerPrint("new address was received by device with serial number: ");
+                Serial.println(formatSerialNumber(sn));
+            #endif
+
+            // i2cLongCommand(i2cCommandParameter(ADDRESS, nextFreeAddress),
+            //                I2C_BASE_ADDRESS);                                   // Send new I2C Address to new Slave
         }
     } else {
         {

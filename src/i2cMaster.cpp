@@ -191,6 +191,105 @@ void i2cLongCommand(LongMessage mess, uint8_t slaveAddress) {
 }
 
 // ----------------------------
+// purpose: send I2C mid command, only one byte
+//
+esp_err_t i2cMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size) {
+    esp_err_t ret = ESP_FAIL;
+    takeI2CSemaphore();
+
+    logMidRequest(midCmd, slaveAddress);
+
+    i2c_cmd_handle_t cmd = buildMidCommand(midCmd, slaveAddress, answer, size);
+    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
+    i2c_cmd_link_delete(cmd);
+
+    giveI2CSemaphore();
+    if (DataEvaluation)
+        DataEvaluation->increment(2, 1, 0);                                     // 2 accesses, 1 byte sent
+
+    if (ret == ESP_OK) {
+        logMidResponse(answer, size);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, size);                              // x bytes read
+    } else {
+        logMidError(midCmd, ret);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // timeout
+    }
+
+    return ret;
+}
+
+// ------------------------------------------
+// helper: to build mid command
+i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+    if (i2c_master_start(cmd) != ESP_OK)
+        Master->systemHalt("FATAL ERROR: I2C start failed", 2);
+
+    if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
+        Master->systemHalt("FATAL ERROR: write address failed", 2);
+
+    uint8_t data[2];
+    data[0] = midCmd.command;
+    data[1] = midCmd.paramByte;
+    i2c_master_write(cmd, data, sizeof(MidMessage), true);                      // send buffer to slave
+
+    i2c_master_start(cmd);                                                      // repeated start
+    i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_READ, true);
+    i2c_master_read(cmd, answer, size, I2C_MASTER_LAST_NACK);
+    i2c_master_stop(cmd);
+
+    return cmd;
+}
+
+// ---------------------------
+// helper to log sending mid command
+void logMidRequest(MidMessage cmd, uint8_t slaveAddress) {
+    #ifdef I2CMASTERVERBOSE
+        TraceScope trace;
+        masterPrint("Send midCommand: 0x");
+        Serial.print(cmd.command, HEX);
+        Serial.print(" - ");
+        Serial.print(getCommandName(cmd.command));
+        Serial.print(" to slave 0x");
+        Serial.println(slaveAddress, HEX);
+    #endif
+}
+
+// ---------------------------
+// helper to log response to mid command
+void logMidResponse(uint8_t* answer, int size) {
+    #ifdef I2CMASTERVERBOSE
+        TraceScope trace;
+        masterPrint("Got answer for midCommand from slave:");
+        for (int i = 0; i < size; i++) {
+        Serial.print(" [");
+        Serial.print(i);
+        Serial.print("] = 0x");
+        Serial.print(answer[i], HEX);
+        }
+        Serial.println();
+    #endif
+}
+
+// ---------------------------
+// helper to log errors for mid command
+void logMidError(MidMessage cmd, esp_err_t err) {
+    #ifdef MASTERVERBOSE
+        TraceScope trace;
+        masterPrint("No answer to midCommand: 0x");
+        Serial.print(cmd.command, HEX);
+        Serial.print(" - ");
+        Serial.println(getCommandName(cmd.command));
+        masterPrint("ESP ERROR: ");
+        Serial.println(esp_err_to_name(err));
+        masterPrintln("Slave is not connected, ignore command.");
+    #endif
+}
+
+// ----------------------------
 // purpose: check if i2c slave is ready or busy
 // - access to i2c bus is protected by semaphore
 // - read data structure slaveReady (structure slaveStatus .read, .taskCode, .error, .eta)

@@ -68,7 +68,6 @@ class SlaveTwin {
     Key21 ir2Key21(uint64_t ircode);
 
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
-    esp_err_t i2cMidCommand(MidMessage midCmd, uint8_t* answer, int size);      // send mid command to slave
 
     // Registry trace
     template <typename... Args>
@@ -117,10 +116,6 @@ class SlaveTwin {
     void             logShortRequest(ShortMessage cmd);
     void             logShortResponse(uint8_t* answer, int size);
     void             logShortError(ShortMessage cmd, esp_err_t err);
-    i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t* answer, int size);
-    void             logMidRequest(MidMessage cmd);
-    void             logMidResponse(uint8_t* answer, int size);
-    void             logMidError(MidMessage cmd, esp_err_t err);
 
     // 40 Flap-Modul
     // -------------

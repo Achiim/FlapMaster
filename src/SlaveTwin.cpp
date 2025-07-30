@@ -228,19 +228,7 @@ void SlaveTwin::reset() {
     Serial.println(slaveAddress, HEX);
     if (check_slaveReady(slaveAddress) > -1) {
         Register->deregisterSlave(slaveAddress);                                // delete slave from registry, this address is free now
-        MidMessage midCmd;
-        midCmd.command   = CMD_NEW_ADDRESS;
-        midCmd.paramByte = Register->getNextAddress();
-        uint8_t answer[4];
-        i2cMidCommand(midCmd, answer, sizeof(answer));
-        #ifdef MASTERVERBOSE
-            uint32_t sn;
-            sn = ((uint32_t)answer[0]) | ((uint32_t)answer[1] << 8) | ((uint32_t)answer[2] << 16) | ((uint32_t)answer[3] << 24);
-            twinPrint("new address was received by device with serial number: ");
-            Serial.println(formatSerialNumber(sn));
-        #endif
-
-        // i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
+        i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
     }
 }
 
@@ -277,36 +265,6 @@ int SlaveTwin::countStepsToMove(int from, int to) {
         return 0;                                                               // nothing to move
     }
 }
-// ----------------------------
-// purpose: send I2C short command, only one byte
-//
-esp_err_t SlaveTwin::i2cMidCommand(MidMessage midCmd, uint8_t* answer, int size) {
-    esp_err_t ret = ESP_FAIL;
-    takeI2CSemaphore();
-
-    logMidRequest(midCmd);
-
-    i2c_cmd_handle_t cmd = buildMidCommand(midCmd, answer, size);
-    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
-    i2c_cmd_link_delete(cmd);
-
-    giveI2CSemaphore();
-    if (DataEvaluation)
-        DataEvaluation->increment(2, 1, 0);                                     // 2 accesses, 1 byte sent
-
-    if (ret == ESP_OK) {
-        logMidResponse(answer, size);
-        if (DataEvaluation)
-            DataEvaluation->increment(0, 0, size);                              // x bytes read
-    } else {
-        logMidError(midCmd, ret);
-        if (DataEvaluation)
-            DataEvaluation->increment(0, 0, 0, 1);                              // timeout
-    }
-
-    return ret;
-}
-
 // ----------------------------
 // purpose: send I2C short command, only one byte
 //
@@ -397,75 +355,6 @@ void SlaveTwin::logShortError(ShortMessage cmd, esp_err_t err) {
         Serial.print(cmd, HEX);
         Serial.print(" - ");
         Serial.println(getCommandName(cmd));
-        twinPrint("ESP ERROR: ");
-        Serial.println(esp_err_to_name(err));
-        twinPrintln("Slave is not connected, ignore command.");
-    #endif
-}
-
-// ------------------------------------------
-// helper: to build mid command
-i2c_cmd_handle_t SlaveTwin::buildMidCommand(MidMessage midCmd, uint8_t* answer, int size) {
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-
-    if (i2c_master_start(cmd) != ESP_OK)
-        Master->systemHalt("FATAL ERROR: I2C start failed", 2);
-
-    if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
-        Master->systemHalt("FATAL ERROR: write address failed", 2);
-
-    uint8_t data[2];
-    data[0] = midCmd.command;
-    data[1] = midCmd.paramByte;
-    i2c_master_write(cmd, data, sizeof(MidMessage), true);                      // send buffer to slave
-
-    i2c_master_start(cmd);                                                      // repeated start
-    i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_READ, true);
-    i2c_master_read(cmd, answer, size, I2C_MASTER_LAST_NACK);
-    i2c_master_stop(cmd);
-
-    return cmd;
-}
-
-// ---------------------------
-// helper to log sending mid command
-void SlaveTwin::logMidRequest(MidMessage cmd) {
-    #ifdef I2CMASTERVERBOSE
-        TraceScope trace;
-        twinPrint("Send midCommand: 0x");
-        Serial.print(cmd.command, HEX);
-        Serial.print(" - ");
-        Serial.print(getCommandName(cmd.command));
-        Serial.print(" to slave 0x");
-        Serial.println(slaveAddress, HEX);
-    #endif
-}
-
-// ---------------------------
-// helper to log response to mid command
-void SlaveTwin::logMidResponse(uint8_t* answer, int size) {
-    #ifdef I2CMASTERVERBOSE
-        TraceScope trace;
-        twinPrint("Got answer for midCommand from slave:");
-        for (int i = 0; i < size; i++) {
-        Serial.print(" [");
-        Serial.print(i);
-        Serial.print("] = 0x");
-        Serial.print(answer[i], HEX);
-        }
-        Serial.println();
-    #endif
-}
-
-// ---------------------------
-// helper to log errors for mid command
-void SlaveTwin::logMidError(MidMessage cmd, esp_err_t err) {
-    #ifdef MASTERVERBOSE
-        TraceScope trace;
-        twinPrint("No answer to midCommand: 0x");
-        Serial.print(cmd.command, HEX);
-        Serial.print(" - ");
-        Serial.println(getCommandName(cmd.command));
         twinPrint("ESP ERROR: ");
         Serial.println(esp_err_to_name(err));
         twinPrintln("Slave is not connected, ignore command.");
