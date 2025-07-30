@@ -32,6 +32,7 @@
 
 #include <Arduino.h>
 #include "sstream"
+#include "driver/i2c.h"
 #include <FlapGlobal.h>
 #include "TracePrint.h"
 #include "RemoteControl.h"
@@ -111,6 +112,11 @@ class SlaveTwin {
     // clang-format on
 
    private:
+    i2c_cmd_handle_t buildI2CShortCommand(ShortMessage shortCmd, uint8_t* answer, int size);
+    void             logI2CRequest(ShortMessage cmd);
+    void             logI2CResponse(uint8_t* answer, int size);
+    void             logI2CError(ShortMessage cmd, esp_err_t err);
+
     // 40 Flap-Modul
     // -------------
     // String flapFont = "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ+-?";               // this list represents the sequence

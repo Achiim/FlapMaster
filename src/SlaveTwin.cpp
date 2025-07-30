@@ -227,7 +227,7 @@ void SlaveTwin::reset() {
     Serial.println(slaveAddress, HEX);
     if (check_slaveReady(slaveAddress) > -1) {
         Register->deregisterSlave(slaveAddress);                                // delete slave from registry, this address is free now
-        i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
+        // todo        i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
     }
 }
 
@@ -268,6 +268,92 @@ int SlaveTwin::countStepsToMove(int from, int to) {
 // ----------------------------
 // purpose: send I2C short command, only one byte
 //
+esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
+    esp_err_t ret = ESP_FAIL;
+    takeI2CSemaphore();
+
+    logI2CRequest(shortCmd);
+
+    i2c_cmd_handle_t cmd = buildI2CShortCommand(shortCmd, answer, size);
+    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
+    i2c_cmd_link_delete(cmd);
+
+    giveI2CSemaphore();
+    if (DataEvaluation)
+        DataEvaluation->increment(2, 1, 0);                                     // 2 accesses, 1 byte sent
+
+    if (ret == ESP_OK) {
+        logI2CResponse(answer, size);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, size);                              // x bytes read
+    } else {
+        logI2CError(shortCmd, ret);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // timeout
+    }
+
+    return ret;
+}
+
+i2c_cmd_handle_t SlaveTwin::buildI2CShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+    if (i2c_master_start(cmd) != ESP_OK)
+        Master->systemHalt("FATAL ERROR: I2C start failed", 3);
+
+    if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
+        Master->systemHalt("FATAL ERROR: write address failed", 3);
+
+    i2c_master_write_byte(cmd, shortCmd, true);
+
+    i2c_master_start(cmd);                                                      // repeated start
+    i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_READ, true);
+    i2c_master_read(cmd, answer, size, I2C_MASTER_LAST_NACK);
+    i2c_master_stop(cmd);
+
+    return cmd;
+}
+
+void SlaveTwin::logI2CRequest(ShortMessage cmd) {
+    #ifdef I2CMASTERVERBOSE
+        TraceScope trace;
+        twinPrint("Send shortCommand: 0x");
+        Serial.print(cmd, HEX);
+        Serial.print(" - ");
+        Serial.print(getCommandName(cmd));
+        Serial.print(" to slave 0x");
+        Serial.println(slaveAddress, HEX);
+    #endif
+}
+
+void SlaveTwin::logI2CResponse(uint8_t* answer, int size) {
+    #ifdef I2CMASTERVERBOSE
+        TraceScope trace;
+        twinPrint("Got answer from slave:");
+        for (int i = 0; i < size; i++) {
+        Serial.print(" [");
+        Serial.print(i);
+        Serial.print("] = 0x");
+        Serial.print(answer[i], HEX);
+        }
+        Serial.println();
+    #endif
+}
+
+void SlaveTwin::logI2CError(ShortMessage cmd, esp_err_t err) {
+    #ifdef MASTERVERBOSE
+        TraceScope trace;
+        twinPrint("No answer to shortCommand: 0x");
+        Serial.print(cmd, HEX);
+        Serial.print(" - ");
+        Serial.println(getCommandName(cmd));
+        twinPrint("ESP ERROR: ");
+        Serial.println(esp_err_to_name(err));
+        twinPrintln("Slave is not connected, ignore command.");
+    #endif
+}
+
+/*
 esp_err_t SlaveTwin::i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size) {
     esp_err_t ret = ESP_FAIL;
 
@@ -353,7 +439,7 @@ esp_err_t SlaveTwin::i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer,
         return ret;                                                             // shortCommand failed
     }
 }
-
+*/
 // -----------------------------------------
 // ask slave about his parameters stored in EEPROM
 // purpose:
@@ -369,16 +455,15 @@ void SlaveTwin::askSlaveAboutParameter(uint8_t address, slaveParameter& paramete
     uint8_t ser[4] = {0, 0, 0, 0};
     i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser));
     // compute serialNumber from byte to integer
-    parameter.serialnumber =
-        ((uint32_t)ser[0]) | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
+    parameter.serialnumber = ((uint32_t)ser[0]) | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
 
-        #ifdef REGISTRYVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("slave answered for parameter.serialnumber = ");
-            Serial.println(formatSerialNumber(parameter.serialnumber));
-            }
-        #endif
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("slave answered for parameter.serialnumber = ");
+        Serial.println(formatSerialNumber(parameter.serialnumber));
+        }
+    #endif
 
     uint8_t off[2] = {0, 0};
     i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off));
