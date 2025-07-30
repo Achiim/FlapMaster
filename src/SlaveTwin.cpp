@@ -264,17 +264,16 @@ int SlaveTwin::countStepsToMove(int from, int to) {
         return 0;                                                               // nothing to move
     }
 }
-
 // ----------------------------
 // purpose: send I2C short command, only one byte
 //
-esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
+esp_err_t SlaveTwin::i2cMidCommand(MidMessage midCmd, uint8_t* answer, int size) {
     esp_err_t ret = ESP_FAIL;
     takeI2CSemaphore();
 
-    logI2CRequest(shortCmd);
+    logMidRequest(midCmd);
 
-    i2c_cmd_handle_t cmd = buildI2CShortCommand(shortCmd, answer, size);
+    i2c_cmd_handle_t cmd = buildMidCommand(midCmd, answer, size);
     ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
     i2c_cmd_link_delete(cmd);
 
@@ -283,11 +282,11 @@ esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int
         DataEvaluation->increment(2, 1, 0);                                     // 2 accesses, 1 byte sent
 
     if (ret == ESP_OK) {
-        logI2CResponse(answer, size);
+        logMidResponse(answer, size);
         if (DataEvaluation)
             DataEvaluation->increment(0, 0, size);                              // x bytes read
     } else {
-        logI2CError(shortCmd, ret);
+        logMidError(midCmd, ret);
         if (DataEvaluation)
             DataEvaluation->increment(0, 0, 0, 1);                              // timeout
     }
@@ -295,7 +294,39 @@ esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int
     return ret;
 }
 
-i2c_cmd_handle_t SlaveTwin::buildI2CShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
+// ----------------------------
+// purpose: send I2C short command, only one byte
+//
+esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
+    esp_err_t ret = ESP_FAIL;
+    takeI2CSemaphore();
+
+    logShortRequest(shortCmd);
+
+    i2c_cmd_handle_t cmd = buildShortCommand(shortCmd, answer, size);
+    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
+    i2c_cmd_link_delete(cmd);
+
+    giveI2CSemaphore();
+    if (DataEvaluation)
+        DataEvaluation->increment(2, 1, 0);                                     // 2 accesses, 1 byte sent
+
+    if (ret == ESP_OK) {
+        logShortResponse(answer, size);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, size);                              // x bytes read
+    } else {
+        logShortError(shortCmd, ret);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // timeout
+    }
+
+    return ret;
+}
+
+// ------------------------------------------
+// helper: to build short command
+i2c_cmd_handle_t SlaveTwin::buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
     if (i2c_master_start(cmd) != ESP_OK)
@@ -314,7 +345,9 @@ i2c_cmd_handle_t SlaveTwin::buildI2CShortCommand(ShortMessage shortCmd, uint8_t*
     return cmd;
 }
 
-void SlaveTwin::logI2CRequest(ShortMessage cmd) {
+// ---------------------------
+// helper to log sending short command
+void SlaveTwin::logShortRequest(ShortMessage cmd) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
         twinPrint("Send shortCommand: 0x");
@@ -326,10 +359,12 @@ void SlaveTwin::logI2CRequest(ShortMessage cmd) {
     #endif
 }
 
-void SlaveTwin::logI2CResponse(uint8_t* answer, int size) {
+// ---------------------------
+// helper to log response to short command
+void SlaveTwin::logShortResponse(uint8_t* answer, int size) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
-        twinPrint("Got answer from slave:");
+        twinPrint("Got answer for shortCommand from slave:");
         for (int i = 0; i < size; i++) {
         Serial.print(" [");
         Serial.print(i);
@@ -340,7 +375,9 @@ void SlaveTwin::logI2CResponse(uint8_t* answer, int size) {
     #endif
 }
 
-void SlaveTwin::logI2CError(ShortMessage cmd, esp_err_t err) {
+// ---------------------------
+// helper to log errors for short command
+void SlaveTwin::logShortError(ShortMessage cmd, esp_err_t err) {
     #ifdef MASTERVERBOSE
         TraceScope trace;
         twinPrint("No answer to shortCommand: 0x");
@@ -353,93 +390,75 @@ void SlaveTwin::logI2CError(ShortMessage cmd, esp_err_t err) {
     #endif
 }
 
-/*
-esp_err_t SlaveTwin::i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size) {
-    esp_err_t ret = ESP_FAIL;
-
-    // take semaphore for i2c access
-    takeI2CSemaphore();
-
-    #ifdef I2CMASTERVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("send shortCommand (i2cShortCommand) 0x");
-        Serial.print(ShortCommand, HEX);
-        Serial.print(" - ");
-        Serial.print(getCommandName(ShortCommand));
-        Serial.print(" to slave 0x");
-        Serial.println(slaveAddress, HEX);
-        }
-    #endif
-
-    // send shortCommand to slave
+// ------------------------------------------
+// helper: to build mid command
+i2c_cmd_handle_t SlaveTwin::buildMidCommand(MidMessage midCmd, uint8_t* answer, int size) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
-    if (i2c_master_start(cmd) != ESP_OK) {
-        #ifdef MASTERVERBOSE
-            twinPrintln("i2c_master_start: generating cmd for I2C shortCommand failed");
-        #endif
-        Master->systemHalt("FATAL ERROR: generating cmd for I2C shortCommand failed", 3);
-    }
+    if (i2c_master_start(cmd) != ESP_OK)
+        Master->systemHalt("FATAL ERROR: I2C start failed", 2);
 
-    if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK) {
-        #ifdef MASTERVERBOSE
-            twinPrintln("i2c_master_write_byte failed");
-        #endif
-        Master->systemHalt("FATAL ERROR: i2c_master_write_byte failed", 3);
-    }
-    i2c_master_write_byte(cmd, ShortCommand, true);
+    if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
+        Master->systemHalt("FATAL ERROR: write address failed", 2);
 
-    i2c_master_start(cmd);                                                      // Repeated Start!
+    uint8_t data[2];
+    data[0] = midCmd.command;
+    data[1] = midCmd.paramByte;
+    i2c_master_write(cmd, data, sizeof(MidMessage), true);                      // send buffer to slave
+
+    i2c_master_start(cmd);                                                      // repeated start
     i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_READ, true);
     i2c_master_read(cmd, answer, size, I2C_MASTER_LAST_NACK);
     i2c_master_stop(cmd);
 
-    ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
-    i2c_cmd_link_delete(cmd);
-
-    // give semaphore for i2c access
-    giveI2CSemaphore();
-    if (DataEvaluation)
-        DataEvaluation->increment(2, 1, 0);                                     // count I2C usage, 2 access, 1 byte data send, x byte read
-
-    if (ret == ESP_OK) {
-        #ifdef I2CMASTERVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("got answer from slave");
-            for (int i = 0; i < size; i++) {
-            Serial.print(" [");
-            Serial.print(i);
-            Serial.print("] = 0x");
-            Serial.print(answer[i], HEX);
-            }
-            Serial.println();
-            }
-        #endif
-        if (DataEvaluation)
-            DataEvaluation->increment(0, 0, size);                              // count I2C usage, 2 access, 1 byte data send, x byte read
-        return ret;                                                             // shortCommand successful
-    } else {
-        #ifdef MASTERVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("no answer from slave to (i2cShortCommand): 0x");
-            Serial.print(ShortCommand, HEX);
-            Serial.print(" - ");
-            Serial.println(getCommandName(ShortCommand));
-            twinPrint("ESP ERROR: ");
-            Serial.println(esp_err_to_name(ret));
-            twinPrintln("Slave is not connected, ignore command");
-            }
-        #endif
-        if (DataEvaluation)
-            DataEvaluation->increment(0, 0, 0, 1);                              // count I2C usage, 1 timeout
-
-        return ret;                                                             // shortCommand failed
-    }
+    return cmd;
 }
-*/
+
+// ---------------------------
+// helper to log sending mid command
+void SlaveTwin::logMidRequest(MidMessage cmd) {
+    #ifdef I2CMASTERVERBOSE
+        TraceScope trace;
+        twinPrint("Send midCommand: 0x");
+        Serial.print(cmd, HEX);
+        Serial.print(" - ");
+        Serial.print(getCommandName(cmd));
+        Serial.print(" to slave 0x");
+        Serial.println(slaveAddress, HEX);
+    #endif
+}
+
+// ---------------------------
+// helper to log response to mid command
+void SlaveTwin::logMidResponse(uint8_t* answer, int size) {
+    #ifdef I2CMASTERVERBOSE
+        TraceScope trace;
+        twinPrint("Got answer for midCommand from slave:");
+        for (int i = 0; i < size; i++) {
+        Serial.print(" [");
+        Serial.print(i);
+        Serial.print("] = 0x");
+        Serial.print(answer[i], HEX);
+        }
+        Serial.println();
+    #endif
+}
+
+// ---------------------------
+// helper to log errors for mid command
+void SlaveTwin::logMidError(MidMessage cmd, esp_err_t err) {
+    #ifdef MASTERVERBOSE
+        TraceScope trace;
+        twinPrint("No answer to midCommand: 0x");
+        Serial.print(cmd.command, HEX);
+        Serial.print(" - ");
+        Serial.println(getCommandName(cmd.command));
+        twinPrint("ESP ERROR: ");
+        Serial.println(esp_err_to_name(err));
+        twinPrintln("Slave is not connected, ignore command.");
+    #endif
+}
+
 // -----------------------------------------
 // ask slave about his parameters stored in EEPROM
 // purpose:

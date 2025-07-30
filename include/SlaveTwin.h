@@ -67,6 +67,9 @@ class SlaveTwin {
     void  initStepsByFlap();                                                    // compute steps needed to move flap by flap
     Key21 ir2Key21(uint64_t ircode);
 
+    esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
+    esp_err_t i2cMidCommand(MidMessage midCmd, uint8_t* answer, int size);      // send mid command to slave
+
     // Registry trace
     template <typename... Args>
     void twinPrint(const Args&... args) {
@@ -80,8 +83,6 @@ class SlaveTwin {
         snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
         tracePrintln(buf, args...);
     }
-
-    esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
 
     // ----------------------------
     template <typename T>
@@ -112,10 +113,14 @@ class SlaveTwin {
     // clang-format on
 
    private:
-    i2c_cmd_handle_t buildI2CShortCommand(ShortMessage shortCmd, uint8_t* answer, int size);
-    void             logI2CRequest(ShortMessage cmd);
-    void             logI2CResponse(uint8_t* answer, int size);
-    void             logI2CError(ShortMessage cmd, esp_err_t err);
+    i2c_cmd_handle_t buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size);
+    void             logShortRequest(ShortMessage cmd);
+    void             logShortResponse(uint8_t* answer, int size);
+    void             logShortError(ShortMessage cmd, esp_err_t err);
+    i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t* answer, int size);
+    void             logMidRequest(MidMessage cmd);
+    void             logMidResponse(uint8_t* answer, int size);
+    void             logMidError(MidMessage cmd, esp_err_t err);
 
     // 40 Flap-Modul
     // -------------
