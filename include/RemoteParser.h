@@ -27,8 +27,8 @@ class RemoteParser {                                                            
     unsigned long _lastClickTime          = 0;                                  // last time key was pressed
     unsigned long _lastReceiveTime        = 0;                                  // last time doubble click was detected
     unsigned long _singleClickPendingTime = 0;                                  // time since single click was decteted
-    bool          _waitingForSecondClick = false;                               // we are still within the Threshold wile we are waiting for a double
-    int           _repeatCount           = 0;                                   // counter for repeated keys
+    bool          _waitingForSecondClick  = false;                              // we are still within the Threshold wile we are waiting for a double
+    int           _repeatCount            = 0;                                  // counter for repeated keys
 
     // Constructor for RemoteParser
     RemoteParser();
