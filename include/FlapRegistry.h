@@ -54,18 +54,18 @@ class FlapRegistry {
 
     // ----------------------------
     // public functions
-    void check_slave_availability();
-    void deregisterSlave(uint8_t slaveAddress);                                 // deregister from registry
-    void scan_i2c_bus();                                                        // search for slave in I2C bus
-    void registerUnregistered();                                                // collect all unregistered slaves
-    int  updateSlaveRegistry(int n, uint8_t address, slaveParameter parameter); // register slaves in registry
-    int  numberOfRegisterdDevices();                                            // scan registry to evaluate number of registered devices
+    void    check_slave_availability();
+    void    deregisterSlave(uint8_t slaveAddress);                              // deregister from registry
+    void    scan_i2c_bus();                                                     // search for slave in I2C bus
+    void    registerUnregistered();                                             // collect all unregistered slaves
+    int     updateSlaveRegistry(int n, uint8_t address, slaveParameter parameter); // register slaves in registry
+    int     numberOfRegisterdDevices();                                         // scan registry to evaluate number of registered devices
+    uint8_t getNextAddress();                                                   // next free i2c address form slave registry
 
    private:
     // ----------------------------
     // privat functions
     uint8_t findFreeAddress(uint8_t minAddr, uint8_t maxAddr);                  // free address from register
-    uint8_t getNextAddress();                                                   // next free i2c address form slave registry
     bool    checkSlaveHasBooted(int n, uint8_t addr);                           // handle slave has booted
     void    error_scan_i2c(int n, uint8_t addr);                                // error tracing during scan_i2c_bus
     void    intro_scan_i2c();                                                   // intro for scan_i2c_bus

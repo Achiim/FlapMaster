@@ -35,6 +35,7 @@
 #include <FlapGlobal.h>
 #include "i2cFlap.h"
 #include "i2cMaster.h"
+#include "RtosTasks.h"
 #include "FlapRegistry.h"
 #include "SlaveTwin.h"
 #include "FlapTasks.h"
@@ -227,7 +228,19 @@ void SlaveTwin::reset() {
     Serial.println(slaveAddress, HEX);
     if (check_slaveReady(slaveAddress) > -1) {
         Register->deregisterSlave(slaveAddress);                                // delete slave from registry, this address is free now
-        // todo        i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
+        MidMessage midCmd;
+        midCmd.command   = CMD_NEW_ADDRESS;
+        midCmd.paramByte = Register->getNextAddress();
+        uint8_t answer[4];
+        i2cMidCommand(midCmd, answer, sizeof(answer));
+        #ifdef MASTERVERBOSE
+            uint32_t sn;
+            sn = ((uint32_t)answer[0]) | ((uint32_t)answer[1] << 8) | ((uint32_t)answer[2] << 16) | ((uint32_t)answer[3] << 24);
+            twinPrint("new address was received by device with serial number: ");
+            Serial.println(formatSerialNumber(sn));
+        #endif
+
+        // i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
     }
 }
 
@@ -420,9 +433,9 @@ void SlaveTwin::logMidRequest(MidMessage cmd) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
         twinPrint("Send midCommand: 0x");
-        Serial.print(cmd, HEX);
+        Serial.print(cmd.command, HEX);
         Serial.print(" - ");
-        Serial.print(getCommandName(cmd));
+        Serial.print(getCommandName(cmd.command));
         Serial.print(" to slave 0x");
         Serial.println(slaveAddress, HEX);
     #endif

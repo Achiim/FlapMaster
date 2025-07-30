@@ -136,7 +136,7 @@ void FlapRegistry::error_scan_i2c(int n, uint8_t addr) {
         Serial.println(addr, HEX);                                              // no twin
         for (int a = 0; a < numberOfTwins; a++) {
         registerPrint("Master I2C-Address Pool# %d: 0x", a);
-        Serial.println(slaveAddressPool[a], HEX);                               // address pool
+        Serial.println(g_slaveAddressPool[a], HEX);                             // address pool
         }
         } else {
         if (n == -2) {
@@ -333,18 +333,17 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
         #endif
 
         if (Twin[n]->numberOfFlaps != parameter.flaps ||
-            Twin[n]->parameter.steps !=
-                parameter.steps) {                                              // recompute steps by flaps based non new step measurement from slave
+            Twin[n]->parameter.steps != parameter.steps) {                      // recompute steps by flaps based non new step measurement from slave
 
-                #ifdef REGISTRYVERBOSE
-                    {
-                    TraceScope trace;
-                    registerPrint("number of Flaps = %d for Slave 0x", parameter.flaps);
-                    Serial.println(address, HEX);
-                    registerPrint("compute new Steps by Flap array for Slave 0x");
-                    Serial.println(address, HEX);
-                    }
-                #endif
+            #ifdef REGISTRYVERBOSE
+                {
+                TraceScope trace;
+                registerPrint("number of Flaps = %d for Slave 0x", parameter.flaps);
+                Serial.println(address, HEX);
+                registerPrint("compute new Steps by Flap array for Slave 0x");
+                Serial.println(address, HEX);
+                }
+            #endif
             Twin[n]->numberOfFlaps = parameter.flaps;
             Twin[n]->initStepsByFlap();                                         // number of flaps or steps per rev. has changed recalculate
 
