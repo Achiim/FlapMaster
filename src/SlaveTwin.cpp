@@ -1,0 +1,491 @@
+// #####################################################################################################
+//
+//  ███████ ██       █████  ██    ██ ███████     ████████ ██     ██ ██ ███    ██
+//  ██      ██      ██   ██ ██    ██ ██             ██    ██     ██ ██ ████   ██
+//  ███████ ██      ███████ ██    ██ █████          ██    ██  █  ██ ██ ██ ██  ██
+//       ██ ██      ██   ██  ██  ██  ██             ██    ██ ███ ██ ██ ██  ██ ██
+//  ███████ ███████ ██   ██   ████   ███████        ██     ███ ███  ██ ██   ████
+//
+//
+//   //// ################################################################################ by Achim ####
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=SLAVE%20TWIN
+//
+/*
+
+    Flap Slave Twin Definition
+
+    provides functionality on a flap module level to do
+
+    - Flap Drum calibration
+    - check for Hall Sensor presence
+    - show Flap digt
+    - move one Flap (next/prev)
+    - move some Steps (next/prev) to set offset steps, if desired flap is not shown after calibration
+    - save calibration to EEPROM on Flap module
+    - step measurement
+    - speed measurement
+
+*/
+
+#include <Arduino.h>
+#include <freertos/FreeRTOS.h>                                                  // Real Time OS
+#include <freertos/task.h>
+#include "driver/i2c.h"
+#include <FlapGlobal.h>
+#include "i2cFlap.h"
+#include "i2cMaster.h"
+#include "FlapRegistry.h"
+#include "SlaveTwin.h"
+#include "FlapTasks.h"
+#include "RemoteControl.h"
+
+SlaveTwin::SlaveTwin(int add) {
+    numberOfFlaps           = 0;                                                // unknown, will be set by device
+    slaveAddress            = add;                                              // take over from funktion call
+    parameter.flaps         = 0;                                                // init all parameter
+    parameter.offset        = 0;
+    parameter.sensorworking = false;
+    parameter.serialnumber  = 0;
+    parameter.slaveaddress  = add;
+    parameter.speed         = 0;
+    parameter.steps         = 0;
+    adjustOffset            = 0;                                                // init set offset variable for adjusting calibration
+}
+
+SlaveTwin* Twin[numberOfTwins];
+
+// ----------------------------
+void SlaveTwin::showFlap(char digit) {
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("showFlap: digit ");
+        Serial.println(digit);
+        }
+    #endif
+
+    targetFlapNumber = searchSign(digit);                                       // sign position in flapFont is number of targetFlap
+
+    #ifdef I2CMASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("showFlap: targetFlapNumber ");
+        Serial.println(targetFlapNumber);
+        }
+    #endif
+
+    if (targetFlapNumber < 0) {                                                 // search sign content of flapFont
+    #ifdef I2CMASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint(" Flap unknown ...");
+        Serial.println(digit);
+        }
+    #endif
+    } else {
+        int steps = countStepsToMove(flapNumber, targetFlapNumber);
+        if (steps > 0) {
+            int n = check_slaveReady(slaveAddress);
+            if (n > -1) {
+                i2cLongCommand(i2cCommandParameter(MOVE, steps), slaveAddress);
+                flapNumber = targetFlapNumber;                                  // I assume it's okay
+
+                bool moveOver = false;
+                while (!moveOver) {
+                    vTaskDelay(pdMS_TO_TICKS(400));                             // Delay for 400ms
+                    check_slaveReady(slaveAddress);                             // request new position from slave
+                    moveOver = slaveReady.ready;
+                }
+            }
+        }
+    }
+}
+
+// ----------------------------
+void SlaveTwin::Calibrate() {
+    if (check_slaveReady(slaveAddress) > -1) {
+        if (parameter.steps > 0)                                                // happend a step-messurement?
+            i2cLongCommand(i2cCommandParameter(CALIBRATE, parameter.steps),
+                           slaveAddress);                                       // use result of measurement
+        else
+            i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS), slaveAddress); // use default steps
+
+        flapNumber = 0;
+    }
+}
+
+// ----------------------------
+void SlaveTwin::stepMeasurement() {
+    if (check_slaveReady(slaveAddress) > -1) {
+        i2cLongCommand(i2cCommandParameter(STEP_MEASSURE, 0), slaveAddress);
+        flapNumber = 0;
+    }
+}
+
+// ----------------------------
+void SlaveTwin::speedMeasurement() {
+    if (check_slaveReady(slaveAddress) > -1)
+        if (parameter.steps > 0)                                                // happend a step-messurement?
+            i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, parameter.steps), slaveAddress);
+        else {
+            i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, DEFAULT_STEPS), slaveAddress);
+        }
+}
+
+// ----------------------------
+void SlaveTwin::sensorCheck() {
+    if (check_slaveReady(slaveAddress) > -1)
+        if (parameter.steps > 0)                                                // happend a step-messurement?
+            i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, parameter.steps), slaveAddress);
+        else
+            i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, DEFAULT_STEPS), slaveAddress);
+}
+
+// ----------------------------
+void SlaveTwin::nextFlap() {
+    if (numberOfFlaps > 0) {
+        targetFlapNumber = flapNumber + 1;
+        if (targetFlapNumber >= numberOfFlaps)
+            targetFlapNumber = 0;
+        int steps = countStepsToMove(flapNumber, targetFlapNumber);
+        if (steps > 0) {
+            if (check_slaveReady(slaveAddress) > -1) {
+                i2cLongCommand(i2cCommandParameter(MOVE, steps), slaveAddress);
+                flapNumber    = targetFlapNumber;
+                bool moveOver = false;
+                while (!moveOver) {
+                    vTaskDelay(pdMS_TO_TICKS(200));                             // Delay for 400ms
+                    check_slaveReady(slaveAddress);                             // request new position from slave
+                    moveOver = slaveReady.ready;
+                }
+            }
+        }
+    } else {
+        #ifdef MASTERVERBOSE
+            twinPrintln("number of Flaps not set");
+        #endif
+    }
+}
+
+// ----------------------------
+void SlaveTwin::prevFlap() {
+    if (numberOfFlaps > 0) {
+        targetFlapNumber = flapNumber - 1;
+        if (targetFlapNumber < 0)
+            targetFlapNumber = numberOfFlaps - 1;
+        int steps = countStepsToMove(flapNumber, targetFlapNumber);
+        if (steps > 0) {
+            if (check_slaveReady(slaveAddress) > -1) {
+                i2cLongCommand(i2cCommandParameter(MOVE, steps), slaveAddress);
+                flapNumber    = targetFlapNumber;
+                bool moveOver = false;
+                while (!moveOver) {
+                    vTaskDelay(pdMS_TO_TICKS(1000));                            // Delay for 1000ms
+                    check_slaveReady(slaveAddress);                             // request new position from slave
+                    moveOver = slaveReady.ready;
+                }
+            }
+        }
+    } else {
+        #ifdef MASTERVERBOSE
+            twinPrintln("number of Flaps not set");
+        #endif
+    }
+}
+
+// ----------------------------
+void SlaveTwin::nextSteps() {
+    if (check_slaveReady(slaveAddress) > -1) {
+        i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS), slaveAddress);
+        adjustOffset += ADJUSTMENT_STEPS;
+        twinPrintln("offset steps = %d", adjustOffset);
+    }
+}
+
+// ----------------------------
+void SlaveTwin::prevSteps() {
+    if (adjustOffset >= ADJUSTMENT_STEPS)
+        adjustOffset -= ADJUSTMENT_STEPS;
+    twinPrintln("offset steps = %d", adjustOffset);
+}
+
+// ----------------------------
+void SlaveTwin::setOffset() {
+    parameter.offset = adjustOffset;
+    twinPrintln("save: offset = %d | ms/Rev = %d | St/Rev = %d", parameter.offset, parameter.speed, parameter.steps);
+    int n = check_slaveReady(slaveAddress);
+    if (n > -1) {
+        i2cLongCommand(i2cCommandParameter(SET_OFFSET, parameter.offset), slaveAddress);
+        Register->updateSlaveRegistry(n, slaveAddress, parameter);              // take over to registry todo vefrify if that works
+    }
+}
+
+// ----------------------------
+void SlaveTwin::reset() {
+    twinPrint("send reset to 0x:  ");
+    Serial.println(slaveAddress, HEX);
+    if (check_slaveReady(slaveAddress) > -1) {
+        Register->deregisterSlave(slaveAddress);                                // delete slave from registry, this address is free now
+        i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
+    }
+}
+
+// ----------------------------
+int SlaveTwin::searchSign(char digit) {
+    if (numberOfFlaps > 0) {
+        for (int i = 0; i < numberOfFlaps; i++) {
+            if (digit == flapFont[i])
+                return i;                                                       // digit in flaps found
+        }
+        return -1;                                                              // digit not found
+    } else {
+        #ifdef MASTERVERBOSE
+            twinPrintln("number of Flaps not set");
+        #endif
+        return -1;                                                              // digit not found
+    }
+}
+
+// ----------------------------
+int SlaveTwin::countStepsToMove(int from, int to) {
+    if (numberOfFlaps > 0) {
+        int sum = 0;
+        int pos = from;
+        while (pos != to) {
+            sum += stepsByFlap[pos];                                            // count steps to go from flap t0 flap
+            pos = (pos + 1) % numberOfFlaps;
+        }
+        return sum;
+    } else {
+        #ifdef MASTERVERBOSE
+            twinPrintln("number of Flaps not set");
+        #endif
+        return 0;                                                               // nothing to move
+    }
+}
+
+// ----------------------------
+// purpose: send I2C short command, only one byte
+//
+esp_err_t SlaveTwin::i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size) {
+    esp_err_t ret = ESP_FAIL;
+
+    // take semaphore for i2c access
+    takeI2CSemaphore();
+
+    #ifdef I2CMASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("send shortCommand (i2cShortCommand) 0x");
+        Serial.print(ShortCommand, HEX);
+        Serial.print(" - ");
+        Serial.print(getCommandName(ShortCommand));
+        Serial.print(" to slave 0x");
+        Serial.println(slaveAddress, HEX);
+        }
+    #endif
+
+    // send shortCommand to slave
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+    if (i2c_master_start(cmd) != ESP_OK) {
+        #ifdef MASTERVERBOSE
+            twinPrintln("i2c_master_start: generating cmd for I2C shortCommand failed");
+        #endif
+        Master->systemHalt("FATAL ERROR: generating cmd for I2C shortCommand failed", 3);
+    }
+
+    if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK) {
+        #ifdef MASTERVERBOSE
+            twinPrintln("i2c_master_write_byte failed");
+        #endif
+        Master->systemHalt("FATAL ERROR: i2c_master_write_byte failed", 3);
+    }
+    i2c_master_write_byte(cmd, ShortCommand, true);
+
+    i2c_master_start(cmd);                                                      // Repeated Start!
+    i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_READ, true);
+    i2c_master_read(cmd, answer, size, I2C_MASTER_LAST_NACK);
+    i2c_master_stop(cmd);
+
+    ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
+    i2c_cmd_link_delete(cmd);
+
+    // give semaphore for i2c access
+    giveI2CSemaphore();
+    if (DataEvaluation)
+        DataEvaluation->increment(2, 1, 0);                                     // count I2C usage, 2 access, 1 byte data send, x byte read
+
+    if (ret == ESP_OK) {
+        #ifdef I2CMASTERVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("got answer from slave");
+            for (int i = 0; i < size; i++) {
+            Serial.print(" [");
+            Serial.print(i);
+            Serial.print("] = 0x");
+            Serial.print(answer[i], HEX);
+            }
+            Serial.println();
+            }
+        #endif
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, size);                              // count I2C usage, 2 access, 1 byte data send, x byte read
+        return ret;                                                             // shortCommand successful
+    } else {
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("no answer from slave to (i2cShortCommand): 0x");
+            Serial.print(ShortCommand, HEX);
+            Serial.print(" - ");
+            Serial.println(getCommandName(ShortCommand));
+            twinPrint("ESP ERROR: ");
+            Serial.println(esp_err_to_name(ret));
+            twinPrintln("Slave is not connected, ignore command");
+            }
+        #endif
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // count I2C usage, 1 timeout
+
+        return ret;                                                             // shortCommand failed
+    }
+}
+
+// -----------------------------------------
+// ask slave about his parameters stored in EEPROM
+// purpose:
+// - request all parameter stored in EEPROM from slave by shortCommand
+// - update structure parameter
+//
+// variable:
+// - in:  address = address of slave to be registerd/updated
+// - out: parameter = parameter that shall be updated by this function
+//
+void SlaveTwin::askSlaveAboutParameter(uint8_t address, slaveParameter& parameter) {
+    // ask Flap about actual parameter
+    uint8_t ser[4] = {0, 0, 0, 0};
+    i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser));
+    // compute serialNumber from byte to integer
+    parameter.serialnumber =
+        ((uint32_t)ser[0]) | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
+
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("slave answered for parameter.serialnumber = ");
+            Serial.println(formatSerialNumber(parameter.serialnumber));
+            }
+        #endif
+
+    uint8_t off[2] = {0, 0};
+    i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off));
+    parameter.offset = 0x100 * off[1] + off[0];                                 // compute offset from byte to integer
+
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("slave answered for parameter.offset = ");
+        Serial.println(parameter.offset);
+        }
+    #endif
+
+    uint8_t flaps = 0;
+    i2cShortCommand(CMD_GET_FLAPS, &flaps, sizeof(flaps));                      // get number of flaps
+    parameter.flaps = flaps;
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("slave answered for parameter.flaps = ");
+        Serial.println(parameter.flaps);
+        }
+    #endif
+
+    uint8_t speed[2] = {0, 0};
+    i2cShortCommand(CMD_GET_SPEED, speed, sizeof(speed));                       // get speed of flap drum
+    parameter.speed = speed[1] * 0x100 + speed[0];
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("slave answered for parameter.speed = ");
+        Serial.println(parameter.speed);
+        }
+    #endif
+
+    uint8_t steps[2] = {0, 0};
+    i2cShortCommand(CMD_GET_STEPS, steps, sizeof(steps));                       // get steps of flap drum
+    parameter.steps = steps[1] * 0x100 + steps[0];
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("slave answered for parameter.steps = ");
+        Serial.println(parameter.steps);
+        }
+    #endif
+
+    uint8_t sensor = 0;
+    i2cShortCommand(CMD_GET_SENSOR, &sensor, sizeof(sensor));                   // get sensor working status
+    parameter.sensorworking = sensor;
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrint("slave answered for parameter.sensorworking = ");
+        Serial.println(parameter.sensorworking);
+        }
+    #endif
+}
+
+// ----------------------------
+// compute steps needed to move flap by flap (Bresenham-artige Verteilung)
+void SlaveTwin::initStepsByFlap() {
+    for (int i = 0; i < parameter.flaps; ++i) {
+        int start      = (i * parameter.steps) / parameter.flaps;
+        int end        = ((i + 1) * parameter.steps) / parameter.flaps;
+        stepsByFlap[i] = end - start;
+    }
+}
+
+// ----------------------------
+// filters repetation and double sendings
+Key21 SlaveTwin::ir2Key21(uint64_t ircode) {
+    Key21    key;
+    uint32_t now = millis();
+
+    // Wiederholungsmuster direkt raus
+    if (ircode == 0xFFFFFFFFFFFFFFFF)
+        return Key21::NONE;
+
+    // Wiederholung echten Codes in kurzer Zeit
+    if (ircode == lastTwinCode && (now - lastTwinTime) < 100) {
+        return Key21::NONE;
+    }
+
+    key = Control.decodeIR(ircode);
+    if ((int)key < (int)Key21::NONE || (int)key > (int)Key21::UNKNOWN) {
+        lastTwinTime = now;
+        lastTwinCode = ircode;
+        return Key21::NONE;
+    }
+
+    if (key != Key21::UNKNOWN && key != Key21::NONE) {
+        #ifdef IRVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("key recognized: ");
+            Serial.print((int)key);
+            Serial.print(" (0x");
+            Serial.print(ircode, HEX);
+            Serial.print(") - ");
+            Serial.println(Control.key21ToString(key));                         // make it visable
+            }
+        #endif
+        lastTwinTime = now;
+        lastTwinCode = ircode;
+        return key;
+    }
+    lastTwinTime = now;
+    lastTwinCode = ircode;
+    return Key21::NONE;                                                         // filter unknown to NONE
+}

@@ -1,0 +1,28 @@
+BasedOnStyle: Google
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+# Präprozessor-Kontrolle
+IndentPPDirectives: BeforeHash
+
+SpacesBeforeTrailingComments: 2
+
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignOperands: true
+
+BreakBeforeBraces: Attach
+SpaceBeforeParens: ControlStatements
+
+SortIncludes: false
+IncludeBlocks: Preserve
+
+Cpp11BracedListStyle: true
+PointerAlignment: Left
+DerivePointerAlignment: false

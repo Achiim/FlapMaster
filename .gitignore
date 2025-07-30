@@ -1,0 +1,11 @@
+# Ignoriere generierte Dateien von PlatformIO
+.pio/
+.vscode/
+*.elf
+*.hex
+*.bin
+*.map
+*.dSYM/
+*.DS_Store
+# Ignoriere Symlink zur SharedLib
+lib/SharedLib/
