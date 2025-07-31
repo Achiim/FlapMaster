@@ -101,7 +101,21 @@ void FlapRegistry::intro_scan_i2c() {
 int FlapRegistry::scanForSlave(int i, uint8_t addr) {
     int  n  = -1;
     auto it = g_slaveRegistry.find(addr);                                       // search in registry
-    n       = check_slaveReady(addr);                                           // get n Twin-Number
+
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;
+        if (pingI2Cslave(addr) == ESP_OK) {                                     // ping and wait for ACK
+        registerPrint("slave is on i2c bus 0x");
+        Serial.println(addr, HEX);
+        } else {
+        registerPrint("no slave on i2c bus with address 0x");
+        Serial.println(addr, HEX);
+        }
+        }
+    #endif
+
+    n = check_slaveReady(addr);                                                 // get n Twin-Number
     #ifdef REGISTRYVERBOSE
         {
         TraceScope trace;
@@ -453,7 +467,7 @@ int FlapRegistry::numberOfRegisterdDevices() {
 }
 
 // ------------------------------
-// find free address in registry
+// register unregistered devices
 void FlapRegistry::registerUnregistered() {
     uint8_t nextFreeAddress = 0;
     if (pingI2Cslave(I2C_BASE_ADDRESS) == ESP_OK) {                             // is there someone new?
@@ -480,9 +494,6 @@ void FlapRegistry::registerUnregistered() {
                 registerPrint("new address was received by device with serial number: ");
                 Serial.println(formatSerialNumber(sn));
             #endif
-
-            // i2cLongCommand(i2cCommandParameter(ADDRESS, nextFreeAddress),
-            //                I2C_BASE_ADDRESS);                                   // Send new I2C Address to new Slave
         }
     } else {
         {
