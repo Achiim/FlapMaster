@@ -477,21 +477,22 @@ void FlapRegistry::registerUnregistered() {
             {
                 TraceScope trace;                                               // use semaphore to protect this block
                 #ifdef REGISTRYVERBOSE
-                    registerPrintln("Send I2C-Address to new Slave...");
-                    registerPrint("Send new I2C Address to new flap slave (defaut address 0x55):  0x");
+                    registerPrint("Send to unregistered slave (with I2C_BASE_ADDRESS) next free I2C Address: 0x");
                     Serial.println(nextFreeAddress, HEX);
                 #endif
             }
 
             MidMessage midCmd;
             midCmd.command   = CMD_NEW_ADDRESS;
-            midCmd.paramByte = getNextAddress();
+            midCmd.paramByte = nextFreeAddress;
             uint8_t answer[4];
             i2cMidCommand(midCmd, I2C_BASE_ADDRESS, answer, sizeof(answer));
             #ifdef MASTERVERBOSE
                 uint32_t sn;
                 sn = ((uint32_t)answer[0]) | ((uint32_t)answer[1] << 8) | ((uint32_t)answer[2] << 16) | ((uint32_t)answer[3] << 24);
-                registerPrint("new address was received by device with serial number: ");
+                registerPrint("new address 0x");
+                Serial.println(nextFreeAddress, HEX);
+                registerPrint("was received by device with serial number: ");
                 Serial.println(formatSerialNumber(sn));
             #endif
         }
@@ -499,7 +500,7 @@ void FlapRegistry::registerUnregistered() {
         {
             TraceScope trace;                                                   // use semaphore to protect this block
             #ifdef REGISTRYVERBOSE
-                registerPrintln("no new unregisered Slave detected...");        // no annswer to ping 0x55
+                registerPrintln("no new unregisered Slave (with I2C_BASE_ADDRESS) detected..."); // no answer to ping 0x55
             #endif
         }
     }
