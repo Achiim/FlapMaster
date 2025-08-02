@@ -174,6 +174,9 @@ void SlaveTwin::sensorCheck() {
 
     int r = 5;
     while (check_slaveReady(slaveAddress) < 0 && r-- > 0) {                     // waiting for sensor check is done
+    #ifdef MASTERVERBOSE
+        twinPrintln("Waiting for slave 0x%02X to be ready: %d", slaveAddress, slaveReady.sensorStatus);
+    #endif
         vTaskDelay(710 / portTICK_PERIOD_MS);                                   // Delay for 710 milliseconds
     }
     if (r <= 0) {
