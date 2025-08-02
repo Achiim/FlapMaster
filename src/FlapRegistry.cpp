@@ -381,15 +381,16 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;
-        registerPrint("master has rebooted calibrating now Slave 0x");
+        registerPrint("master has rebooted: calibrating now Slave 0x");
         Serial.println(address, HEX);
         }
     #endif
         c++;                                                                    // counting calibrations
         i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS),
                        address);                                                // Calibrate device because of reboot
-        Twin[n]->flapNumber   = 0;                                              // synchronize FlapPosition
-        Twin[n]->adjustOffset = parameter.offset;                               // ??? set internal offset counter to stored offset Todo
+        Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
+        //        Twin[n]->adjustOffset = parameter.offset;                               // don't update, because during setting of adjust steps,
+        //        this will overwrite this ??? set internal offset counter to stored offset Todo
 
         #ifdef MASTERVERBOSE
             {

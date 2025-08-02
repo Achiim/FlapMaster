@@ -200,7 +200,7 @@ void SlaveTwin::nextSteps() {
     if (check_slaveReady(slaveAddress) > -1) {
         i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS), slaveAddress);
         adjustOffset += ADJUSTMENT_STEPS;
-        twinPrintln("offset steps = %d", adjustOffset);
+        twinPrintln("actual stored offset = %d + adjustment steps = %d: %d", parameter.offset, adjustOffset, parameter.offset + adjustOffset);
     }
 }
 
@@ -208,12 +208,13 @@ void SlaveTwin::nextSteps() {
 void SlaveTwin::prevSteps() {
     if (adjustOffset >= ADJUSTMENT_STEPS)
         adjustOffset -= ADJUSTMENT_STEPS;
-    twinPrintln("offset steps = %d", adjustOffset);
+    twinPrintln("actual stored offset = %d + adjustment steps = %d: %d", parameter.offset, adjustOffset, parameter.offset + adjustOffset);
 }
 
 // ----------------------------
 void SlaveTwin::setOffset() {
-    parameter.offset = adjustOffset;
+    parameter.offset += adjustOffset;                                           // add adjustment to stored offset
+    adjustOffset = 0;                                                           // reset adjustement to zero
     twinPrintln("save: offset = %d | ms/Rev = %d | St/Rev = %d", parameter.offset, parameter.speed, parameter.steps);
     int n = check_slaveReady(slaveAddress);
     if (n > -1) {
