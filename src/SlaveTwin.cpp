@@ -169,22 +169,16 @@ void SlaveTwin::sensorCheck() {
     int n = check_slaveReady(slaveAddress);                                     // check if slave is ready
     if (n < 0)
         return;                                                                 // slave not ready, ignore
+
     uint16_t stepsToCheck = (parameter.steps > 0) ? parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
     i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, parameter.steps), slaveAddress); // do sensor check
+    bool moveOver = false;
+    while (!moveOver) {
+        vTaskDelay(pdMS_TO_TICKS(400));                                         // Delay for 400ms
+        check_slaveReady(slaveAddress);                                         // request new position from slave
+        moveOver = slaveReady.ready;
+    }
 
-    int r = 5;
-    while (check_slaveReady(slaveAddress) < 0 && r-- > 0) {                     // waiting for sensor check is done
-    #ifdef MASTERVERBOSE
-        twinPrintln("Waiting for slave 0x%02X to be ready: %d", slaveAddress, slaveReady.sensorStatus);
-    #endif
-        vTaskDelay(710 / portTICK_PERIOD_MS);                                   // Delay for 710 milliseconds
-    }
-    if (r <= 0) {
-        #ifdef MASTERVERBOSE
-            twinPrintln("Sensor check failed or timed out on slave 0x%02X", slaveAddress);
-        #endif
-        return;
-    }
     Register->updateSlaveRegistry(n, slaveAddress, parameter);                  // take over measured value to registry
     #ifdef MASTERVERBOSE
         twinPrintln("Sensor status in registry updated of slave 0x%02X to: %d", slaveAddress, slaveReady.sensorStatus);
