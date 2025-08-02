@@ -281,9 +281,10 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
     auto it = g_slaveRegistry.find(address);                                    // search in registry
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
 
-        I2CSlaveDevice* device = it->second;
-        device->parameter      = parameter;                                     // update all parameter
-        device->position       = Twin[n]->slaveReady.position;                  // update Flap position
+        I2CSlaveDevice* device          = it->second;
+        device->parameter               = parameter;                            // update all parameter
+        device->position                = Twin[n]->slaveReady.position;         // update Flap position
+        device->parameter.sensorworking = Twin[n]->slaveReady.sensorStatus;     // update Sensor status
         #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
@@ -389,8 +390,6 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
         i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS),
                        address);                                                // Calibrate device because of reboot
         Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
-        //        Twin[n]->adjustOffset = parameter.offset;                               // don't update, because during setting of adjust steps,
-        //        this will overwrite this ??? set internal offset counter to stored offset Todo
 
         #ifdef MASTERVERBOSE
             {

@@ -136,11 +136,26 @@ void SlaveTwin::speedMeasurement() {
 
 // ----------------------------
 void SlaveTwin::sensorCheck() {
-    if (check_slaveReady(slaveAddress) > -1)
-        if (parameter.steps > 0)                                                // happend a step-messurement?
-            i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, parameter.steps), slaveAddress);
-        else
-            i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, DEFAULT_STEPS), slaveAddress);
+    int n = check_slaveReady(slaveAddress);                                     // check if slave is ready
+    if (n < 0)
+        return;                                                                 // slave not ready, ignore
+    uint16_t stepsToCheck = (parameter.steps > 0) ? parameter.steps : DEFAULT_STEPS; // happend a step-messurement before?
+    i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, parameter.steps), slaveAddress); // do sensor check
+
+    int r = 5;
+    while (check_slaveReady(slaveAddress) < 0 && r-- > 0) {                     // waiting for sensor check is done
+        vTaskDelay(710 / portTICK_PERIOD_MS);                                   // Delay for 710 milliseconds
+    }
+    if (r <= 0) {
+        #ifdef MASTERVERBOSE
+            twinPrintln("Sensor check failed or timed out on slave 0x%02X", slaveAddress);
+        #endif
+        return;
+    }
+    Register->updateSlaveRegistry(n, slaveAddress, parameter);                  // take over measured value to registry
+    #ifdef MASTERVERBOSE
+        twinPrintln("Sensor status updated of slave 0x%02X to: %d", slaveAddress, slaveReady.sensorStatus);
+    #endif
 }
 
 // ----------------------------
@@ -218,8 +233,8 @@ void SlaveTwin::setOffset() {
     twinPrintln("save: offset = %d | ms/Rev = %d | St/Rev = %d", parameter.offset, parameter.speed, parameter.steps);
     int n = check_slaveReady(slaveAddress);
     if (n > -1) {
+        Register->updateSlaveRegistry(n, slaveAddress, parameter);              // take over new offset to registry
         i2cLongCommand(i2cCommandParameter(SET_OFFSET, parameter.offset), slaveAddress);
-        Register->updateSlaveRegistry(n, slaveAddress, parameter);              // take over to registry todo vefrify if that works
     }
 }
 
