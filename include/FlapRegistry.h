@@ -71,6 +71,6 @@ class FlapRegistry {
     void    intro_scan_i2c();                                                   // intro for scan_i2c_bus
     void    outro_scan_i2c(int foundToCalibrate, int foundToRegister);          // outro scan_i2c_bus
     int     scanForSlave(int i, uint8_t addrs);                                 // scan one slave
-    int     searchTwinWithAddress(uint8_t address);                             // get number of Twin[]
+    int     findTwinIndexByAddress(uint8_t addr);                               // find Twin by slaveAddress
 };
 #endif                                                                          // FlapRegistry_h

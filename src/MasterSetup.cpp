@@ -95,7 +95,7 @@ void masterStartRtosTasks() {
 // ---------------------------
 void masterOutrodution() {
     #ifdef MASTERVERBOSE
-        masterPrintln("Flap Master Setup complete.");
+        masterPrintln("I²C Master is up and running...");
     #endif
 }
 

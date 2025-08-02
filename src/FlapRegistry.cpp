@@ -58,7 +58,7 @@ void FlapRegistry::check_slave_availability() {
                 Serial.println(addr, HEX);
                 }
             #endif
-            int n = searchTwinWithAddress(addr);                                // corresponding twin for new slave
+            int n = findTwinIndexByAddress(addr);                               // corresponding twin for new slave
             if (n >= 0)
                 checkSlaveHasBooted(n, addr);
             ++it;                                                               // next registry entry
@@ -77,7 +77,7 @@ void FlapRegistry::deregisterSlave(uint8_t slaveAddress) {
 // ----------------------------
 // messages to introduce scan_i2c_bus
 void FlapRegistry::intro_scan_i2c() {
-    #ifdef REGISTRYVERBOSE
+    #ifdef MASTERVERBOSE
         {
         TraceScope trace;
         registerPrintln("Start I²C-Scan to register new slaves...");
@@ -94,51 +94,98 @@ void FlapRegistry::intro_scan_i2c() {
         #endif
     }
 }
+
 // ----------------------------
-// scan one slave on i2c bus
-// return n = 0...x number of twin
-// return -1 slave not found / not ready
-int FlapRegistry::scanForSlave(int i, uint8_t addr) {
-    int  n  = -1;
-    auto it = g_slaveRegistry.find(addr);                                       // search in registry
-
-    #ifdef REGISTRYVERBOSE
-        {
-        TraceScope trace;
-        if (pingI2Cslave(addr) == ESP_OK) {                                     // ping and wait for ACK
-        registerPrint("slave is on i2c bus 0x");
-        Serial.println(addr, HEX);
-        } else {
-        registerPrint("no slave on i2c bus with address 0x");
-        Serial.println(addr, HEX);
+// Helper: finde Twin-Index zu gegebener I2C-Adresse, oder -1 wenn keiner passt
+int FlapRegistry::findTwinIndexByAddress(uint8_t addr) {
+    for (int s = 0; s < numberOfTwins; ++s) {
+        if (Twin[s] && Twin[s]->slaveAddress == addr) {
+            return s;
         }
-        }
-    #endif
-
-    n = check_slaveReady(addr);                                                 // get n Twin-Number
-    #ifdef REGISTRYVERBOSE
-        {
-        TraceScope trace;
-        registerPrint("Twinnumber is n = ");
-        Serial.println(n);                                                      //  twin
-        }
-    #endif
-    if (n < 0)
-        return -1;                                                              // skip this slave and move to the next
-
-    if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
-
-    #ifdef REGISTRYVERBOSE
-        {
-        TraceScope trace;
-        registerPrint("Slave allready registered 0x");
-        Serial.println(addr, HEX);                                              // slave registered
-        }
-    #endif
     }
-    return n;                                                                   // return Twin[n]
+    return -1;
 }
 
+// ----------------------------
+// Scan one slave on I2C bus.
+// Returns:
+//   >=0 : index of corresponding twin
+//   -1  : slave not found / not ready / twin missing
+int FlapRegistry::scanForSlave(int poolIndex, uint8_t addr) {
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;
+        registerPrint("Scanning address pool entry #");
+        Serial.print(poolIndex);
+        Serial.print(": slave 0x");
+        Serial.println(addr, HEX);
+        }
+    #endif
+
+    // Registry lookup (for diagnostics)
+    auto it = g_slaveRegistry.find(addr);
+
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;
+        if (pingI2Cslave(addr) == ESP_OK) {
+        registerPrint("Slave is present on I2C bus: 0x");
+        Serial.println(addr, HEX);
+        } else {
+        registerPrint("No slave responded on I2C bus at address: 0x");
+        Serial.println(addr, HEX);
+        }
+        }
+    #endif
+
+    int twinIndex = findTwinIndexByAddress(addr);
+
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;
+        registerPrint("Twin number resolved to: ");
+        Serial.println(twinIndex);
+        }
+    #endif
+
+    if (twinIndex < 0) {
+        return -1;                                                              // no matching twin
+    }
+
+    if (it != g_slaveRegistry.end() && it->second != nullptr) {
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("Slave already registered at address 0x");
+            Serial.println(addr, HEX);
+            }
+        #endif
+    }
+
+    return twinIndex;
+}
+
+// ----------------------------
+// messages to leave scan_i2c_bus
+void FlapRegistry::outro_scan_i2c(int foundToCalibrate, int foundToRegister) {
+    if (g_masterBooted) {
+        g_masterBooted = false;                                                 // master boot is over, reset master has booted
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            registerPrintln("Master-Setup complete -> number of calibrated devices: %d", foundToCalibrate);
+            }
+        #endif
+    }
+
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;
+        registerPrintln("number of registered devices: %d", foundToRegister);
+        registerPrintln("I²C-Scan complete.");
+        }
+    #endif
+}
 // ----------------------------
 // error tracing for one slave on i2c bus
 void FlapRegistry::error_scan_i2c(int n, uint8_t addr) {
@@ -163,28 +210,6 @@ void FlapRegistry::error_scan_i2c(int n, uint8_t addr) {
 }
 
 // ----------------------------
-// messages to leave scan_i2c_bus
-void FlapRegistry::outro_scan_i2c(int foundToCalibrate, int foundToRegister) {
-    if (g_masterBooted) {
-        g_masterBooted = false;                                                 // master boot is over, reset master has booted
-        #ifdef MASTERVERBOSE
-            {
-            TraceScope trace;
-            registerPrintln("Master-Setup complete -> number of calibrated devices: %d", foundToCalibrate);
-            }
-        #endif
-    }
-
-    #ifdef REGISTRYVERBOSE
-        {
-        TraceScope trace;
-        registerPrintln("number of registered devices: %d", foundToRegister);
-        registerPrintln("I²C-Scan complete.");
-        }
-    #endif
-}
-
-// ----------------------------
 // Ask I2C Bus who is there, and register unknown slaves
 void FlapRegistry::scan_i2c_bus() {
     int     foundToRegister  = 0;                                               // counter for registered slaves
@@ -204,7 +229,7 @@ void FlapRegistry::scan_i2c_bus() {
         } else {
             foundToRegister++;
             Twin[n]->askSlaveAboutParameter(addr, parameter);                   // get actual parameter from
-            c = updateSlaveRegistry(n, addr, parameter);                        // update registry with slave data
+            c = updateSlaveRegistry(n, addr, parameter);                        // register slave
             foundToCalibrate += c;                                              // count calibrations
         }
     }
@@ -400,34 +425,6 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
         #endif
     }
     return c;                                                                   // number of calibrated devices
-}
-
-// -----------------------------------------
-// search index of Twin Object with ic2 address
-int FlapRegistry::searchTwinWithAddress(uint8_t address) {
-    int n = 0;
-    for (n = 0; n < numberOfTwins; n++) {
-        if (Twin[n] != nullptr && Twin[n]->slaveAddress == address) {           // address found
-        #ifdef REGISTRYVERBOSE
-            {
-            TraceScope trace;
-            masterPrint("address 0x");
-            Serial.print(address, HEX);
-            Serial.printf(" fits to Twin [%d]", n);
-            Serial.println();
-            }
-        #endif
-            return n;
-        }
-    }
-    #ifdef REGISTRYVERBOSE
-        {
-        TraceScope trace;
-        masterPrint("Twin address not found..");
-        Serial.println(n);
-        }
-    #endif
-    return -1;
 }
 
 // -----------------------------------------
