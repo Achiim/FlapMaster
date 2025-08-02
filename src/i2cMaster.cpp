@@ -326,7 +326,7 @@ int check_slaveReady(uint8_t slaveAddress) {
     #ifdef READYBUSYVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("corresponding twin not found for slave: 0x");
+        masterPrint("corresponding twin object not found or not created for slave: 0x");
         Serial.println(slaveAddress, HEX);
         }
     #endif
@@ -338,20 +338,10 @@ int check_slaveReady(uint8_t slaveAddress) {
         TraceScope trace;                                                       // use semaphore to protect this block
         masterPrint("corresponding twin found: Twin[%d] fits to slave: 0x", a);
         Serial.println(slaveAddress, HEX);
+        masterPrint("sending now STATE request to slave: 0x");
+        Serial.println(slaveAddress, HEX);
         }
     #endif
-
-    if (Twin[a] == nullptr) {
-        #ifdef READYBUSYVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            masterPrint("(check_slaveReady) Twin[%d]: 0x", a);
-            Serial.print(slaveAddress, HEX);
-            Serial.println(" not created.");
-            }
-        #endif
-        return -1;                                                              // twin not connected
-    }
 
     if (Twin[a]->i2cShortCommand(CMD_GET_STATE, data, sizeof(data)) != ESP_OK) { // send  request to Slave
     #ifdef READYBUSYVERBOSE
