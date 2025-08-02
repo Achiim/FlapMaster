@@ -118,20 +118,50 @@ void SlaveTwin::Calibrate() {
 
 // ----------------------------
 void SlaveTwin::stepMeasurement() {
-    if (check_slaveReady(slaveAddress) > -1) {
-        i2cLongCommand(i2cCommandParameter(STEP_MEASSURE, 0), slaveAddress);
-        flapNumber = 0;
+    int n = check_slaveReady(slaveAddress);                                     // check if slave is ready
+    if (n < 0)
+        return;                                                                 // slave not ready, ignore
+    i2cLongCommand(i2cCommandParameter(STEP_MEASSURE, 0), slaveAddress);
+    flapNumber = 0;                                                             // we stand at Zero after that
+
+    int r = 5;
+    while (check_slaveReady(slaveAddress) < 0 && r-- > 0) {                     // waiting for step meassurement is done
+        vTaskDelay(710 / portTICK_PERIOD_MS);                                   // Delay for 710 milliseconds
     }
+    if (r <= 0) {
+        #ifdef MASTERVERBOSE
+            twinPrintln("Step meassurement failed or timed out on slave 0x%02X", slaveAddress);
+        #endif
+        return;
+    }
+    Register->updateSlaveRegistry(n, slaveAddress, parameter);                  // take over measured value to registry
+    #ifdef MASTERVERBOSE
+        twinPrintln("Device steps per revolution in registry updated of slave 0x%02X to: %d", slaveAddress, parameter.steps);
+    #endif
 }
 
 // ----------------------------
 void SlaveTwin::speedMeasurement() {
-    if (check_slaveReady(slaveAddress) > -1)
-        if (parameter.steps > 0)                                                // happend a step-messurement?
-            i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, parameter.steps), slaveAddress);
-        else {
-            i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, DEFAULT_STEPS), slaveAddress);
-        }
+    int n = check_slaveReady(slaveAddress);                                     // check if slave is ready
+    if (n < 0)
+        return;                                                                 // slave not ready, ignore
+    uint16_t stepsToCheck = (parameter.steps > 0) ? parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
+    i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, parameter.steps), slaveAddress);
+
+    int r = 5;
+    while (check_slaveReady(slaveAddress) < 0 && r-- > 0) {                     // waiting for speed meassurement is done
+        vTaskDelay(710 / portTICK_PERIOD_MS);                                   // Delay for 710 milliseconds
+    }
+    if (r <= 0) {
+        #ifdef MASTERVERBOSE
+            twinPrintln("Speed meassurement failed or timed out on slave 0x%02X", slaveAddress);
+        #endif
+        return;
+    }
+    Register->updateSlaveRegistry(n, slaveAddress, parameter);                  // take over measured value to registry
+    #ifdef MASTERVERBOSE
+        twinPrintln("Device speed in registry updated of slave 0x%02X to: %d", slaveAddress, parameter.speed);
+    #endif
 }
 
 // ----------------------------
@@ -139,7 +169,7 @@ void SlaveTwin::sensorCheck() {
     int n = check_slaveReady(slaveAddress);                                     // check if slave is ready
     if (n < 0)
         return;                                                                 // slave not ready, ignore
-    uint16_t stepsToCheck = (parameter.steps > 0) ? parameter.steps : DEFAULT_STEPS; // happend a step-messurement before?
+    uint16_t stepsToCheck = (parameter.steps > 0) ? parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
     i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, parameter.steps), slaveAddress); // do sensor check
 
     int r = 5;
@@ -154,7 +184,7 @@ void SlaveTwin::sensorCheck() {
     }
     Register->updateSlaveRegistry(n, slaveAddress, parameter);                  // take over measured value to registry
     #ifdef MASTERVERBOSE
-        twinPrintln("Sensor status updated of slave 0x%02X to: %d", slaveAddress, slaveReady.sensorStatus);
+        twinPrintln("Sensor status in registry updated of slave 0x%02X to: %d", slaveAddress, slaveReady.sensorStatus);
     #endif
 }
 
