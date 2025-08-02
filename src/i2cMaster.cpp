@@ -305,7 +305,7 @@ void logMidError(MidMessage cmd, esp_err_t err) {
 //
 int check_slaveReady(uint8_t slaveAddress) {
     uint8_t data[6] = {0, 0, 0, 0, 0, 0};
-    #ifdef I2CMASTERVERBOSE
+    #ifdef READYBUSYVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         masterPrint("readyness/busyness check of slave 0x");
@@ -314,7 +314,7 @@ int check_slaveReady(uint8_t slaveAddress) {
     #endif
     bool found = false;
     int  a     = 0;
-    while (a < numberOfTwins) {
+    while (a < numberOfTwins) {                                                 // is slaveAddress valide (content of adress pool)
         if (g_slaveAddressPool[a] == slaveAddress) {
             found = true;
             break;
@@ -322,18 +322,18 @@ int check_slaveReady(uint8_t slaveAddress) {
         a++;
     }
 
-    if (!found || Twin[a] == nullptr) {
-        #ifdef I2CMASTERVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            masterPrint("corresponding twin not found for slave: 0x");
-            Serial.println(slaveAddress, HEX);
-            }
-        #endif
+    if (!found || Twin[a] == nullptr) {                                         // is there a valide Twin[] Object available that can communicte with slave
+    #ifdef READYBUSYVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        masterPrint("corresponding twin not found for slave: 0x");
+        Serial.println(slaveAddress, HEX);
+        }
+    #endif
         return -1;                                                              // return no Twin found
     }
 
-    #ifdef I2CMASTERVERBOSE
+    #ifdef READYBUSYVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         masterPrint("corresponding twin found: Twin[%d] fits to slave: 0x", a);
@@ -342,7 +342,7 @@ int check_slaveReady(uint8_t slaveAddress) {
     #endif
 
     if (Twin[a] == nullptr) {
-        #ifdef I2CMASTERVERBOSE
+        #ifdef READYBUSYVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block
             masterPrint("(check_slaveReady) Twin[%d]: 0x", a);
@@ -354,7 +354,7 @@ int check_slaveReady(uint8_t slaveAddress) {
     }
 
     if (Twin[a]->i2cShortCommand(CMD_GET_STATE, data, sizeof(data)) != ESP_OK) { // send  request to Slave
-    #ifdef I2CMASTERVERBOSE
+    #ifdef READYBUSYVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         masterPrint("(check_slaveReady) shortCommand STATE failed to: 0x");
@@ -364,7 +364,7 @@ int check_slaveReady(uint8_t slaveAddress) {
         return -2;                                                              // twin not connected
     }
     updateSlaveReadyInfo(a, slaveAddress, data);                                // Update Slave-Status
-    #ifdef I2CMASTERVERBOSE
+    #ifdef READYBUSYVERBOSE
         printSlaveReadyInfo(Twin[a]);
     #endif
 
