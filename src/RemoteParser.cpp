@@ -26,7 +26,7 @@ RemoteParser::RemoteParser() {
 // ---------------------
 // dispatch keystroke to all registered devices
 void RemoteParser::dispatchToTwins() {
-    #ifdef MASTERVERBOSE
+    #ifdef PARSERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         parserPrintln("final decision ClickEvent.type: %s", Control.clickTypeToString(_receivedEvent.type));
@@ -43,17 +43,15 @@ void RemoteParser::dispatchToTwins() {
                 #ifdef IRVERBOSE
                     {
                     TraceScope trace;                                           // use semaphore to protect this block
-                    parserPrintln("send final decision ClickEvent.type: %s to Twin",
-                    Control.clickTypeToString(receivedEvent.type));
-                    parserPrintln("send final decision Received Key21: %s to Twin",
-                    Control.key21ToString(receivedEvent.key));
+                    parserPrintln("send final decision ClickEvent.type: %s to Twin", Control.clickTypeToString(receivedEvent.type));
+                    parserPrintln("send final decision Received Key21: %s to Twin", Control.key21ToString(receivedEvent.key));
                     }
                 #endif
 
             } else {
                 {
                     TraceScope trace;                                           // use semaphore to protect this block
-                    #ifdef MASTERVERBOSE
+                    #ifdef ERRORVERBOSE
                         parserPrintln("no slaveTwin available");
                     #endif
                 }
@@ -122,7 +120,7 @@ void RemoteParser::handleQueueMessage() {
         _receivedKey = Control.ir2Key21(_receivedValue);                        // filter remote signal to reduce options
         if (_receivedKey != Key21::NONE && _receivedKey != Key21::UNKNOWN) {
             _receivedEvent = Parser->detect(_receivedKey);                      // valid key21 was pressed
-            #ifdef MASTERVERBOSE
+            #ifdef PARSERVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block
                 Parser->parserPrintln("from Queue ClickEvent.type: %s", Control.clickTypeToString(_receivedEvent.type));

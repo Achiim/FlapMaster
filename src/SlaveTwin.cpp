@@ -58,7 +58,7 @@ SlaveTwin* Twin[numberOfTwins];
 
 // ----------------------------
 void SlaveTwin::showFlap(char digit) {
-    #ifdef MASTERVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("showFlap: digit ");
@@ -68,7 +68,7 @@ void SlaveTwin::showFlap(char digit) {
 
     targetFlapNumber = searchSign(digit);                                       // sign position in flapFont is number of targetFlap
 
-    #ifdef I2CMASTERVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("showFlap: targetFlapNumber ");

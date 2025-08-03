@@ -111,7 +111,7 @@ void FlapTask::handleSingleKey(Key21 key, int mod) {
         }
 
         default: {
-            #ifdef MASTERVERBOSE
+            #ifdef ERRORVERBOSE
                 {
                 TraceScope trace;
                 masterPrint("Unknown remote control key: ");
@@ -125,7 +125,7 @@ void FlapTask::handleSingleKey(Key21 key, int mod) {
 
 // --------------------------------------
 void FlapTask::logAndRun(int mod, const char* message, std::function<void()> action) {
-    #ifdef MASTERVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;
         Twin[mod]->twinPrintln(message);
