@@ -302,10 +302,11 @@ bool FlapRegistry::checkSlaveHasBooted(int n, uint8_t address) {
 // return = number of calibrated devices
 //
 int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter parameter) {
-    int  c  = 0;                                                                // number of calibrated devices
-    auto it = g_slaveRegistry.find(address);                                    // search in registry
+    bool twinIsNew = false;                                                     // flag, if twin is new
+    int  c         = 0;                                                         // number of calibrated devices
+    auto it        = g_slaveRegistry.find(address);                             // search in registry
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
-
+        twinIsNew                       = false;                                // twin is allready regisered
         I2CSlaveDevice* device          = it->second;
         device->parameter               = parameter;                            // update all parameter
         device->position                = Twin[n]->slaveReady.position;         // update Flap position
@@ -318,30 +319,10 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
             }
         #endif
 
-        /*
-        if (device->parameter.serialnumber ==
-            parameter.serialnumber) {                                           // has detected device same serial
-            #ifdef REGISTRYVERBOSE
-                {
-                TraceScope trace;
-                registerPrint("Registry will be updated for known Slave 0x");
-                Serial.println(address, HEX);
-                }
-            #endif
-        } else {
-            #ifdef REGISTRYVERBOSE
-                {
-                TraceScope trace;
-                registerPrint("registry rejected: serial number of slave does not match to registered Slave 0x");
-                Serial.println(address, HEX);
-                }
-            #endif
-        }
-
-        */
 
     } else {
         // Device is new → register
+        twinIsNew                          = true;                              // new twin detected
         I2CSlaveDevice* newDevice          = new I2CSlaveDevice();              // create new device
         newDevice->parameter               = parameter;                         // set all parameter
         newDevice->position                = Twin[n]->slaveReady.position;      // set flap position
@@ -358,8 +339,7 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
     }
 
     checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
-    //    n = check_slaveReady(address);                                              // get all parameter from slave
-    if (n >= 0) {                                                               // only if slave is ready
+    if (n >= 0 && twinIsNew) {                                                  // only if slave is ready
 // take over parameter to twin
 #ifdef MASTERVERBOSE
     {
