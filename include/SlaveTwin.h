@@ -65,6 +65,7 @@ class SlaveTwin {
     void  reset();                                                              // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
     void  askSlaveAboutParameter(uint8_t address, slaveParameter& parameter);   // retrieve all slave parameter
     void  initStepsByFlap();                                                    // compute steps needed to move flap by flap
+    bool  isSlaveReady();                                                       // check if slave is ready
     Key21 ir2Key21(uint64_t ircode);
 
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
@@ -112,10 +113,14 @@ class SlaveTwin {
     // clang-format on
 
    private:
+    void             printSlaveReadyInfo();                                     // trace output Read Structure
+    void             updateSlaveReadyInfo(uint8_t* data);                       // take over Read Structure
     i2c_cmd_handle_t buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size);
     void             logShortRequest(ShortMessage cmd);
     void             logShortResponse(uint8_t* answer, int size);
     void             logShortError(ShortMessage cmd, esp_err_t err);
+    void             synchSlaveRegistry(slaveParameter parameter);
+    bool             waitUntilSlaveReady(uint32_t timeout_ms);
 
     // 40 Flap-Modul
     // -------------

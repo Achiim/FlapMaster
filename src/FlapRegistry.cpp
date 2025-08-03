@@ -342,9 +342,10 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
 
     } else {
         // Device is new → register
-        I2CSlaveDevice* newDevice = new I2CSlaveDevice();                       // create new device
-        newDevice->parameter      = parameter;
-        newDevice->position       = Twin[n]->slaveReady.position;               // ...flap position
+        I2CSlaveDevice* newDevice          = new I2CSlaveDevice();              // create new device
+        newDevice->parameter               = parameter;                         // set all parameter
+        newDevice->position                = Twin[n]->slaveReady.position;      // set flap position
+        newDevice->parameter.sensorworking = Twin[n]->slaveReady.sensorStatus;  // set Sensor status
 
         #ifdef REGISTRYVERBOSE
             {
@@ -357,10 +358,22 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
     }
 
     checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
-    n = check_slaveReady(address);                                              // get all parameter from slave
+    //    n = check_slaveReady(address);                                              // get all parameter from slave
     if (n >= 0) {                                                               // only if slave is ready
-        // take over parameter to twin
+// take over parameter to twin
+#ifdef MASTERVERBOSE
+    {
+    TraceScope trace;
+    registerPrint("take over parameter before isSlaveReady() values from slave to his twin on master side 0x");
+    Serial.println(address, HEX);
+    registerPrint("number of Steps = %d for Slave 0x", parameter.steps);
+    Serial.println(address, HEX);
+    registerPrint("sensor status = %d for Slave 0x", parameter.sensorworking);
+    Serial.println(address, HEX);
+    }
+#endif
         Twin[n]->parameter = parameter;                                         // update all twin parameter
+        Twin[n]->isSlaveReady();
 
         #ifdef REGISTRYVERBOSE
             {
