@@ -123,7 +123,7 @@ void SlaveTwin::stepMeasurement() {
     i2cLongCommand(i2cCommandParameter(STEP_MEASSURE, 0), slaveAddress);
     flapNumber = 0;                                                             // we stand at Zero after that
 
-    if (!waitUntilSlaveReady(7 * parameter.speed)) {                            // wait for slave to get ready; maximum time of 35 revolutions
+    if (!waitUntilSlaveReady(10 * parameter.speed)) {                           // wait for slave to get ready; maximum time of 10 revolutions
 //
 #ifdef ERRORVERBOSE
     twinPrintln("Step meassurement failed or timed out on slave 0x%02X", slaveAddress);
