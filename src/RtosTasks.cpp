@@ -77,8 +77,7 @@ void twinRegister(void* pvParameters) {
         }
 
         if (now - lastAvailabilityTime >= availableDelayTicks) {
-            Register
-                ->check_slave_availability();                                   // check if all registerd slaves are still available, if not deregister
+            Register->check_slave_availability();                               // check if all registerd slaves are still available, if not deregister
             lastAvailabilityTime = now;
         }
         vTaskDelay(5000 / portTICK_PERIOD_MS);                                  // Delay for 5 seconds
@@ -113,8 +112,7 @@ void statisticTask(void* param) {
         {
             TraceScope trace;                                                   // use semaphore to protect this block
             #ifdef STATISTICVERBOSE
-                masterPrintln("I²C statistic cycle - access: ", DataEvaluation->busAccessCounter,
-                " data write: ", DataEvaluation->busDataCounter,
+                masterPrintln("I²C statistic cycle - access: ", DataEvaluation->busAccessCounter, " data write: ", DataEvaluation->busDataCounter,
                 " data read: ", DataEvaluation->busReadCounter);
             #endif
         }
@@ -140,8 +138,9 @@ void reportingTask(void* pvParameters) {
                     Reports->reportHeader();                                    // Report Hrader
                     Reports->reportMemory();                                    // ESP32 (RAM status)
                     Reports->reportTasks();                                     // show Task List
-                    Reports->traceSlaveRegistry();
-                    Reports->printI2CStatistic();
+                    Reports->reportAllTwins();                                  // show Slave steps prt Flap
+                    Reports->reportSlaveRegistry();                             // show registry
+                    Reports->reportI2CStatistic();                              // shoe I2C usage
                     Reports->reportPrintln("======== Flap Master Health Overview End ====");
                 }
                 vTaskDelay(100 / portTICK_PERIOD_MS);

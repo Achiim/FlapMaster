@@ -27,6 +27,8 @@
 #include <map>
 #include <FlapGlobal.h>
 #include "TracePrint.h"
+#include <cstdint>
+#include <climits>
 
 #ifndef FlapRegistry_h
     #define FlapRegistry_h

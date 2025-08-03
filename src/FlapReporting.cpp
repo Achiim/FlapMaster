@@ -30,9 +30,10 @@
 #include "FlapRegistry.h"
 
 // Definitionen der Symbole mit Null-Terminator
-const char FlapReporting::BLOCK_LIGHT[]  = u8"░";
-const char FlapReporting::BLOCK_MEDIUM[] = u8"▒";
-const char FlapReporting::BLOCK_DENSE[]  = u8"▓";
+const char  FlapReporting::BLOCK_LIGHT[]      = u8"░";
+const char  FlapReporting::BLOCK_MEDIUM[]     = u8"▒";
+const char  FlapReporting::BLOCK_DENSE[]      = u8"▓";
+const char* FlapReporting::SPARKLINE_LEVELS[] = {u8"▁", u8"▂", u8"▃", u8"▄", u8"▅", u8"▆", u8"▇", u8"█"};
 
 // ----------------------------
 // Constructor
@@ -40,7 +41,7 @@ FlapReporting::FlapReporting() {}
 
 // -----------------------------------
 // trace print I2C usage statistic
-void FlapReporting::printI2CStatistic() {
+void FlapReporting::reportI2CStatistic() {
     Serial.println("- FLAP I²C STATISTIC AND HISTRORY OF LAST MINUTES");
     if (DataEvaluation == nullptr) {
         #ifdef MASTERVERBOSE
@@ -131,7 +132,7 @@ void FlapReporting::printBar(uint32_t value, float scale, const char* symbol, ui
         Serial.print(' ');
 }
 
-void FlapReporting::traceSlaveRegistry() {
+void FlapReporting::reportSlaveRegistry() {
     Serial.println("╔══════════════════════════════════════════════════════════════════════════════════════════╗");
     Serial.println("║                             FLAP I²C DEVICE REGISTRY                                     ║");
     Serial.println("╠══════╦══════════════════════╦════════╦═════╦═══════╦═══════╦══════╦══════╦═══════════════╣");
@@ -141,8 +142,7 @@ void FlapReporting::traceSlaveRegistry() {
     for (const auto& [address, device] : g_slaveRegistry) {
         if (!device) {
             char buffer[64];
-            snprintf(buffer, sizeof(buffer),
-                     "║ 0x%02X ║       (nullptr)      ║   ---  ║ --- ║  ---  ║  ---  ║  --- ║ ---  ║     [invalid]   ║",
+            snprintf(buffer, sizeof(buffer), "║ 0x%02X ║       (nullptr)      ║   ---  ║ --- ║  ---  ║  ---  ║  --- ║ ---  ║     [invalid]   ║",
                      address);
             Serial.println(buffer);
             continue;
@@ -159,8 +159,8 @@ void FlapReporting::traceSlaveRegistry() {
         uint16_t pos     = device->position;
 
         char line[128];
-        snprintf(line, sizeof(line), "║ 0x%02X ║ %-20s ║ %6u ║ %3u ║ %5u ║ %5u ║ %4u ║ %4u ║ %-13s ║", address, name,
-                 offset, (speedMs > 0 ? rpm : 0), speedMs, steps, flaps, pos, sensorStatus);
+        snprintf(line, sizeof(line), "║ 0x%02X ║ %-20s ║ %6u ║ %3u ║ %5u ║ %5u ║ %4u ║ %4u ║ %-13s ║", address, name, offset, (speedMs > 0 ? rpm : 0),
+                 speedMs, steps, flaps, pos, sensorStatus);
 
         Serial.println(line);
     }
@@ -178,8 +178,7 @@ void FlapReporting::reportTasks() {
     auto printTaskInfo = [](const char* name, UBaseType_t reserve, uint16_t size, uint8_t prio) {
         uint16_t used = size - reserve;
         char     buffer[128];
-        snprintf(buffer, sizeof(buffer), "║  %-16s │ %7u       │ %6u       │ %6u      │   %2u      ║", name, reserve,
-                 size, used, prio);
+        snprintf(buffer, sizeof(buffer), "║  %-16s │ %7u       │ %6u       │ %6u      │   %2u      ║", name, reserve, size, used, prio);
         Serial.println(buffer);
     };
 
@@ -188,25 +187,20 @@ void FlapReporting::reportTasks() {
 
     // Weitere registrierte Tasks
     if (g_remoteControlHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_remoteControlHandle), uxTaskGetStackHighWaterMark(g_remoteControlHandle),
-                      STACK_REMOTE, PRIO_REMOTE);
+        printTaskInfo(pcTaskGetName(g_remoteControlHandle), uxTaskGetStackHighWaterMark(g_remoteControlHandle), STACK_REMOTE, PRIO_REMOTE);
 
     if (g_remoteParserHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_remoteParserHandle), uxTaskGetStackHighWaterMark(g_remoteParserHandle),
-                      STACK_PARSER, PRIO_PARSER);
+        printTaskInfo(pcTaskGetName(g_remoteParserHandle), uxTaskGetStackHighWaterMark(g_remoteParserHandle), STACK_PARSER, PRIO_PARSER);
 
     if (g_twinRegisterHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_twinRegisterHandle), uxTaskGetStackHighWaterMark(g_twinRegisterHandle),
-                      STACK_REGISTRY, PRIO_REGISTRY);
+        printTaskInfo(pcTaskGetName(g_twinRegisterHandle), uxTaskGetStackHighWaterMark(g_twinRegisterHandle), STACK_REGISTRY, PRIO_REGISTRY);
 
     if (g_statisticTaskHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_statisticTaskHandle), uxTaskGetStackHighWaterMark(g_statisticTaskHandle),
-                      STACK_STATISTICS, PRIO_STATISTICS);
+        printTaskInfo(pcTaskGetName(g_statisticTaskHandle), uxTaskGetStackHighWaterMark(g_statisticTaskHandle), STACK_STATISTICS, PRIO_STATISTICS);
 
     for (uint8_t i = 0; i < numberOfTwins; i++) {
         if (g_twinHandle[i] != nullptr)
-            printTaskInfo(pcTaskGetName(g_twinHandle[i]), uxTaskGetStackHighWaterMark(g_twinHandle[i]), STACK_TWIN,
-                          PRIO_TWIN);
+            printTaskInfo(pcTaskGetName(g_twinHandle[i]), uxTaskGetStackHighWaterMark(g_twinHandle[i]), STACK_TWIN, PRIO_TWIN);
     }
 
     Serial.println("╚════════════════════════════════════════════════════════════════════════════╝");
@@ -220,8 +214,7 @@ void FlapReporting::reportHeader() {
     snprintf(buffer, sizeof(buffer), "║ Tick count: %10lu                                   ║", xTaskGetTickCount());
     Serial.println(buffer);
 
-    snprintf(buffer, sizeof(buffer), "║ Task count: %10u                                   ║",
-             uxTaskGetNumberOfTasks());
+    snprintf(buffer, sizeof(buffer), "║ Task count: %10u                                   ║", uxTaskGetNumberOfTasks());
     Serial.println(buffer);
 
     // Uptime formatting
@@ -232,8 +225,7 @@ void FlapReporting::reportHeader() {
     uint32_t   minutes      = (totalSeconds % 3600) / 60;
     uint32_t   seconds      = totalSeconds % 60;
 
-    snprintf(buffer, sizeof(buffer), "║ Uptime:       %3u Tage, %02u:%02u:%02u                         ║", days, hours,
-             minutes, seconds);
+    snprintf(buffer, sizeof(buffer), "║ Uptime:       %3u Tage, %02u:%02u:%02u                         ║", days, hours, minutes, seconds);
     Serial.println(buffer);
 
     Serial.println("╚══════════════════════════════════════════════════════════╝");
@@ -272,17 +264,316 @@ void FlapReporting::reportMemory() {
     Serial.println("╠════════════════════════════════════════════════════════════════╣");
 
     char buffer[128];
-    snprintf(buffer, sizeof(buffer), "║ Free RAM now                     (kByte): %7u              ║",
-             ESP.getFreeHeap() / 1024);
+    snprintf(buffer, sizeof(buffer), "║ Free RAM now                     (kByte): %7u              ║", ESP.getFreeHeap() / 1024);
     Serial.println(buffer);
 
-    snprintf(buffer, sizeof(buffer), "║ Lowest level of free RAM         (kByte): %7u              ║",
-             ESP.getMinFreeHeap() / 1024);
+    snprintf(buffer, sizeof(buffer), "║ Lowest level of free RAM         (kByte): %7u              ║", ESP.getMinFreeHeap() / 1024);
     Serial.println(buffer);
 
-    snprintf(buffer, sizeof(buffer), "║ Biggest unfragmented RAM block   (kByte): %7u              ║",
-             ESP.getMaxAllocHeap() / 1024);
+    snprintf(buffer, sizeof(buffer), "║ Biggest unfragmented RAM block   (kByte): %7u              ║", ESP.getMaxAllocHeap() / 1024);
     Serial.println(buffer);
 
     Serial.println("╚════════════════════════════════════════════════════════════════╝");
+}
+
+#include <vector>                                                               // oben in der .cpp
+
+void FlapReporting::reportAllTwins(int wrapWidth) {
+    for (int i = 0; i < numberOfTwins; ++i) {
+        SlaveTwin* twin = Twin[i];
+        if (!twin)
+            continue;
+
+        // Header info
+        char serialBuf[64];
+        snprintf(serialBuf, sizeof(serialBuf), "%s", formatSerialNumber(twin->parameter.serialnumber));
+        int stepsPerRev = twin->parameter.steps;
+
+        int count = twin->parameter.flaps;
+        if (count <= 0)
+            continue;
+
+        // compute min/max for sparkline
+        int minVal = INT_MAX, maxVal = 0;
+        for (int j = 0; j < count; ++j) {
+            int v  = twin->stepsByFlap[j];
+            minVal = min(minVal, v);
+            maxVal = max(maxVal, v);
+        }
+
+        struct Chunk {
+            String flaps;
+            String steps;
+            String index;
+        };
+        std::vector<Chunk> chunks;
+        int                widest = 0;
+
+        for (int offset = 0; offset < count; offset += wrapWidth) {
+            int  lineCount  = min(wrapWidth, count - offset);
+            bool firstChunk = (offset == 0);
+
+            // Flaps line
+            String flapsLine = "           |  Flaps  :";
+            for (int k = 0; k < lineCount; ++k) {
+                int         v      = twin->stepsByFlap[offset + k];
+                const char* barStr = selectSparklineLevel(v, minVal, maxVal);
+                flapsLine += "  ";
+                flapsLine += barStr;
+                flapsLine += " ";
+            }
+
+            // Steps line
+            String stepsLine;
+            if (firstChunk) {
+                char addrBuf[32];
+                snprintf(addrBuf, sizeof(addrBuf), "  0x%02X |  Steps  :", twin->slaveAddress);
+                stepsLine = String(addrBuf);
+            } else {
+                stepsLine = "           |  Steps  :";
+            }
+            for (int k = 0; k < lineCount; ++k) {
+                char buf[8];
+                int  v = twin->stepsByFlap[offset + k];
+                snprintf(buf, sizeof(buf), " %03d", v);
+                stepsLine += buf;
+            }
+
+            // Index line
+            String indexLine = "           |  Index  :";
+            for (int k = 0; k < lineCount; ++k) {
+                char buf[8];
+                int  idx = offset + k + 1;
+                snprintf(buf, sizeof(buf), " %2d", idx);
+                indexLine += buf;
+            }
+
+            widest = max(widest, (int)flapsLine.length());
+            widest = max(widest, (int)stepsLine.length());
+            widest = max(widest, (int)indexLine.length());
+            chunks.push_back({flapsLine, stepsLine, indexLine});
+        }
+
+        // Build header content, right-align Steps/Rev
+        String headerContent = String(serialBuf);
+        char   rightPart[32];
+        snprintf(rightPart, sizeof(rightPart), "Steps/Rev: %d", stepsPerRev);
+        int inner_space = widest - (int)headerContent.length() - (int)strlen(rightPart);
+        if (inner_space < 1)
+            inner_space = 1;
+        for (int s = 0; s < inner_space; ++s)
+            headerContent += ' ';
+        headerContent += rightPart;
+
+        int boxWidth = headerContent.length() + 2;                              // include vertical bars
+
+        // draw box top
+        Serial.print("┌");
+        for (int j = 0; j < boxWidth - 2; ++j)
+            Serial.print("─");
+        Serial.println("┐");
+        // header line
+        Serial.print("│");
+        Serial.print(headerContent);
+        Serial.println("│");
+        // separator line
+        Serial.print("├");
+        for (int j = 0; j < boxWidth - 2; ++j)
+            Serial.print("─");
+        Serial.println("┤");
+
+        // content chunks (no extra blank after separator)
+        for (size_t ci = 0; ci < chunks.size(); ++ci) {
+            Serial.println(chunks[ci].flaps);
+            Serial.println(chunks[ci].steps);
+            Serial.println(chunks[ci].index);
+            if (ci + 1 < chunks.size()) {
+                Serial.println();                                               // gap between chunks
+            }
+        }
+
+        // bottom border
+        Serial.print("└");
+        for (int j = 0; j < boxWidth - 2; ++j)
+            Serial.print("─");
+        Serial.println("┘");
+
+        Serial.println();                                                       // space between twins
+    }
+}
+
+// private
+void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
+    int count = twin.parameter.flaps;
+    if (count <= 0)
+        return;
+
+    // compute min/max for sparkline
+    int minVal = INT_MAX, maxVal = 0;
+    for (int i = 0; i < count; ++i) {
+        int v  = twin.stepsByFlap[i];
+        minVal = min(minVal, v);
+        maxVal = max(maxVal, v);
+    }
+
+    // Build all chunk lines first to determine width
+    int widest = 0;
+    struct Chunk {
+        String flaps;
+        String steps;
+        String index;
+    };
+    std::vector<Chunk> chunks;
+    for (int offset = 0; offset < count; offset += wrapWidth) {
+        int    lineCount  = min(wrapWidth, count - offset);
+        bool   firstChunk = (offset == 0);
+        String flapsLine  = buildFlapsLine(twin, offset, lineCount, minVal, maxVal);
+        String stepsLine  = buildStepsLine(twin, offset, lineCount, firstChunk);
+        String indexLine  = buildIndexLine(offset, lineCount);
+        widest            = max(widest, (int)flapsLine.length());
+        widest            = max(widest, (int)stepsLine.length());
+        widest            = max(widest, (int)indexLine.length());
+        chunks.push_back({flapsLine, stepsLine, indexLine});
+    }
+
+    // Header serial + Steps/Rev
+    char serialBuf[64];
+    snprintf(serialBuf, sizeof(serialBuf), "%s", formatSerialNumber(twin.parameter.serialnumber));
+    char rightPart[32];
+    snprintf(rightPart, sizeof(rightPart), "Steps/Rev: %d", twin.parameter.steps);
+    String headerContent = String(serialBuf);
+    int    inner_space   = widest - (int)headerContent.length() - (int)strlen(rightPart);
+    if (inner_space < 1)
+        inner_space = 1;
+    for (int i = 0; i < inner_space; ++i)
+        headerContent += ' ';
+    headerContent += rightPart;
+
+    // total box width = 2 for vertical borders + headerContent length
+    int boxWidth = headerContent.length() + 2;
+
+    // draw box
+    // top
+    Serial.print("┌");
+    for (int i = 0; i < boxWidth - 2; ++i)
+        Serial.print("─");
+    Serial.println("┐");
+    // header
+    Serial.print("│");
+    Serial.print(headerContent);
+    Serial.println("│");
+    // sep
+    Serial.print("├");
+    for (int i = 0; i < boxWidth - 2; ++i)
+        Serial.print("─");
+    Serial.println("┤");
+    Serial.println();                                                           // blank line as in sample
+
+    // content chunks
+    bool first = true;
+    for (auto& c : chunks) {
+        Serial.println(c.flaps);
+        Serial.println(c.steps);
+        Serial.println(c.index);
+        if (&c != &chunks.back())
+            Serial.println();                                                   // gap between chunks
+    }
+
+    // bottom
+    Serial.print("└");
+    for (int i = 0; i < boxWidth - 2; ++i)
+        Serial.print("─");
+    Serial.println("┘");
+}
+
+const char* FlapReporting::selectSparklineLevel(int value, int minVal, int maxVal) {
+    if (maxVal == minVal) {
+        return (minVal == 0) ? SPARKLINE_LEVELS[0] : SPARKLINE_LEVELS[SPARKLINE_LEVEL_COUNT - 1];
+    }
+    int idx = ((long)(value - minVal) * (SPARKLINE_LEVEL_COUNT - 1)) / (maxVal - minVal);
+    if (idx < 0)
+        idx = 0;
+    if (idx >= SPARKLINE_LEVEL_COUNT)
+        idx = SPARKLINE_LEVEL_COUNT - 1;
+    return SPARKLINE_LEVELS[idx];
+}
+
+// Box drawing helpers
+void FlapReporting::printTopBorder(int width) {
+    Serial.print("┌");
+    for (int i = 0; i < width - 2; ++i)
+        Serial.print("─");
+    Serial.println("┐");
+}
+
+void FlapReporting::printSepBorder(int width) {
+    Serial.print("├");
+    for (int i = 0; i < width - 2; ++i)
+        Serial.print("─");
+    Serial.println("┤");
+}
+
+void FlapReporting::printBottomBorder(int width) {
+    Serial.print("└");
+    for (int i = 0; i < width - 2; ++i)
+        Serial.print("─");
+    Serial.println("┘");
+}
+
+void FlapReporting::printHeaderLine(const char* serial, int stepsPerRev, int total_width) {
+    char rightPart[32];
+    snprintf(rightPart, sizeof(rightPart), "Steps/Rev: %d", stepsPerRev);
+    int leftLen     = strlen(serial);
+    int rightLen    = strlen(rightPart);
+    int inner_space = total_width - 2 - leftLen - rightLen;                     // account for box sides
+    if (inner_space < 1)
+        inner_space = 1;
+
+    Serial.print("│ ");
+    Serial.print(serial);
+    for (int i = 0; i < inner_space; ++i)
+        Serial.print(' ');
+    Serial.print(rightPart);
+    Serial.println(" │");
+}
+
+String FlapReporting::buildFlapsLine(SlaveTwin& twin, int offset, int lineCount, int minVal, int maxVal) {
+    String s = "           |  Flaps  :";
+    for (int i = 0; i < lineCount; ++i) {
+        int         v      = twin.stepsByFlap[offset + i];
+        const char* barStr = FlapReporting().selectSparklineLevel(v, minVal, maxVal); // oder falls non-static: use instance
+        s += "  ";
+        s += barStr;
+        s += " ";
+    }
+    return s;
+}
+
+String FlapReporting::buildStepsLine(SlaveTwin& twin, int offset, int lineCount, bool firstChunk) {
+    String s;
+    if (firstChunk) {
+        char addrBuf[16];
+        snprintf(addrBuf, sizeof(addrBuf), "  0x%02X |  Steps  :", twin.slaveAddress);
+        s += addrBuf;
+    } else {
+        s += "           |  Steps  :";
+    }
+    for (int i = 0; i < lineCount; ++i) {
+        char buf[8];
+        int  v = twin.stepsByFlap[offset + i];
+        snprintf(buf, sizeof(buf), " %03d", v);
+        s += buf;
+    }
+    return s;
+}
+
+String FlapReporting::buildIndexLine(int offset, int lineCount) {
+    String s = "           |  Index  :";
+    for (int i = 0; i < lineCount; ++i) {
+        char buf[8];
+        int  idx = offset + i + 1;
+        snprintf(buf, sizeof(buf), " %2d", idx);
+        s += buf;
+    }
+    return s;
 }

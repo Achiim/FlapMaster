@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <vector>
+#include "SlaveTwin.h"
 
 #ifndef FlapReporting_h
     #define FlapReporting_h
@@ -27,18 +29,33 @@ class FlapReporting {
     uint32_t maxValueFromHistory(uint32_t* history);
     //    void     printI2CHistoryDescending(uint32_t* history, uint32_t maxValue, uint8_t currentIndex);
     void printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength);
-    void printI2CStatistic();
+    void reportI2CStatistic();
     void printFramedHistory();
     void printUptime();                                                         // Helper to report up time
-    void traceSlaveRegistry();                                                  // Helper to report registry content
+    void reportSlaveRegistry();                                                 // Helper to report registry content
     void reportTasks();                                                         // show Tasklist with remaining stack size
     void reportHeader();                                                        // show Ticks and uptime
     void reportHeaderAlt();                                                     // show Ticks and uptime
     void reportMemory();
+    void reportAllTwins(int wrapWidth = 20);                                    // Ausgabe der Reports aller globalen Twins. wrapWidth bestimmt, wie viele Flaps pro Block/Zeile.
 
    private:
-    static const char BLOCK_LIGHT[];                                            // bar pattern for Access
-    static const char BLOCK_MEDIUM[];                                           // bar pattern for Send
-    static const char BLOCK_DENSE[];                                            // bar pattern for Read
+    static const char    BLOCK_LIGHT[];                                         // bar pattern for Access
+    static const char    BLOCK_MEDIUM[];                                        // bar pattern for Send
+    static const char    BLOCK_DENSE[];                                         // bar pattern for Read
+    static const char*   SPARKLINE_LEVELS[];                                    // declaration
+    static constexpr int SPARKLINE_LEVEL_COUNT = 8;                             // number of levels
+
+    void        printStepsByFlapReport(SlaveTwin& twin, int wrapWidth);         // Einzelreport für einen Twin (wird intern benutzt).
+    const char* selectSparklineLevel(int value, int minVal, int maxVal);        // helper to select sparkling
+
+    // box drawing helpers
+    void          printTopBorder(int width);
+    void          printSepBorder(int width);
+    void          printBottomBorder(int width);
+    void          printHeaderLine(const char* serial, int stepsPerRev, int total_width);
+    static String buildIndexLine(int offset, int lineCount);
+    static String buildStepsLine(SlaveTwin& twin, int offset, int lineCount, bool firstChunk);
+    static String buildFlapsLine(SlaveTwin& twin, int offset, int lineCount, int minVal, int maxVal);
 };
 #endif                                                                          // FlapReporting_h
