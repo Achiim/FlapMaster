@@ -56,9 +56,9 @@ void twinRegister(void* pvParameters) {
     Register->scan_i2c_bus();                                                   // Ask I2C Bus who is there, and register unknown slaves
 
     while (true) {
-        const TickType_t scanDelayTicksShort = 10000;                           // every 10 Seconds
-        const TickType_t scanDelayTicksLong  = 300000;                          // every 300 Seconds
-        const TickType_t availableDelayTicks = 20000;                           // every 20 Seconds
+        const TickType_t scanDelayTicksShort = 1000 * 10;                       // every 10 Seconds
+        const TickType_t scanDelayTicksLong  = 1000 * 60 * 20;                  // every 20 Minutes
+        const TickType_t availableDelayTicks = 1000 * 60 * 10;                  // every 10 Minuten
 
         TickType_t now = xTaskGetTickCount();
 
