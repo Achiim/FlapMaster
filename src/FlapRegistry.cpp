@@ -319,7 +319,6 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
             }
         #endif
 
-
     } else {
         // Device is new → register
         twinIsNew                          = true;                              // new twin detected
@@ -378,7 +377,7 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
                 }
             #endif
             Twin[n]->numberOfFlaps = parameter.flaps;
-            Twin[n]->initStepsByFlap();                                         // number of flaps or steps per rev. has changed recalculate
+            Twin[n]->calculateStepsPerFlap();                                   // number of flaps or steps per rev. has changed recalculate
 
             #ifdef REGISTRYVERBOSE
                 {

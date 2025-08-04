@@ -42,7 +42,7 @@ class SlaveTwin {
     int            numberOfFlaps = 0;                                           // the number of flaps of each flap drum
     int            slaveAddress  = 0;                                           // I2C Address of the flap
     int            flapNumber    = 0;                                           // actual flap that is displayed
-    u_int16_t      adjustOffset  = 0;                                           // internal adjustment -> will be saved by save
+    int            adjustOffset  = 0;                                           // internal adjustment -> will be saved by save
     slaveParameter parameter;                                                   // parameter of Slave in EEPROM
     slaveStatus    slaveReady;                                                  // status of slave
     unsigned long  lastTwinTime = 0;
@@ -64,7 +64,7 @@ class SlaveTwin {
     void  setOffset();                                                          // save calibration ofset in slave EEPROM
     void  reset();                                                              // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
     void  askSlaveAboutParameter(uint8_t address, slaveParameter& parameter);   // retrieve all slave parameter
-    void  initStepsByFlap();                                                    // compute steps needed to move flap by flap
+    void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
     Key21 ir2Key21(uint64_t ircode);
 
