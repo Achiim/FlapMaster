@@ -45,42 +45,48 @@ void remoteParser(void* pvParameters) {
 // ----------------------------
 // freeRTOS Task Registry
 void twinRegister(void* pvParameters) {
+    // Initialize timestamps with offset to desynchronize 10 min availability check
     TickType_t lastScanTimeShort    = xTaskGetTickCount();
     TickType_t lastScanTimeLong     = xTaskGetTickCount();
-    TickType_t lastAvailabilityTime = xTaskGetTickCount();
+    TickType_t lastAvailabilityTime = xTaskGetTickCount() + (1000 * 60 * 2);    // +2 minute offset
 
-    Register = new FlapRegistry();                                              // create object for task
+    Register = new FlapRegistry();                                              // Create registry object
 
-    // first job
-    Register->registerUnregistered();                                           // collect unregistered slaves
-    Register->scan_i2c_bus();                                                   // Ask I2C Bus who is there, and register unknown slaves
+    // Initial job: discover and register unknown devices
+    Register->registerUnregistered();
+    Register->scan_i2c_bus();
 
     while (true) {
-        const TickType_t scanDelayTicksShort = 1000 * 10;                       // every 10 Seconds
-        const TickType_t scanDelayTicksLong  = 1000 * 60 * 20;                  // every 20 Minutes
-        const TickType_t availableDelayTicks = 1000 * 60 * 10;                  // every 10 Minuten
+        // Task intervals
+        const TickType_t scanDelayTicksShort = 1000 * 10;                       // every 10 seconds
+        const TickType_t scanDelayTicksLong  = 1000 * 60 * 20;                  // every 20 minutes
+        const TickType_t availableDelayTicks = 1000 * 60 * 10;                  // every 10 minutes
 
         TickType_t now = xTaskGetTickCount();
 
+        // If not all expected twins are registered, perform fast scan
         if (Register->numberOfRegisterdDevices() < numberOfTwins) {
             if (now - lastScanTimeShort >= scanDelayTicksShort) {
-                Register->scan_i2c_bus();                                       // Ask I2C Bus who is there, and register unknown slaves
-                Register->registerUnregistered();                               // collect unregistered slaves
+                Register->scan_i2c_bus();                                       // Scan I2C bus
+                Register->registerUnregistered();                               // Register newly discovered devices
                 lastScanTimeShort = now;
             }
         } else {
+            // Perform long interval scan every 20 minutes
             if (now - lastScanTimeLong >= scanDelayTicksLong) {
-                Register->scan_i2c_bus();                                       // Ask I2C Bus who is there, and register unknown slaves
-                Register->registerUnregistered();                               // collect unregistered slaves
+                Register->scan_i2c_bus();                                       // Scan I2C bus
+                Register->registerUnregistered();                               // Register newly discovered devices
                 lastScanTimeLong = now;
             }
         }
 
+        // Desynchronized availability check (offset by 2 minutes)
         if (now - lastAvailabilityTime >= availableDelayTicks) {
-            Register->check_slave_availability();                               // check if all registerd slaves are still available, if not deregister
+            Register->check_slave_availability();                               // Verify device availability, deregister if missing
             lastAvailabilityTime = now;
         }
-        vTaskDelay(5000 / portTICK_PERIOD_MS);                                  // Delay for 5 seconds
+
+        vTaskDelay(5000 / portTICK_PERIOD_MS);                                  // Delay execution by 5 seconds
     }
 }
 
