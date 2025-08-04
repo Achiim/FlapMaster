@@ -37,7 +37,8 @@ class FlapReporting {
     void reportHeader();                                                        // show Ticks and uptime
     void reportHeaderAlt();                                                     // show Ticks and uptime
     void reportMemory();
-    void reportAllTwins(int wrapWidth = 20);                                    // Ausgabe der Reports aller globalen Twins. wrapWidth bestimmt, wie viele Flaps pro Block/Zeile.
+    void reportAllTwinStepsByFlap(
+        int wrapWidth = 20);                                                    // Ausgabe der Reports aller globalen Twins. wrapWidth bestimmt, wie viele Flaps pro Block/Zeile.
 
    private:
     static const char    BLOCK_LIGHT[];                                         // bar pattern for Access

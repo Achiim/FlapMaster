@@ -144,7 +144,7 @@ void reportingTask(void* pvParameters) {
                     Reports->reportHeader();                                    // Report Hrader
                     Reports->reportMemory();                                    // ESP32 (RAM status)
                     Reports->reportTasks();                                     // show Task List
-                    Reports->reportAllTwins();                                  // show Slave steps prt Flap
+                    Reports->reportAllTwinStepsByFlap();                        // show Slave steps prt Flap
                     Reports->reportSlaveRegistry();                             // show registry
                     Reports->reportI2CStatistic();                              // shoe I2C usage
                     Reports->reportPrintln("======== Flap Master Health Overview End ====");

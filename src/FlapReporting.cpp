@@ -276,7 +276,7 @@ void FlapReporting::reportMemory() {
     Serial.println("╚════════════════════════════════════════════════════════════════╝");
 }
 
-void FlapReporting::reportAllTwins(int wrapWidth) {
+void FlapReporting::reportAllTwinStepsByFlap(int wrapWidth) {
     for (int i = 0; i < numberOfTwins; ++i) {
         SlaveTwin* twin = Twin[i];
         printStepsByFlapReport(*twin, wrapWidth);
@@ -387,7 +387,7 @@ void FlapReporting::drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWid
         int         v   = twin.stepsByFlap[offset + i];
         const char* bar = selectSparklineLevel(v, minVal, maxVal);
 
-        flapLine += padStart(String(offset + i + 1), 3, ' ') + " ";             // z. B. "  1 "
+        flapLine += padStart(String(offset + i), 3, ' ') + " ";                 // z. B. "  0 "
         barsLine += String(bar) + String(bar) + String(bar) + " ";              // z. B. "▁▁▁ "
         stepsLine += padStart(String(v), 3, ' ') + " ";                         // z. B. "409 "
     }
