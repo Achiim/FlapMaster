@@ -135,11 +135,7 @@ void SlaveTwin::stepMeasurement() {
     #endif
 
     askSlaveAboutParameter(slaveAddress, parameter);                            // get result of measurement
-
     synchSlaveRegistry(parameter);                                              // take over measured value to registry
-    #ifdef TWINVERBOSE
-        twinPrintln("Device steps per revolution in registry updated of slave 0x%02X to: %d", slaveAddress, parameter.steps);
-    #endif
 }
 
 // ----------------------------
@@ -157,9 +153,6 @@ void SlaveTwin::speedMeasurement() {
         return;
     }
     synchSlaveRegistry(parameter);                                              // take over measured value to registry
-    #ifdef MASTERVERBOSE
-        twinPrintln("Device speed in registry updated of slave 0x%02X to: %d", slaveAddress, parameter.speed);
-    #endif
 }
 
 // ----------------------------
@@ -177,9 +170,6 @@ void SlaveTwin::sensorCheck() {
         return;
     }
     synchSlaveRegistry(parameter);                                              // take over measured value to registry
-    #ifdef MASTERVERBOSE
-        twinPrintln("Sensor status in registry updated of slave 0x%02X to: %d", slaveAddress, slaveReady.sensorStatus);
-    #endif
 }
 
 // ----------------------------
@@ -639,76 +629,73 @@ void SlaveTwin::synchSlaveRegistry(slaveParameter parameter) {
     auto it       = g_slaveRegistry.find(slaveAddress);                         // search in registry
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
 
-        I2CSlaveDevice* device          = it->second;
-        device->position                = slaveReady.position;                  // update Flap position
-        device->parameter.steps         = parameter.steps;                      // update steps per revolution
-        device->parameter.speed         = parameter.speed;                      // update speed (time per revolution)
-        device->parameter.offset        = parameter.offset;                     // update offset
-        device->parameter.sensorworking = slaveReady.sensorStatus;              // update Sensor status
-        #ifdef TWINVERBOSE
-            {
-            TraceScope trace;
-            twinPrint("Registry updated for known Slave 0x");
-            Serial.println(slaveAddress, HEX);
-            }
-        #endif
+        I2CSlaveDevice* device = it->second;
+
+        if (device->position != slaveReady.position) {
+            device->position = slaveReady.position;                             // update Flap position
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;
+                twinPrintln("Device position in registry updated of slave 0x%02X to: %d", slaveAddress, slaveReady.position);
+                }
+            #endif
+        }
+        if (device->parameter.steps != parameter.steps) {
+            device->parameter.steps = parameter.steps;                          // update steps per revolution
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;
+                twinPrintln("Device steps per revolution in registry updated of slave 0x%02X to: %d", slaveAddress, parameter.steps);
+                Serial.println(slaveAddress, HEX);
+                }
+            #endif
+
+            calculateStepsPerFlap();                                            // steps per rev. has changed recalculate stepsPerFlap
+
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;
+                twinPrint("Steps by Flap are: ");
+                for (int i = 0; i < parameter.flaps; ++i) {
+                Serial.print(stepsByFlap[i]);
+                if (i < parameter.flaps - 1)
+                Serial.print(", ");
+                }
+                Serial.println();
+                }
+            #endif
+        }
+
+        if (device->parameter.speed != parameter.speed) {
+            device->parameter.speed = parameter.speed;                          // update speed (time per revolution)
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;
+                twinPrintln("Device speed in registry updated of slave 0x%02X to: %d", slaveAddress, parameter.speed);
+                }
+            #endif
+        }
+
+        if (device->parameter.offset != parameter.offset) {
+            device->parameter.offset = parameter.offset;                        // update offset
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;
+                twinPrintln("Device offset in registry updated of slave 0x%02X to: %d", slaveAddress, parameter.offset);
+                }
+            #endif
+        }
+
+        if (device->parameter.sensorworking != slaveReady.sensorStatus) {
+            device->parameter.sensorworking = slaveReady.sensorStatus;          // update Sensor status
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;
+                twinPrintln("Device sensor status in registry updated of slave 0x%02X to: %d", slaveAddress, slaveReady.sensorStatus);
+                }
+            #endif
+        }
     }
-    /*
-        else {
-            // Device is new → register
-            I2CSlaveDevice* newDevice          = new I2CSlaveDevice();          // create new device
-            newDevice->position                = slaveReady.position;           // set flap position
-            newDevice->parameter.steps         = parameter.steps;               // update speed per revolution
-            newDevice->parameter.speed         = parameter.speed;               // update speed (time per revolution)
-            newDevice->parameter.offset        = parameter.offset;              // update offset
-            newDevice->parameter.sensorworking = slaveReady.sensorStatus;       // set Sensor status
-
-            #ifdef TWINVERBOSE
-                {
-                TraceScope trace;
-                twinPrint("Registered new Slave 0x");
-                Serial.println(slaveAddress, HEX);
-                }
-            #endif
-            g_slaveRegistry[slaveAddress] = newDevice;                          // register new device
-        }
-
-        #ifdef TWINVERBOSE
-            {
-            TraceScope trace;
-            twinPrint("number of old steps = %d for Slave 0x", oldSteps);
-            Serial.println(slaveAddress, HEX);
-            twinPrint("number of new Steps = %d for Slave 0x", parameter.steps);
-            Serial.println(slaveAddress, HEX);
-            }
-        #endif
-
-            #ifdef TWINVERBOSE
-                {
-                TraceScope trace;
-                twinPrint("number of Flaps = %d for Slave 0x", parameter.flaps);
-                Serial.println(slaveAddress, HEX);
-                twinPrint("compute new Steps by Flap array for Slave 0x");
-                Serial.println(slaveAddress, HEX);
-                }
-            #endif
-            numberOfFlaps = parameter.flaps;
-    */
-
-    calculateStepsPerFlap();                                                    // steps per rev. has changed recalculate stepsPerFlap
-
-    #ifdef TWINVERBOSE
-        {
-        TraceScope trace;
-        twinPrint("Steps by Flap are: ");
-        for (int i = 0; i < parameter.flaps; ++i) {
-        Serial.print(stepsByFlap[i]);
-        if (i < parameter.flaps - 1)
-        Serial.print(", ");
-        }
-        Serial.println();
-        }
-    #endif
 }
 
 // ---------------------------
