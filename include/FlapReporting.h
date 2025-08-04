@@ -50,12 +50,8 @@ class FlapReporting {
     const char* selectSparklineLevel(int value, int minVal, int maxVal);        // helper to select sparkling
 
     // box drawing helpers
-    void          printTopBorder(int width);
-    void          printSepBorder(int width);
-    void          printBottomBorder(int width);
-    void          printHeaderLine(const char* serial, int stepsPerRev, int total_width);
-    static String buildIndexLine(int offset, int lineCount);
-    static String buildStepsLine(SlaveTwin& twin, int offset, int lineCount, bool firstChunk);
-    static String buildFlapsLine(SlaveTwin& twin, int offset, int lineCount, int minVal, int maxVal);
+    String repeatChar(const String& symbol, int count);                         // Helper for unicode
+    String padStart(String val, int length, char fill = ' ');
+    void   drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWidth);
 };
 #endif                                                                          // FlapReporting_h

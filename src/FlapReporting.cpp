@@ -276,139 +276,22 @@ void FlapReporting::reportMemory() {
     Serial.println("╚════════════════════════════════════════════════════════════════╝");
 }
 
-#include <vector>                                                               // oben in der .cpp
-
 void FlapReporting::reportAllTwins(int wrapWidth) {
     for (int i = 0; i < numberOfTwins; ++i) {
         SlaveTwin* twin = Twin[i];
-        if (!twin)
-            continue;
+        printStepsByFlapReport(*twin, wrapWidth);
 
-        // Header info
-        char serialBuf[64];
-        snprintf(serialBuf, sizeof(serialBuf), "%s", formatSerialNumber(twin->parameter.serialnumber));
-        int stepsPerRev = twin->parameter.steps;
-
-        int count = twin->parameter.flaps;
-        if (count <= 0)
-            continue;
-
-        // compute min/max for sparkline
-        int minVal = INT_MAX, maxVal = 0;
-        for (int j = 0; j < count; ++j) {
-            int v  = twin->stepsByFlap[j];
-            minVal = min(minVal, v);
-            maxVal = max(maxVal, v);
-        }
-
-        struct Chunk {
-            String flaps;
-            String steps;
-            String index;
-        };
-        std::vector<Chunk> chunks;
-        int                widest = 0;
-
-        for (int offset = 0; offset < count; offset += wrapWidth) {
-            int  lineCount  = min(wrapWidth, count - offset);
-            bool firstChunk = (offset == 0);
-
-            // Flaps line
-            String flapsLine = "           |  Flaps  :";
-            for (int k = 0; k < lineCount; ++k) {
-                int         v      = twin->stepsByFlap[offset + k];
-                const char* barStr = selectSparklineLevel(v, minVal, maxVal);
-                flapsLine += "  ";
-                flapsLine += barStr;
-                flapsLine += " ";
-            }
-
-            // Steps line
-            String stepsLine;
-            if (firstChunk) {
-                char addrBuf[32];
-                snprintf(addrBuf, sizeof(addrBuf), "  0x%02X |  Steps  :", twin->slaveAddress);
-                stepsLine = String(addrBuf);
-            } else {
-                stepsLine = "           |  Steps  :";
-            }
-            for (int k = 0; k < lineCount; ++k) {
-                char buf[8];
-                int  v = twin->stepsByFlap[offset + k];
-                snprintf(buf, sizeof(buf), " %03d", v);
-                stepsLine += buf;
-            }
-
-            // Index line
-            String indexLine = "           |  Index  :";
-            for (int k = 0; k < lineCount; ++k) {
-                char buf[8];
-                int  idx = offset + k + 1;
-                snprintf(buf, sizeof(buf), " %2d", idx);
-                indexLine += buf;
-            }
-
-            widest = max(widest, (int)flapsLine.length());
-            widest = max(widest, (int)stepsLine.length());
-            widest = max(widest, (int)indexLine.length());
-            chunks.push_back({flapsLine, stepsLine, indexLine});
-        }
-
-        // Build header content, right-align Steps/Rev
-        String headerContent = String(serialBuf);
-        char   rightPart[32];
-        snprintf(rightPart, sizeof(rightPart), "Steps/Rev: %d", stepsPerRev);
-        int inner_space = widest - (int)headerContent.length() - (int)strlen(rightPart);
-        if (inner_space < 1)
-            inner_space = 1;
-        for (int s = 0; s < inner_space; ++s)
-            headerContent += ' ';
-        headerContent += rightPart;
-
-        int boxWidth = headerContent.length() + 2;                              // include vertical bars
-
-        // draw box top
-        Serial.print("┌");
-        for (int j = 0; j < boxWidth - 2; ++j)
-            Serial.print("─");
-        Serial.println("┐");
-        // header line
-        Serial.print("│");
-        Serial.print(headerContent);
-        Serial.println("│");
-        // separator line
-        Serial.print("├");
-        for (int j = 0; j < boxWidth - 2; ++j)
-            Serial.print("─");
-        Serial.println("┤");
-
-        // content chunks (no extra blank after separator)
-        for (size_t ci = 0; ci < chunks.size(); ++ci) {
-            Serial.println(chunks[ci].flaps);
-            Serial.println(chunks[ci].steps);
-            Serial.println(chunks[ci].index);
-            if (ci + 1 < chunks.size()) {
-                Serial.println();                                               // gap between chunks
-            }
-        }
-
-        // bottom border
-        Serial.print("└");
-        for (int j = 0; j < boxWidth - 2; ++j)
-            Serial.print("─");
-        Serial.println("┘");
-
-        Serial.println();                                                       // space between twins
+        // Optionale Trennlinie zwischen Geräten
+        // Serial.println();                                                       // oder ein dekorativer Rahmen
     }
 }
 
-// private
 void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
     int count = twin.parameter.flaps;
     if (count <= 0)
         return;
 
-    // compute min/max for sparkline
+    // Min/Max für Sparkline
     int minVal = INT_MAX, maxVal = 0;
     for (int i = 0; i < count; ++i) {
         int v  = twin.stepsByFlap[i];
@@ -416,164 +299,119 @@ void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
         maxVal = max(maxVal, v);
     }
 
-    // Build all chunk lines first to determine width
-    int widest = 0;
+    // Baue alle Zeilen vorab, um Breite zu bestimmen
     struct Chunk {
-        String flaps;
-        String steps;
-        String index;
+        String bars, steps, index;
     };
     std::vector<Chunk> chunks;
-    for (int offset = 0; offset < count; offset += wrapWidth) {
-        int    lineCount  = min(wrapWidth, count - offset);
-        bool   firstChunk = (offset == 0);
-        String flapsLine  = buildFlapsLine(twin, offset, lineCount, minVal, maxVal);
-        String stepsLine  = buildStepsLine(twin, offset, lineCount, firstChunk);
-        String indexLine  = buildIndexLine(offset, lineCount);
-        widest            = max(widest, (int)flapsLine.length());
-        widest            = max(widest, (int)stepsLine.length());
-        widest            = max(widest, (int)indexLine.length());
-        chunks.push_back({flapsLine, stepsLine, indexLine});
-    }
+    int                columnWidth     = 4;
+    int                chunkFieldWidth = wrapWidth * 4;                         // 3 Zeichen pro Feld + 1 Leerzeichen
+    int                flapCount       = twin.parameter.flaps;
+    if (wrapWidth < twin.parameter.flaps)
+        flapCount = wrapWidth;
+    int tableWidth = 10 + flapCount * columnWidth;                              // z.B. columnWidth = 4 oder 5
 
-    // Header serial + Steps/Rev
+    // Header mit I²C, Seriennummer und Steps/Rev
+    char addrBuf[6];
+    snprintf(addrBuf, sizeof(addrBuf), "0x%02X", twin.slaveAddress);
     char serialBuf[64];
     snprintf(serialBuf, sizeof(serialBuf), "%s", formatSerialNumber(twin.parameter.serialnumber));
-    char rightPart[32];
-    snprintf(rightPart, sizeof(rightPart), "Steps/Rev: %d", twin.parameter.steps);
-    String headerContent = String(serialBuf);
-    int    inner_space   = widest - (int)headerContent.length() - (int)strlen(rightPart);
-    if (inner_space < 1)
-        inner_space = 1;
-    for (int i = 0; i < inner_space; ++i)
-        headerContent += ' ';
-    headerContent += rightPart;
+    char stepsBuf[32];
+    snprintf(stepsBuf, sizeof(stepsBuf), " Steps/Rev: %d", twin.parameter.steps);
 
-    // total box width = 2 for vertical borders + headerContent length
-    int boxWidth = headerContent.length() + 2;
+    String headerLine = "│ ";
+    headerLine += addrBuf;
+    headerLine += "  |";
+    headerLine += serialBuf;
+    int    padding = tableWidth - headerLine.length() - String(stepsBuf).length();
+    String spaces  = "";
+    for (int i = 0; i < padding; ++i)
+        spaces += ' ';
 
-    // draw box
-    // top
+    headerLine += spaces;
+    headerLine += stepsBuf;
+    headerLine += " │";
+
+    // Rahmen oben
     Serial.print("┌");
-    for (int i = 0; i < boxWidth - 2; ++i)
-        Serial.print("─");
+    Serial.print(repeatChar("─", tableWidth - 2));
     Serial.println("┐");
-    // header
-    Serial.print("│");
-    Serial.print(headerContent);
+    Serial.println(headerLine);
+    Serial.print("├");
+    Serial.print(repeatChar("─", tableWidth - 2));
+    Serial.println("┤");
+
+    for (int offset = 0; offset < count; offset += wrapWidth) {
+        drawTwinChunk(twin, offset, wrapWidth);
+    }
+    // Rahmen unten
+    Serial.print("└");
+    Serial.print(repeatChar("─", tableWidth - 2));
+    Serial.println("┘");
+}
+
+String FlapReporting::repeatChar(const String& symbol, int count) {
+    String result;
+    for (int i = 0; i < count; ++i) {
+        result += symbol;
+    }
+    return result;
+}
+
+String FlapReporting::padStart(String val, int length, char fill) {
+    while (val.length() < length) {
+        val = String(fill) + val;
+    }
+    return val;
+}
+
+void FlapReporting::drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWidth) {
+    const int chunkWidth = wrapWidth * 4;
+
+    String barsLine, stepsLine, flapLine;
+
+    // Sparkline Grenzwerte holen
+    int count  = twin.parameter.flaps;
+    int end    = min(offset + wrapWidth, count);
+    int minVal = INT_MAX, maxVal = 0;
+    for (int i = offset; i < end; ++i) {
+        int v  = twin.stepsByFlap[i];
+        minVal = min(minVal, v);
+        maxVal = max(maxVal, v);
+    }
+
+    int flapCount = twin.parameter.flaps;
+    if (wrapWidth < twin.parameter.flaps)
+        flapCount = wrapWidth;
+    for (int i = 0; i < flapCount; ++i) {
+        int         v   = twin.stepsByFlap[offset + i];
+        const char* bar = selectSparklineLevel(v, minVal, maxVal);
+
+        flapLine += padStart(String(offset + i + 1), 3, ' ') + " ";             // z. B. "  1 "
+        barsLine += String(bar) + String(bar) + String(bar) + " ";              // z. B. "▁▁▁ "
+        stepsLine += padStart(String(v), 3, ' ') + " ";                         // z. B. "409 "
+    }
+
+    // Header (optional)
+    Serial.print("│  flap │");
+    Serial.print(flapLine);
     Serial.println("│");
-    // sep
-    Serial.print("├");
-    for (int i = 0; i < boxWidth - 2; ++i)
-        Serial.print("─");
-    Serial.println("┤");
-    Serial.println();                                                           // blank line as in sample
 
-    // content chunks
-    bool first = true;
-    for (auto& c : chunks) {
-        Serial.println(c.flaps);
-        Serial.println(c.steps);
-        Serial.println(c.index);
-        if (&c != &chunks.back())
-            Serial.println();                                                   // gap between chunks
-    }
+    Serial.print("│       │");
+    Serial.print(barsLine);
+    Serial.println("│");
 
-    // bottom
-    Serial.print("└");
-    for (int i = 0; i < boxWidth - 2; ++i)
-        Serial.print("─");
-    Serial.println("┘");
+    Serial.print("│ steps │");
+    Serial.print(stepsLine);
+    Serial.println("│");
 }
+const char* FlapReporting::selectSparklineLevel(int value, int minValue, int maxValue) {
+    if (maxValue == minValue)
+        return SPARKLINE_LEVELS[0];
 
-const char* FlapReporting::selectSparklineLevel(int value, int minVal, int maxVal) {
-    if (maxVal == minVal) {
-        return (minVal == 0) ? SPARKLINE_LEVELS[0] : SPARKLINE_LEVELS[SPARKLINE_LEVEL_COUNT - 1];
-    }
-    int idx = ((long)(value - minVal) * (SPARKLINE_LEVEL_COUNT - 1)) / (maxVal - minVal);
-    if (idx < 0)
-        idx = 0;
-    if (idx >= SPARKLINE_LEVEL_COUNT)
-        idx = SPARKLINE_LEVEL_COUNT - 1;
-    return SPARKLINE_LEVELS[idx];
-}
+    float ratio = static_cast<float>(value - minValue) / (maxValue - minValue);
+    int   index = round(ratio * (SPARKLINE_LEVEL_COUNT - 1));
+    index       = std::max(0, std::min(index, SPARKLINE_LEVEL_COUNT - 1));
 
-// Box drawing helpers
-void FlapReporting::printTopBorder(int width) {
-    Serial.print("┌");
-    for (int i = 0; i < width - 2; ++i)
-        Serial.print("─");
-    Serial.println("┐");
-}
-
-void FlapReporting::printSepBorder(int width) {
-    Serial.print("├");
-    for (int i = 0; i < width - 2; ++i)
-        Serial.print("─");
-    Serial.println("┤");
-}
-
-void FlapReporting::printBottomBorder(int width) {
-    Serial.print("└");
-    for (int i = 0; i < width - 2; ++i)
-        Serial.print("─");
-    Serial.println("┘");
-}
-
-void FlapReporting::printHeaderLine(const char* serial, int stepsPerRev, int total_width) {
-    char rightPart[32];
-    snprintf(rightPart, sizeof(rightPart), "Steps/Rev: %d", stepsPerRev);
-    int leftLen     = strlen(serial);
-    int rightLen    = strlen(rightPart);
-    int inner_space = total_width - 2 - leftLen - rightLen;                     // account for box sides
-    if (inner_space < 1)
-        inner_space = 1;
-
-    Serial.print("│ ");
-    Serial.print(serial);
-    for (int i = 0; i < inner_space; ++i)
-        Serial.print(' ');
-    Serial.print(rightPart);
-    Serial.println(" │");
-}
-
-String FlapReporting::buildFlapsLine(SlaveTwin& twin, int offset, int lineCount, int minVal, int maxVal) {
-    String s = "           |  Flaps  :";
-    for (int i = 0; i < lineCount; ++i) {
-        int         v      = twin.stepsByFlap[offset + i];
-        const char* barStr = FlapReporting().selectSparklineLevel(v, minVal, maxVal); // oder falls non-static: use instance
-        s += "  ";
-        s += barStr;
-        s += " ";
-    }
-    return s;
-}
-
-String FlapReporting::buildStepsLine(SlaveTwin& twin, int offset, int lineCount, bool firstChunk) {
-    String s;
-    if (firstChunk) {
-        char addrBuf[16];
-        snprintf(addrBuf, sizeof(addrBuf), "  0x%02X |  Steps  :", twin.slaveAddress);
-        s += addrBuf;
-    } else {
-        s += "           |  Steps  :";
-    }
-    for (int i = 0; i < lineCount; ++i) {
-        char buf[8];
-        int  v = twin.stepsByFlap[offset + i];
-        snprintf(buf, sizeof(buf), " %03d", v);
-        s += buf;
-    }
-    return s;
-}
-
-String FlapReporting::buildIndexLine(int offset, int lineCount) {
-    String s = "           |  Index  :";
-    for (int i = 0; i < lineCount; ++i) {
-        char buf[8];
-        int  idx = offset + i + 1;
-        snprintf(buf, sizeof(buf), " %2d", idx);
-        s += buf;
-    }
-    return s;
+    return SPARKLINE_LEVELS[index];
 }
