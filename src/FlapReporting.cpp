@@ -444,9 +444,6 @@ void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
     Serial.print("└");
     Serial.print(repeatChar("─", tableWidth - 2));
     Serial.println("┘");
-    bars  = "";
-    steps = "";
-    index = "";
 }
 
 String FlapReporting::repeatChar(const String& symbol, int count) {
@@ -503,7 +500,12 @@ void FlapReporting::drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWid
     Serial.print("│ steps │");
     Serial.print(stepsLine);
     Serial.println("│");
+
+    barsLine  = "";
+    stepsLine = "";
+    flapLine  = "";
 }
+
 const char* FlapReporting::selectSparklineLevel(int value, int minValue, int maxValue) {
     if (maxValue == minValue)
         return SPARKLINE_LEVELS[0];
@@ -511,6 +513,5 @@ const char* FlapReporting::selectSparklineLevel(int value, int minValue, int max
     float ratio = static_cast<float>(value - minValue) / (maxValue - minValue);
     int   index = round(ratio * (SPARKLINE_LEVEL_COUNT - 1));
     index       = std::max(0, std::min(index, SPARKLINE_LEVEL_COUNT - 1));
-
     return SPARKLINE_LEVELS[index];
 }
