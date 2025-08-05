@@ -124,24 +124,27 @@ int FlapRegistry::scanForSlave(int poolIndex, uint8_t addr) {
         }
     #endif
 
-    // Registry lookup (for diagnostics)
-    auto it = g_slaveRegistry.find(addr);
-
-    #ifdef REGISTRYVERBOSE
-        {
-        TraceScope trace;
-        if (pingI2Cslave(addr) == ESP_OK) {
-        registerPrint("Slave is present on I2C bus: 0x");
-        Serial.println(addr, HEX);
-        } else {
-        registerPrint("No slave responded on I2C bus at address: 0x");
-        Serial.println(addr, HEX);
-        }
-        }
-    #endif
+    esp_err_t pingResult = pingI2Cslave(addr);                                  // Ping slave and wait for ACK
+    if (pingResult == ESP_OK) {
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("Slave is present on I2C bus: 0x");
+            Serial.println(addr, HEX);
+            }
+        #endif
+    } else {
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("No slave responded on I2C bus at address: 0x");
+            Serial.println(addr, HEX);
+            }
+            return -1;
+        #endif
+    }
 
     int twinIndex = findTwinIndexByAddress(addr);
-
     #ifdef REGISTRYVERBOSE
         {
         TraceScope trace;
@@ -154,6 +157,8 @@ int FlapRegistry::scanForSlave(int poolIndex, uint8_t addr) {
         return -1;                                                              // no matching twin
     }
 
+    // Registry lookup (for diagnostics)
+    auto it = g_slaveRegistry.find(addr);
     if (it != g_slaveRegistry.end() && it->second != nullptr) {
         #ifdef REGISTRYVERBOSE
             {
