@@ -54,5 +54,11 @@ class FlapReporting {
     String repeatChar(const String& symbol, int count);                         // Helper for unicode
     String padStart(String val, int length, char fill = ' ');
     void   drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWidth);
-};
+
+    void     reportNextAvailabilityTime();
+    void     reportNextScanTime();
+    uint32_t getNextScanRemainingMs();
+    uint32_t getNextAvailabilityRemainingMs();
+
 #endif                                                                          // FlapReporting_h
+};

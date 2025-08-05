@@ -46,6 +46,11 @@
     #define STACK_STATISTICS 1024                                               // Statistics Task
 #endif
 
+// Task Countdown Timer
+#define LONG_SCAN_COUNTDOWN 1000 * 60 * 20                                      // 20 minutes
+#define SHORT_SCAN_COUNTDOWN 1000 * 15                                          // 15 seconds
+#define AVAILABILITY_CHECK_COUNTDOWN 1000 * 60                                  // 1 minute
+
 // Global variables for RTOS task handles
 extern TaskHandle_t g_remoteControlHandle;                                      // Task handlers https://www.freertos.org/a00019.html#xTaskHandle
 extern TaskHandle_t g_remoteParserHandle;                                       // RTOS Task Handler
@@ -64,6 +69,16 @@ extern RemoteControl   Control;                                                 
 extern RemoteParser*   Parser;                                                  // Parser class to filter key from remote control
 extern FlapRegistry*   Register;                                                // class for Registry Task
 extern FlapStatistics* DataEvaluation;                                          // class to collect and evaluate operation statistics
+
+// Global Timer-Handles
+extern TimerHandle_t shortScanTimer;                                            // ic2 scan in short modus
+extern TimerHandle_t longScanTimer;                                             // i2c scan in long modus
+extern TimerHandle_t availCheckTimer;                                           // device availability check
+
+// Global Timer-CAllbacks
+extern void shortScanCallback(TimerHandle_t xTimer);                            // execute short Time i2c bus scan
+extern void longScanCallback(TimerHandle_t xTimer);                             // execute Long Time i2c bus scan
+extern void availCheckCallback(TimerHandle_t xTimer);                           // execute Availability Check
 
 class FlapTask {
    public:

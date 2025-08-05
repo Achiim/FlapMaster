@@ -45,6 +45,23 @@ void remoteParser(void* pvParameters) {
 // ----------------------------
 // freeRTOS Task Registry
 void twinRegister(void* pvParameters) {
+    Register = new FlapRegistry();
+    Register->registerUnregistered();
+    Register->scan_i2c_bus();
+    shortScanTimer =
+        xTimerCreate("ScanShort", pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), pdTRUE, nullptr, shortScanCallback); // 1) Short-Scan-Timer (Auto-Reload)
+    longScanTimer =
+        xTimerCreate("ScanLong", pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), pdTRUE, nullptr, longScanCallback); // 2) Long-Scan-Timer (Auto-Reload)
+    availCheckTimer = xTimerCreate("AvailChk", pdMS_TO_TICKS(AVAILABILITY_CHECK_COUNTDOWN), pdTRUE, nullptr,
+                                   availCheckCallback);                         // 3) Availability-Check-Timer (Auto-Reload)
+
+    xTimerStart(shortScanTimer, 0);                                             // starte Short-Scan now
+    vTaskDelay(pdMS_TO_TICKS(2 * 60 * 1000));                                   // start Availability-Check with 2 Min-Offset
+    xTimerStart(availCheckTimer, 0);
+    vTaskSuspend(nullptr);                                                      // suspend task,  Callbacks are doing the job
+}
+/*
+void twinRegister(void* pvParameters) {
     // Initialize timestamps with offset to desynchronize 10 min availability check
     TickType_t lastScanTimeShort    = xTaskGetTickCount();
     TickType_t lastScanTimeLong     = xTaskGetTickCount();
@@ -89,7 +106,7 @@ void twinRegister(void* pvParameters) {
         vTaskDelay(5000 / portTICK_PERIOD_MS);                                  // Delay execution by 5 seconds
     }
 }
-
+*/
 // ----------------------------
 // freeRTOS Task Twin[n]
 void slaveTwinTask(void* pvParameters) {
@@ -141,7 +158,7 @@ void reportingTask(void* pvParameters) {
             if (receivedKey != Key21::NONE) {
                 if (receivedKey == Key21::KEY_100_PLUS) {
                     Reports->reportPrintln("======== Flap Master Health Overview ========");
-                    Reports->reportHeader();                                    // Report Hrader
+                    Reports->reportHeader();                                    // Report Header
                     Reports->reportMemory();                                    // ESP32 (RAM status)
                     Reports->reportTasks();                                     // show Task List
                     Reports->reportAllTwinStepsByFlap();                        // show Slave steps prt Flap

@@ -14,6 +14,8 @@
 #include <Arduino.h>
 #include <FlapGlobal.h>
 #include <map>
+#include <freertos/FreeRTOS.h>                                                  // Real Time OS
+#include <freertos/timers.h>                                                    // Real Time OS time
 #include "MasterPrint.h"
 #include "TracePrint.h"
 #include "FlapRegistry.h"

@@ -206,41 +206,137 @@ void FlapReporting::reportTasks() {
     Serial.println("╚════════════════════════════════════════════════════════════════════════════╝");
 }
 void FlapReporting::reportHeader() {
-    Serial.println("╔══════════════════════════════════════════════════════════╗");
-    Serial.println("║                  FLAP TASKS STATUS REPORT                ║");
-    Serial.println("╠══════════════════════════════════════════════════════════╣");
+    constexpr int CONTENT_WIDTH = 58;                                           // Breite zwischen den Rahmenlinien
+    constexpr int VALUE_COL     = 22;                                           // Spalte (1-basiert) ab der der Wert beginnt
 
-    char buffer[128];
-    snprintf(buffer, sizeof(buffer), "║ Tick count: %10lu                                   ║", xTaskGetTickCount());
-    Serial.println(buffer);
+    auto printTop    = [&]() { Serial.println("╔══════════════════════════════════════════════════════════╗"); };
+    auto printSep    = [&]() { Serial.println("╠══════════════════════════════════════════════════════════╣"); };
+    auto printBottom = [&]() { Serial.println("╚══════════════════════════════════════════════════════════╝"); };
 
-    snprintf(buffer, sizeof(buffer), "║ Task count: %10u                                   ║", uxTaskGetNumberOfTasks());
-    Serial.println(buffer);
+    // Hilfs-Lambda, um eine Zeile "║ label + spaces + value + spaces ║" zu drucken
+    auto printKV = [&](const char* label, const char* value) {
+        char buf[CONTENT_WIDTH + 1];
+        int  pos = 0;
 
-    // Uptime formatting
-    TickType_t ticks        = xTaskGetTickCount();
-    uint32_t   totalSeconds = ticks * portTICK_PERIOD_MS / 1000;
-    uint32_t   days         = totalSeconds / 86400;
-    uint32_t   hours        = (totalSeconds % 86400) / 3600;
-    uint32_t   minutes      = (totalSeconds % 3600) / 60;
-    uint32_t   seconds      = totalSeconds % 60;
+        // 1) Label kopieren
+        int lblLen = strlen(label);
+        memcpy(buf + pos, label, lblLen);
+        pos += lblLen;
 
-    snprintf(buffer, sizeof(buffer), "║ Uptime:       %3u Tage, %02u:%02u:%02u                         ║", days, hours, minutes, seconds);
-    Serial.println(buffer);
+        // 2) Zwischenraum bis VALUE_COL füllen
+        int pad = VALUE_COL - 1 - lblLen;
+        if (pad < 1)
+            pad = 1;
+        memset(buf + pos, ' ', pad);
+        pos += pad;
 
-    Serial.println("╚══════════════════════════════════════════════════════════╝");
+        // 3) Wert einfügen
+        int valLen = strlen(value);
+        memcpy(buf + pos, value, valLen);
+        pos += valLen;
+
+        // 4) Rest mit Leerzeichen auffüllen
+        if (pos < CONTENT_WIDTH) {
+            memset(buf + pos, ' ', CONTENT_WIDTH - pos);
+        }
+        buf[CONTENT_WIDTH] = '\0';
+
+        // 5) ausgeben
+        Serial.print("║");
+        Serial.print(buf);
+        Serial.println("║");
+    };
+
+    printTop();
+    // Titel zentriert oder linksbündig – hier linksbündig
+    printKV(" FLAP TASKS STATUS REPORT", "");
+    printSep();
+
+    // Tick count
+    {
+        char val[32];
+        snprintf(val, sizeof(val), "%10lu", (unsigned long)xTaskGetTickCount());
+        printKV(" Tick count:", val);
+    }
+
+    // Task count
+    {
+        char val[32];
+        snprintf(val, sizeof(val), "%10u", (unsigned)uxTaskGetNumberOfTasks());
+        printKV(" Task count:", val);
+    }
+
+    // Uptime
+    {
+        TickType_t ticks        = xTaskGetTickCount();
+        uint32_t   totalSeconds = ticks * portTICK_PERIOD_MS / 1000;
+        uint32_t   days         = totalSeconds / 86400;
+        uint32_t   hours        = (totalSeconds % 86400) / 3600;
+        uint32_t   minutes      = (totalSeconds % 3600) / 60;
+        uint32_t   seconds      = totalSeconds % 60;
+        char       val[32];
+        snprintf(val, sizeof(val), "%3u Tage, %02u:%02u:%02u", days, hours, minutes, seconds);
+        printKV(" Uptime:", val);
+    }
+
+    // Next scan
+    {
+        uint32_t ms = getNextScanRemainingMs();
+        char     val[32];
+        if (ms == 0) {
+            strcpy(val, "inactive");
+        } else {
+            uint32_t m = ms / 60000;
+            uint32_t s = (ms % 60000) / 1000;
+            snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
+        }
+        printKV(" Next I2C bus scan in:", val);
+    }
+
+    // Next availability check
+    {
+        uint32_t ms = getNextAvailabilityRemainingMs();
+        char     val[32];
+        if (ms == 0) {
+            strcpy(val, "inactive");
+        } else {
+            uint32_t m = ms / 60000;
+            uint32_t s = (ms % 60000) / 1000;
+            snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
+        }
+        printKV(" Next device check in:", val);
+    }
+    printBottom();
 }
 
-void FlapReporting::reportHeaderAlt() {
-    reportPrintln("");
-    reportPrintln("");
-    reportPrintln("======== Flap Tasks status ========");
-    reportPrint("  Tick count: ");
-    Serial.println(xTaskGetTickCount());
-    reportPrint("  Task count: ");
-    Serial.println(uxTaskGetNumberOfTasks());
-    printUptime();
-    reportPrintln("");
+// ----------------------------
+// Helper
+// get remaining time for next Scan (short or long)
+uint32_t FlapReporting::getNextScanRemainingMs() {
+    TickType_t now = xTaskGetTickCount();
+    // wenn shortScan aktiv ist, nimmt dessen nächstes Ablaufdatum,
+    // sonst das von longScan (falls aktiv)
+    if (shortScanTimer && xTimerIsTimerActive(shortScanTimer)) {
+        TickType_t expiry = xTimerGetExpiryTime(shortScanTimer);
+        return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
+    }
+    if (longScanTimer && xTimerIsTimerActive(longScanTimer)) {
+        TickType_t expiry = xTimerGetExpiryTime(longScanTimer);
+        return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
+    }
+    return 0;                                                                   // no Timer aktive
+}
+
+// ----------------------------
+// Helper
+// get remaining time for next Availability-Check
+uint32_t FlapReporting::getNextAvailabilityRemainingMs() {
+    TickType_t now = xTaskGetTickCount();
+    if (availCheckTimer && xTimerIsTimerActive(availCheckTimer)) {
+        TickType_t expiry = xTimerGetExpiryTime(availCheckTimer);
+        return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
+    }
+    return 0;
 }
 
 // ----------------------------

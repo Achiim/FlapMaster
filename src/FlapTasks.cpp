@@ -45,6 +45,11 @@ FlapRegistry*   Register       = nullptr;                                       
 FlapStatistics* DataEvaluation = nullptr;                                       // Object for Statistics Task
 FlapTask*       Master         = nullptr;
 
+// Global Timer-Handles
+TimerHandle_t shortScanTimer  = nullptr;
+TimerHandle_t longScanTimer   = nullptr;
+TimerHandle_t availCheckTimer = nullptr;
+
 // --------------------------------------
 void FlapTask::TwinControl(ClickEvent event, int mod) {
     if (event.type == CLICK_SINGLE) {
@@ -195,5 +200,74 @@ void FlapTask::systemHalt(const char* reason, int blinkCode) {
             Serial.println(reason);
         }
         vTaskDelay(pdMS_TO_TICKS(5000));                                        // Delay for 5s
+    }
+}
+
+// --- Short-Scan (SHORT_SCAN_COUNTDOWN),
+// change to Long-Scan if all devices are available
+void shortScanCallback(TimerHandle_t xTimer) {
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;
+        Register->registerPrintln("========== I²C Short Scan Check ================");
+        }
+    #endif
+    Register->scan_i2c_bus();
+    Register->registerUnregistered();
+
+    if (Register->numberOfRegisterdDevices() >= numberOfTwins) {
+        xTimerStop(shortScanTimer, 0);
+        xTimerStart(longScanTimer, 0);
+    }
+}
+
+// --- Long-Scan (LONG_SCAN_COUNTDOWN)
+//
+void longScanCallback(TimerHandle_t xTimer) {
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;
+        Register->registerPrintln("========== I²C Long Scan Check ================");
+        }
+    #endif
+    Register->scan_i2c_bus();
+    Register->registerUnregistered();
+}
+
+// --- Availability-Check (AVAILABILITY_CHECK_COUNTDOWN),
+// change back to Short-Scan, if devices are missing
+void availCheckCallback(TimerHandle_t xTimer) {
+    #ifdef REGISTRYVERBOSE
+        {
+        TraceScope trace;
+        Register->registerPrintln("======= Device-Availability Check =============");
+        }
+    #endif
+    Register->check_slave_availability();
+
+    if (Register->numberOfRegisterdDevices() < numberOfTwins) {
+        // missing one device → Short-Scan
+        if (xTimerIsTimerActive(shortScanTimer) == pdFALSE) {
+            xTimerStop(longScanTimer, 0);
+            xTimerStart(shortScanTimer, 0);
+            #ifdef REGISTRYVERBOSE
+                {
+                TraceScope trace;
+                Register->registerPrintln("switch to Short scan modus for I²C bus");
+                }
+            #endif
+        } else {
+            // all devices on board → Long-Scan
+            if (xTimerIsTimerActive(longScanTimer) == pdFALSE) {
+                xTimerStop(shortScanTimer, 0);
+                xTimerStart(longScanTimer, 0);
+                #ifdef REGISTRYVERBOSE
+                    {
+                    TraceScope trace;
+                    Register->registerPrintln("switch to Long scan modus for I²C bus");
+                    }
+                #endif
+            }
+        }
     }
 }
