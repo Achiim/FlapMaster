@@ -444,6 +444,9 @@ void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
     Serial.print("└");
     Serial.print(repeatChar("─", tableWidth - 2));
     Serial.println("┘");
+    bars  = "";
+    steps = "";
+    index = "";
 }
 
 String FlapReporting::repeatChar(const String& symbol, int count) {
