@@ -15,11 +15,11 @@ class FlapReporting {
     // Report
     template <typename... Args>
     void reportPrint(const Args&... args) {
-        tracePrint("[FLAP  REPORTING] ", args...);
+        tracePrint("[FLAP - REPORT  ] ", args...);
     }
     template <typename... Args>
     void reportPrintln(const Args&... args) {
-        tracePrintln("[FLAP  REPORTING] ", args...);
+        tracePrintln("[FLAP - REPORT  ] ", args...);
     }
 
     // Constructor

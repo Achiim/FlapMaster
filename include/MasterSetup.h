@@ -25,7 +25,7 @@ void masterStartRtosTasks();                                                    
 void masterOutrodution();                                                       // setup finishc message
 void createTwinTasks();                                                         // create Twins
 void createStatisticTask();                                                     // create Statistic
-void createReportingTask();                                                     // create REporting
+void createReportTask();                                                        // create Report task
 void createRemoteControlTask();                                                 // create Remote Control
 void createRegisterTwinsTask();                                                 // create Registry
 void createRemoteParserTask();                                                  // create remote creator task

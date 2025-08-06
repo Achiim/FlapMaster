@@ -145,15 +145,15 @@ void statisticTask(void* param) {
 
 // ----------------------------
 // freeRTOS Task Reporting
-void reportingTask(void* pvParameters) {
+void reportTask(void* pvParameters) {
     uint32_t receivedValue;
     Key21    receivedKey;
 
     FlapReporting* Reports;                                                     // create object for task
-    g_reportingQueue = xQueueCreate(1, sizeof(uint32_t));                       // Create task Queue
+    g_reportQueue = xQueueCreate(1, sizeof(uint32_t));                          // Create task Queue
 
     while (true) {
-        if (xQueueReceive(g_reportingQueue, &receivedValue, portMAX_DELAY)) {
+        if (xQueueReceive(g_reportQueue, &receivedValue, portMAX_DELAY)) {
             receivedKey = Control.ir2Key21(receivedValue);
             if (receivedKey != Key21::NONE) {
                 if (receivedKey == Key21::KEY_100_PLUS) {

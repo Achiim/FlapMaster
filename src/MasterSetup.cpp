@@ -85,7 +85,7 @@ void masterSlaveControlObject() {
 // ---------------------------
 void masterStartRtosTasks() {
     createStatisticTask();                                                      // create statistics task
-    createReportingTask();                                                      // Create reporting tasks
+    createReportTask();                                                         // Create report tasks
     createTwinTasks();                                                          // Create twin tasks
     createRemoteControlTask();                                                  // Create remote control
     createRemoteParserTask();                                                   // create remote creator task
@@ -146,11 +146,11 @@ void createStatisticTask() {
 }
 
 // ---------------------------
-void createReportingTask() {
+void createReportTask() {
     #ifdef MASTERVERBOSE
-        masterPrintln("start freeRTOS task: ReportingTask and corresponding queue");
+        masterPrintln("start freeRTOS task: ReportTask and corresponding queue");
     #endif
-    xTaskCreate(reportingTask, "ReportingTask", STACK_REPORTING, NULL, PRIO_REPORTING, &g_reportingTaskHandle);
+    xTaskCreate(reportTask, "ReportTask", STACK_REPORT, NULL, PRIO_REPORT, &g_reportTaskHandle);
 }
 
 // ---------------------------

@@ -29,14 +29,14 @@
 TaskHandle_t g_remoteControlHandle = nullptr;                                   // Task handlers https://www.freertos.org/a00019.html#xTaskHandle
 TaskHandle_t g_remoteParserHandle  = nullptr;
 TaskHandle_t g_twinRegisterHandle  = nullptr;
-TaskHandle_t g_reportingTaskHandle = nullptr;
+TaskHandle_t g_reportTaskHandle    = nullptr;
 TaskHandle_t g_statisticTaskHandle = nullptr;
 TaskHandle_t g_twinHandle[numberOfTwins];
 
 // Global defines for RTOS Queue handles
 QueueHandle_t g_twinQueue[numberOfTwins];
-QueueHandle_t g_reportingQueue = nullptr;
-QueueHandle_t g_parserQueue    = nullptr;
+QueueHandle_t g_reportQueue = nullptr;
+QueueHandle_t g_parserQueue = nullptr;
 
 // Global Objects for Tasks
 RemoteControl   Control;                                                        // Remote Control with 21 keys

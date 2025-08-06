@@ -56,8 +56,8 @@ void RemoteControl::getKey() {
                                 &_lastGetKeyCode);                              // send all other keys to all registered twin queues
             }
         } else {
-            if (g_reportingQueue != nullptr) {                                  // if queue exists
-                xQueueOverwrite(g_reportingQueue, &_lastGetKeyCode);            // send Key100_PLUS only to status task queue
+            if (g_reportQueue != nullptr) {                                     // if queue exists
+                xQueueOverwrite(g_reportQueue, &_lastGetKeyCode);               // send Key100_PLUS only to status task queue
             }
         }
         irController.resume();                                                  // prepare next ir receive

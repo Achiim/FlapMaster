@@ -183,7 +183,7 @@ void FlapReporting::reportRtosTasks() {
     };
 
     // Aktuelle Task (ReportingTask)
-    printTaskInfo(pcTaskGetName(NULL), uxTaskGetStackHighWaterMark(NULL), STACK_REPORTING, PRIO_REPORTING);
+    printTaskInfo(pcTaskGetName(NULL), uxTaskGetStackHighWaterMark(NULL), STACK_REPORT, PRIO_REPORT);
 
     // Weitere registrierte Tasks
     if (g_remoteControlHandle != nullptr)
