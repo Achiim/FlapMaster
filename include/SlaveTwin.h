@@ -109,6 +109,82 @@ class SlaveTwin {
                                     51,51,51,51,52,51,51,51,51,52,              // are needed to rotate that flap (2048/40=51 Rest 8)
                                     51,51,51,51,52,51,51,51,51,52,              // Every 5th flap will do one step more to reach in sum
                                     51,51,51,51,52,51,51,51,51,52};             // 2048 steps (stepsPerRevolution)
+
+
+#include <cstddef>
+
+struct Club {
+    const char* code;
+    const char* name;
+};
+
+static constexpr Club Liga[] = {
+    // 1. Bundesliga
+    { "FCB", "FC Bayern München" },
+    { "BVB", "Borussia Dortmund" },
+    { "LEV", "Bayer 04 Leverkusen" },
+    { "BMG", "Borussia Mönchengladbach" },
+    { "SGE", "Eintracht Frankfurt" },
+    { "FCA", "FC Augsburg" },
+    { "KOE", "1. FC Köln" },
+    { "SCF", "SC Freiburg" },
+    { "HSV", "Hamburger SV" },
+    { "HDH", "1. FC Heidenheim" },
+    { "TSG", "TSG Hoffenheim" },
+    { "M05", "1. FSV Mainz 05" },
+    { "RBL", "RB Leipzig" },
+    { "STP", "FC St. Pauli" },
+    { "FCU", "Union Berlin" },
+    { "VFB", "VfB Stuttgart" },
+    { "WOB", "VfL Wolfsburg" },
+    { "SVW", "SV Werder Bremen" },
+
+    // 2. Bundesliga
+    { "DSC", "Arminia Bielefeld" },
+    { "D98", "SV Darmstadt 98" },
+    { "SGD", "Dynamo Dresden" },
+    { "EBS", "Eintracht Braunschweig" },
+    { "ELV", "SV Elversberg" },
+    { "FCM", "1. FC Magdeburg" },
+    { "F95", "Fortuna Düsseldorf" },
+    { "SGF", "SpVgg Greuther Fürth" },
+    { "H96", "Hannover 96" },
+    { "BSC", "Hertha BSC" },
+    { "KSV", "Holstein Kiel" },
+    { "FCK", "1. FC Kaiserslautern" },
+    { "KSC", "Karlsruher SC" },
+    { "FCN", "1. FC Nürnberg" },
+    { "MUN", "Preußen Münster" },
+    { "PAD", "SC Paderborn 07" },
+    { "S04", "FC Schalke 04" },
+    { "BOC", "VfL Bochum" }
+};
+
+static constexpr std::size_t numLiga =
+    sizeof(Liga) / sizeof(Liga[0]);
+
+
+static constexpr std::size_t numLiga =
+    sizeof(Liga) / sizeof(Liga[0]);
+
+// Liefert den Index im Array Liga[] zum Vereins-Kürzel,
+// oder -1, wenn das Kürzel nicht gefunden wird.
+constexpr int findClubIndex(std::string_view code) {
+    for (std::size_t i = 0; i < numLiga; ++i) {
+        if (code == Liga[i].code)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+// Liefert das Vereins-Kürzel an der Stelle `index`,
+// oder eine leere string_view, falls `index` ungültig ist.
+constexpr std::string_view clubCodeAt(std::size_t index) {
+    return index < numLiga
+        ? std::string_view{Liga[index].code}
+        : std::string_view{};
+}
+
     */
     // clang-format on
 
