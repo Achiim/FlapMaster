@@ -117,7 +117,7 @@ void RemoteParser::analyseClickEvent() {
 // read Parser input from Queue and filter
 void RemoteParser::handleQueueMessage() {
     if (xQueueReceive(g_parserQueue, &_receivedValue, 0)) {
-        _receivedKey = Control.ir2Key21(_receivedValue);                        // filter remote signal to reduce options
+        _receivedKey = Control.ircodeToKey21(_receivedValue);                   // filter remote signal to reduce options
         if (_receivedKey != Key21::NONE && _receivedKey != Key21::UNKNOWN) {
             _receivedEvent = Parser->detect(_receivedKey);                      // valid key21 was pressed
             #ifdef PARSERVERBOSE

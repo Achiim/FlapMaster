@@ -362,19 +362,21 @@ int check_slaveReady(uint8_t slaveAddress) {
 }
 
 // --------------------------
-//
+// update position to registry
 void updateSlaveReadyInfo(int n, uint8_t address, uint8_t* data) {
     if (data == nullptr || n < 0 || n >= numberOfTwins || Twin[n] == nullptr) {
         masterPrintln("Invalid input for updateSlaveReadyInfo: Twin[%d] or data is null", n);
         return;
     }
 
+    // update twin status
     Twin[n]->slaveReady.ready        = data[0];
     Twin[n]->slaveReady.taskCode     = data[1];
     Twin[n]->slaveReady.bootFlag     = data[2];
     Twin[n]->slaveReady.sensorStatus = data[3];
     Twin[n]->slaveReady.position     = data[5] * 0x100 + data[4];               // MSB + LSB
 
+    // update crrresponding regisry entry
     auto it = g_slaveRegistry.find(address);                                    // search in registry
     if (it != g_slaveRegistry.end() && it->second != nullptr) {
         I2CSlaveDevice* device = it->second;
@@ -391,7 +393,7 @@ void updateSlaveReadyInfo(int n, uint8_t address, uint8_t* data) {
 }
 
 // --------------------------
-//
+// trace slave answer to STATUS
 void printSlaveReadyInfo(SlaveTwin* twin) {
     #ifdef MASTERVERBOSE
         {
@@ -420,7 +422,7 @@ void printSlaveReadyInfo(SlaveTwin* twin) {
 }
 
 // --------------------------
-//
+// semaphore protected ping
 esp_err_t i2c_probe_device(uint8_t address) {
     if (takeI2CSemaphore()) {
         esp_err_t ret = pingI2Cslave(address);
@@ -439,7 +441,7 @@ esp_err_t i2c_probe_device(uint8_t address) {
 }
 
 // --------------------------
-//
+// take Semaphore
 bool takeI2CSemaphore() {
     int retry = 5;
     while (retry > 0) {
@@ -466,7 +468,7 @@ bool takeI2CSemaphore() {
 }
 
 // --------------------------
-//
+// give Semaphore
 bool giveI2CSemaphore() {
     if (xSemaphoreGive(g_i2c_mutex)) {
         #ifdef SEMAPHOREVERBOSE

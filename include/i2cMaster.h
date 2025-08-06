@@ -41,24 +41,27 @@ extern bool              g_masterBooted;                                        
 extern SemaphoreHandle_t g_i2c_mutex;                                           // Semaphor to protect access to I2C Bus
 
 // -------------------------------
-void        i2csetup();                                                         // initialize I2C Bus for Master access
+void i2csetup();                                                                // initialize I2C Bus for Master access
+
 LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter);          // prepare I2C LongCommand from paramter
 void        i2cLongCommand(LongMessage mess, uint8_t slaveAddress);             // Long Command to slave, do not wait for answer
-esp_err_t   i2cMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size); // send mid command to slave
-int         check_slaveReady(uint8_t slaveAddress);                             // status check isf slave is ready/busy
-void        updateSlaveReadyInfo(int n, uint8_t slaveAddress,
-                                 uint8_t* data);                                // evaluate and remember slave answer to check_slaveReady()
-void        printSlaveReadyInfo(SlaveTwin* twin);                               // trace printing slave answer to check_slaveReady()
-bool        takeI2CSemaphore();                                                 // get a semaphore
-bool        giveI2CSemaphore();                                                 // release a semaphore
-esp_err_t   i2c_probe_device(uint8_t address);                                  // semaphore protected ping
-esp_err_t   pingI2Cslave(u_int8_t address);                                     // just ping on I2C if slave is still online
+void        prepareI2Cdata(LongMessage mess, uint8_t slaveAddress, uint8_t* outBuffer);
 
+esp_err_t        i2cMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size); // send mid command to slave
 i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size);
-void             logMidRequest(MidMessage cmd, uint8_t slaveAddress);
-void             logMidResponse(uint8_t* answer, int size);
-void             logMidError(MidMessage cmd, esp_err_t err);
+void             logMidRequest(MidMessage cmd, uint8_t slaveAddress);           // Mid Request
+void             logMidResponse(uint8_t* answer, int size);                     // Mid Response
+void             logMidError(MidMessage cmd, esp_err_t err);                    // Mid Error
 
+void      printSlaveReadyInfo(SlaveTwin* twin);                                 // trace printing slave answer to check_slaveReady()
+int       check_slaveReady(uint8_t slaveAddress);                               // status check isf slave is ready/busy
+void      updateSlaveReadyInfo(int n, uint8_t slaveAddress,
+                               uint8_t* data);                                  // evaluate and remember slave answer to check_slaveReady()
+esp_err_t i2c_probe_device(uint8_t address);                                    // semaphore protected ping
+esp_err_t pingI2Cslave(u_int8_t address);                                       // just ping on I2C if slave is still online
+
+bool takeI2CSemaphore();                                                        // get a semaphore
+bool giveI2CSemaphore();                                                        // release a semaphore
 // --------------------------------
 
 #endif                                                                          // i2cMaster_h

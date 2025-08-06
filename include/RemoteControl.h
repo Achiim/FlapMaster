@@ -25,8 +25,6 @@
 #ifndef RemoteControl_h
 #define RemoteControl_h
 
-// Remote Control with 21 keys                                        // remote control
-// #include <DIYables_IRcontroller.h>                                 // DIYables_IRcontroller library
 #include <Arduino.h>
 #include <IRrecv.h>
 #include <FlapGlobal.h>
@@ -36,8 +34,8 @@
 
 #define IR_RECEIVER_PIN 14                                                      // The ESP32 pin GPIO14 connected to IR controller
 #define DEBOUNCE_CONTROL_REMOTE 50                                              // ms
-#define REPEAT_WINDOW 200                                                       // ms
 #define DOUBLE_CLICK_THRESHOLD 300                                              // ms
+#define REPEAT_WINDOW 200                                                       // ms
 #define LONG_PRESS_THRESHOLD 900                                                // ms
 
 enum class Key21 : uint8_t {                                                    // list of known key21:keys
@@ -92,7 +90,7 @@ class RemoteControl {                                                           
     // public functions
     void        getRemote();                                                    // get original raw data from IR receiver
     Key21       decodeIR(uint32_t code);                                        // decode IR raw data to Key21 code
-    Key21       ir2Key21(uint64_t ircode);                                      // filter raw key codes and convert to key21
+    Key21       ircodeToKey21(uint64_t ircode);                                 // filter raw key codes and convert to key21
     const char* clickTypeToString(ClickType type);                              // get Text to ClickType
     const char* key21ToString(Key21 key);                                       // make readable Key21 Text for tracing
 
@@ -110,7 +108,7 @@ class RemoteControl {                                                           
    private:
     // ---------------------
     // private functions
-    void getKey();                                                              // direct contact to irConroller to receive raw data
+    void getIRcode();                                                           // direct contact to irConroller to receive raw data
 };
 
 #endif                                                                          // RemoteControl_h

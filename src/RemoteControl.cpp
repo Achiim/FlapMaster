@@ -42,11 +42,11 @@ RemoteControl::RemoteControl() {
 
 // ---------------------
 void RemoteControl::getRemote() {
-    getKey();
+    getIRcode();
 };
 
 // ---------------------
-void RemoteControl::getKey() {
+void RemoteControl::getIRcode() {
     if (irController.decode(&results)) {
         _lastGetKeyCode = results.value;
         if (_lastGetKeyCode != 0xFF9867) {                                      // is it Key100_PLUS
@@ -66,7 +66,7 @@ void RemoteControl::getKey() {
 
 // ----------------------------
 // filters repetation and double sendings
-Key21 RemoteControl::ir2Key21(uint64_t ircode) {
+Key21 RemoteControl::ircodeToKey21(uint64_t ircode) {
     Key21    key;
     uint32_t now = millis();
 

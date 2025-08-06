@@ -154,7 +154,7 @@ void reportTask(void* pvParameters) {
 
     while (true) {
         if (xQueueReceive(g_reportQueue, &receivedValue, portMAX_DELAY)) {
-            receivedKey = Control.ir2Key21(receivedValue);
+            receivedKey = Control.ircodeToKey21(receivedValue);
             if (receivedKey != Key21::NONE) {
                 if (receivedKey == Key21::KEY_100_PLUS) {
                     Reports->reportPrintln("======== Flap Master Health Overview ========");
