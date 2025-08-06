@@ -192,11 +192,11 @@ void FlapReporting::reportRtosTasks() {
     if (g_remoteParserHandle != nullptr)
         printTaskInfo(pcTaskGetName(g_remoteParserHandle), uxTaskGetStackHighWaterMark(g_remoteParserHandle), STACK_PARSER, PRIO_PARSER);
 
-    if (g_twinRegisterHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_twinRegisterHandle), uxTaskGetStackHighWaterMark(g_twinRegisterHandle), STACK_REGISTRY, PRIO_REGISTRY);
+    if (g_registryHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_registryHandle), uxTaskGetStackHighWaterMark(g_registryHandle), STACK_REGISTRY, PRIO_REGISTRY);
 
-    if (g_statisticTaskHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_statisticTaskHandle), uxTaskGetStackHighWaterMark(g_statisticTaskHandle), STACK_STATISTICS, PRIO_STATISTICS);
+    if (g_statisticHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_statisticHandle), uxTaskGetStackHighWaterMark(g_statisticHandle), STACK_STATISTICS, PRIO_STATISTICS);
 
     for (uint8_t i = 0; i < numberOfTwins; i++) {
         if (g_twinHandle[i] != nullptr)

@@ -28,9 +28,9 @@
 // Global defines for RTOS task handles
 TaskHandle_t g_remoteControlHandle = nullptr;                                   // Task handlers https://www.freertos.org/a00019.html#xTaskHandle
 TaskHandle_t g_remoteParserHandle  = nullptr;
-TaskHandle_t g_twinRegisterHandle  = nullptr;
-TaskHandle_t g_reportTaskHandle    = nullptr;
-TaskHandle_t g_statisticTaskHandle = nullptr;
+TaskHandle_t g_registryHandle      = nullptr;
+TaskHandle_t g_reportHandle        = nullptr;
+TaskHandle_t g_statisticHandle     = nullptr;
 TaskHandle_t g_twinHandle[numberOfTwins];
 
 // Global defines for RTOS Queue handles
@@ -107,7 +107,7 @@ void FlapTask::handleSingleKey(Key21 key, int mod) {
         case Key21::KEY_7:
         case Key21::KEY_8:
         case Key21::KEY_9: {
-            char        digit = keyToDigit(key);
+            char        digit = key21ToDigit(key);
             std::string msg   = "Send ";
             msg += digit;
             msg += "...";
@@ -139,7 +139,7 @@ void FlapTask::logAndRun(int mod, const char* message, std::function<void()> act
     action();
 }
 
-char FlapTask::keyToDigit(Key21 key) {
+char FlapTask::key21ToDigit(Key21 key) {
     switch (key) {
         case Key21::KEY_0:
             return '0';

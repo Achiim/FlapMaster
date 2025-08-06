@@ -51,12 +51,12 @@
 #define SHORT_SCAN_COUNTDOWN 1000 * 15                                          // 15 seconds
 #define AVAILABILITY_CHECK_COUNTDOWN 1000 * 60                                  // 1 minute
 
-// Global variables for RTOS task handles
-extern TaskHandle_t g_remoteControlHandle;                                      // Task handlers https://www.freertos.org/a00019.html#xTaskHandle
+// Global variables for RTOS task handles https://www.freertos.org/a00019.html#xTaskHandle
+extern TaskHandle_t g_remoteControlHandle;                                      // RTOS Task Handler
 extern TaskHandle_t g_remoteParserHandle;                                       // RTOS Task Handler
-extern TaskHandle_t g_twinRegisterHandle;                                       // RTOS Task Handler
-extern TaskHandle_t g_reportTaskHandle;                                         // RTOS Task Handler
-extern TaskHandle_t g_statisticTaskHandle;                                      // RTOS Task Handler
+extern TaskHandle_t g_registryHandle;                                           // RTOS Task Handler
+extern TaskHandle_t g_reportHandle;                                             // RTOS Task Handler
+extern TaskHandle_t g_statisticHandle;                                          // RTOS Task Handler
 extern TaskHandle_t g_twinHandle[numberOfTwins];                                // RTOS Task Handler
 
 // Global variables for RTOS Queue handles
@@ -70,12 +70,12 @@ extern RemoteParser*   Parser;                                                  
 extern FlapRegistry*   Register;                                                // class for Registry Task
 extern FlapStatistics* DataEvaluation;                                          // class to collect and evaluate operation statistics
 
-// Global Timer-Handles
+// Global count down Timer-Handles
 extern TimerHandle_t shortScanTimer;                                            // ic2 scan in short modus
 extern TimerHandle_t longScanTimer;                                             // i2c scan in long modus
 extern TimerHandle_t availCheckTimer;                                           // device availability check
 
-// Global Timer-CAllbacks
+// Global Timer-Callbacks
 extern void shortScanCallback(TimerHandle_t xTimer);                            // execute short Time i2c bus scan
 extern void longScanCallback(TimerHandle_t xTimer);                             // execute Long Time i2c bus scan
 extern void availCheckCallback(TimerHandle_t xTimer);                           // execute Availability Check
@@ -90,7 +90,7 @@ class FlapTask {
     void handleSingleKey(Key21 key, int mod);                                   // remote key single pressed handle
     void handleDoubleKey(Key21 key, int mod);                                   // remote key double pressed handle
     void logAndRun(int mod, const char* message, std::function<void()> action); // remote key execution
-    char keyToDigit(Key21 key);                                                 // convert Key21 0...9 to digit 0...9
+    char key21ToDigit(Key21 key);                                               // convert Key21 0...9 to digit 0...9
 };
 
 #endif                                                                          // FlapTasks_h

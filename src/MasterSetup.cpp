@@ -142,7 +142,7 @@ void createStatisticTask() {
     #ifdef MASTERVERBOSE
         masterPrintln("start freeRTOS task: StatisticTask");
     #endif
-    xTaskCreate(statisticTask, "StatisticTask", STACK_STATISTICS, NULL, PRIO_STATISTICS, &g_statisticTaskHandle);
+    xTaskCreate(statisticTask, "StatisticTask", STACK_STATISTICS, NULL, PRIO_STATISTICS, &g_statisticHandle);
 }
 
 // ---------------------------
@@ -150,7 +150,7 @@ void createReportTask() {
     #ifdef MASTERVERBOSE
         masterPrintln("start freeRTOS task: ReportTask and corresponding queue");
     #endif
-    xTaskCreate(reportTask, "ReportTask", STACK_REPORT, NULL, PRIO_REPORT, &g_reportTaskHandle);
+    xTaskCreate(reportTask, "ReportTask", STACK_REPORT, NULL, PRIO_REPORT, &g_reportHandle);
 }
 
 // ---------------------------
@@ -158,7 +158,7 @@ void createRegisterTwinsTask() {
     #ifdef MASTERVERBOSE
         masterPrintln("start freeRTOS task: TwinRegister");
     #endif
-    xTaskCreate(twinRegister, "TwinRegister", STACK_REGISTRY, NULL, PRIO_REGISTRY, &g_twinRegisterHandle);
+    xTaskCreate(twinRegister, "TwinRegister", STACK_REGISTRY, NULL, PRIO_REGISTRY, &g_registryHandle);
     vTaskDelay(500 / portTICK_PERIOD_MS);                                       // give task some time for registering new devices
 }
 
