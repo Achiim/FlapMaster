@@ -29,7 +29,7 @@
 #include "FlapReporting.h"
 #include "FlapRegistry.h"
 
-// Definitionen der Symbole mit Null-Terminator
+// Unicode symbols for reports
 const char  FlapReporting::BLOCK_LIGHT[]      = u8"░";
 const char  FlapReporting::BLOCK_MEDIUM[]     = u8"▒";
 const char  FlapReporting::BLOCK_DENSE[]      = u8"▓";
@@ -49,7 +49,7 @@ void FlapReporting::reportI2CStatistic() {
         #endif
         return;
     }
-    printFramedHistory();
+    printI2CHistory();                                                          // show history of I2C usage
 }
 
 // -----------------------------------
@@ -63,7 +63,7 @@ uint32_t FlapReporting::maxValueFromHistory(uint32_t* history) {
 }
 // -----------------------------------
 // print I2C usage statistic with frames
-void FlapReporting::printFramedHistory() {
+void FlapReporting::printI2CHistory() {
     const uint32_t maxBarWidth = 45;
     const uint8_t  FRAME_WIDTH = 80;                                            // make frame
     const uint8_t  INNER_WIDTH = FRAME_WIDTH - 2;                               // inner with without frame (││)
@@ -168,7 +168,7 @@ void FlapReporting::reportSlaveRegistry() {
     Serial.println("╚══════╩══════════════════════╩════════╩═════╩═══════╩═══════╩══════╩══════╩═══════════════╝");
 }
 
-void FlapReporting::reportTasks() {
+void FlapReporting::reportRtosTasks() {
     Serial.println("╔════════════════════════════════════════════════════════════════════════════╗");
     Serial.println("║                             RTOS Task Report                               ║");
     Serial.println("╠════════════════════════════════════════════════════════════════════════════╣");
@@ -205,7 +205,7 @@ void FlapReporting::reportTasks() {
 
     Serial.println("╚════════════════════════════════════════════════════════════════════════════╝");
 }
-void FlapReporting::reportHeader() {
+void FlapReporting::reportTaskStatus() {
     constexpr int CONTENT_WIDTH = 58;                                           // Breite zwischen den Rahmenlinien
     constexpr int VALUE_COL     = 22;                                           // Spalte (1-basiert) ab der der Wert beginnt
 

@@ -19,8 +19,10 @@
     - register
     - deregister
     - i2c scan to check who is there
-    - check if registered slave is still available
+    - availability check if registered slave is still available
     - list registry
+    - count registered devices
+    - provide free address to be used for registration
 
 */
 #include <Arduino.h>
@@ -44,35 +46,35 @@ extern std::map<uint8_t, I2CSlaveDevice*> g_slaveRegistry;
 
 class FlapRegistry {
    public:
-    // Registry trace
-    template <typename... Args>
+    // ----------------------------
+    // public functions
+    void    registerUnregistered();                                             // collect all unregistered slaves
+    int     updateSlaveRegistry(int n, uint8_t address, slaveParameter parameter); // register slaves in registry
+    void    deregisterSlave(uint8_t slaveAddress);                              // deregister from registry
+    void    check_slave_availability();
+    void    scan_i2c_bus();                                                     // search for slave in I2C bus
+    int     numberOfRegisterdDevices();                                         // scan registry to evaluate number of registered devices
+    uint8_t getNextAddress();                                                   // next free i2c address form slave registry
+
+    // public trace functions
+    template <typename... Args>                                                 // Registry trace
     void registerPrint(const Args&... args) {
         tracePrint("[FLAP - REGISTER] ", args...);
     }
-    template <typename... Args>
+    template <typename... Args>                                                 // Registry trace with new line
     void registerPrintln(const Args&... args) {
         tracePrintln("[FLAP - REGISTER] ", args...);
     }
 
-    // ----------------------------
-    // public functions
-    void    check_slave_availability();
-    void    deregisterSlave(uint8_t slaveAddress);                              // deregister from registry
-    void    scan_i2c_bus();                                                     // search for slave in I2C bus
-    void    registerUnregistered();                                             // collect all unregistered slaves
-    int     updateSlaveRegistry(int n, uint8_t address, slaveParameter parameter); // register slaves in registry
-    int     numberOfRegisterdDevices();                                         // scan registry to evaluate number of registered devices
-    uint8_t getNextAddress();                                                   // next free i2c address form slave registry
-
    private:
     // ----------------------------
     // privat functions
-    uint8_t findFreeAddress(uint8_t minAddr, uint8_t maxAddr);                  // free address from register
     bool    checkSlaveHasBooted(int n, uint8_t addr);                           // handle slave has booted
     void    error_scan_i2c(int n, uint8_t addr);                                // error tracing during scan_i2c_bus
     void    intro_scan_i2c();                                                   // intro for scan_i2c_bus
     void    outro_scan_i2c(int foundToCalibrate, int foundToRegister);          // outro scan_i2c_bus
     int     scanForSlave(int i, uint8_t addrs);                                 // scan one slave
+    uint8_t findFreeAddress(uint8_t minAddr, uint8_t maxAddr);                  // free address from register
     int     findTwinIndexByAddress(uint8_t addr);                               // find Twin by slaveAddress
 };
 #endif                                                                          // FlapRegistry_h

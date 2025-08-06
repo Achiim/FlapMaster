@@ -27,18 +27,13 @@ class FlapReporting {
 
     // ----------------------------
     uint32_t maxValueFromHistory(uint32_t* history);
-    //    void     printI2CHistoryDescending(uint32_t* history, uint32_t maxValue, uint8_t currentIndex);
-    void printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength);
-    void reportI2CStatistic();
-    void printFramedHistory();
-    void printUptime();                                                         // Helper to report up time
-    void reportSlaveRegistry();                                                 // Helper to report registry content
-    void reportTasks();                                                         // show Tasklist with remaining stack size
-    void reportHeader();                                                        // show Ticks and uptime
-    void reportHeaderAlt();                                                     // show Ticks and uptime
-    void reportMemory();
-    void reportAllTwinStepsByFlap(
-        int wrapWidth = 20);                                                    // Ausgabe der Reports aller globalen Twins. wrapWidth bestimmt, wie viele Flaps pro Block/Zeile.
+
+    void reportTaskStatus();                                                    // show Task status report
+    void reportMemory();                                                        // show memory usage
+    void reportRtosTasks();                                                     // show Tasklist with remaining stack size
+    void reportAllTwinStepsByFlap(int wrapWidth = 20);                          // show steps per flap for all Twins
+    void reportSlaveRegistry();                                                 // show registry content
+    void reportI2CStatistic();                                                  // show I2C usage history
 
    private:
     static const char    BLOCK_LIGHT[];                                         // bar pattern for Access
@@ -49,16 +44,17 @@ class FlapReporting {
 
     void        printStepsByFlapReport(SlaveTwin& twin, int wrapWidth);         // Einzelreport für einen Twin (wird intern benutzt).
     const char* selectSparklineLevel(int value, int minVal, int maxVal);        // helper to select sparkling
+    void        printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength);
+    void        printI2CHistory();
+    void        printUptime();                                                  // Helper to report up time
 
-    // box drawing helpers
+    // box drawing helpers for steps by flap report
     String repeatChar(const String& symbol, int count);                         // Helper for unicode
-    String padStart(String val, int length, char fill = ' ');
-    void   drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWidth);
+    String padStart(String val, int length, char fill = ' ');                   // Helper to fill some blanks
+    void   drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWidth);     // to draw report line
 
-    void     reportNextAvailabilityTime();
-    void     reportNextScanTime();
-    uint32_t getNextScanRemainingMs();
-    uint32_t getNextAvailabilityRemainingMs();
+    uint32_t getNextScanRemainingMs();                                          // next i2c scan time
+    uint32_t getNextAvailabilityRemainingMs();                                  // next availability checl time
 
 #endif                                                                          // FlapReporting_h
 };

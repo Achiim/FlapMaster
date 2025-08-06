@@ -158,9 +158,9 @@ void reportingTask(void* pvParameters) {
             if (receivedKey != Key21::NONE) {
                 if (receivedKey == Key21::KEY_100_PLUS) {
                     Reports->reportPrintln("======== Flap Master Health Overview ========");
-                    Reports->reportHeader();                                    // Report Header
+                    Reports->reportTaskStatus();                                // Report Header
                     Reports->reportMemory();                                    // ESP32 (RAM status)
-                    Reports->reportTasks();                                     // show Task List
+                    Reports->reportRtosTasks();                                 // show Task List
                     Reports->reportAllTwinStepsByFlap();                        // show Slave steps prt Flap
                     Reports->reportSlaveRegistry();                             // show registry
                     Reports->reportI2CStatistic();                              // shoe I2C usage

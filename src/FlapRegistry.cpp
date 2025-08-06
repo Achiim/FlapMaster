@@ -124,7 +124,7 @@ int FlapRegistry::scanForSlave(int poolIndex, uint8_t addr) {
         }
     #endif
 
-    esp_err_t pingResult = pingI2Cslave(addr);                                  // Ping slave and wait for ACK
+    esp_err_t pingResult = i2c_probe_device(addr);                              // Ping slave and wait for ACK
     if (pingResult == ESP_OK) {
         #ifdef REGISTRYVERBOSE
             {
@@ -466,7 +466,7 @@ int FlapRegistry::numberOfRegisterdDevices() {
 // register unregistered devices
 void FlapRegistry::registerUnregistered() {
     uint8_t nextFreeAddress = 0;
-    if (pingI2Cslave(I2C_BASE_ADDRESS) == ESP_OK) {                             // is there someone new?
+    if (i2c_probe_device(I2C_BASE_ADDRESS) == ESP_OK) {                         // is there someone new?
         nextFreeAddress = getNextAddress();                                     // get next free address for new slaves
 
         if (nextFreeAddress > 0) {                                              // if address is valide
