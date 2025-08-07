@@ -365,8 +365,8 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
                 registerPrint("sensor status = %d for Slave 0x", parameter.sensorworking);
                 Serial.println(address, HEX);
                 }
-                }
             #endif
+        }
         Twin[n]->parameter = parameter;                                         // update all twin parameter
         Twin[n]->isSlaveReady();
 
@@ -411,14 +411,15 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
     }
 
     if (g_masterBooted) {                                                       // if Master booted
-
-    #ifdef MASTERVERBOSE
         {
-        TraceScope trace;
-        registerPrint("master has rebooted: calibrating now Slave 0x");
-        Serial.println(address, HEX);
+            #ifdef MASTERVERBOSE
+                {
+                TraceScope trace;
+                registerPrint("master has rebooted: calibrating now Slave 0x");
+                Serial.println(address, HEX);
+                }
+            #endif
         }
-    #endif
         c++;                                                                    // counting calibrations
         i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS),
                        address);                                                // Calibrate device because of reboot
