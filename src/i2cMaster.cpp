@@ -226,7 +226,7 @@ i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
     if (i2c_master_start(cmd) != ESP_OK)
-        Master->systemHalt("FATAL ERROR: I2C start failed", 2);
+        Master->systemHalt("FATAL ERROR: I2C midCommand start failed", 2);
 
     if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
         Master->systemHalt("FATAL ERROR: write address failed", 2);
