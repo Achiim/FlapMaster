@@ -322,7 +322,11 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
             {
             TraceScope trace;
             registerPrint("Registry updated for known Slave 0x");
-            Serial.println(address, HEX);
+            Serial.print(address, HEX);
+            Serial.print(" in position = ");
+            Serial.print(device->position);
+            Serial.print(" and sensor status = ");
+            Serial.println(device->parameter.sensorworking);
             }
         #endif
 
@@ -338,7 +342,11 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
             {
             TraceScope trace;
             registerPrint("Registered new Slave 0x");
-            Serial.println(address, HEX);
+            Serial.print(address, HEX);
+            Serial.print(" in position = ");
+            Serial.print(newDevice->position);
+            Serial.print(" and sensor status = ");
+            Serial.println(newDevice->parameter.sensorworking);
             }
         #endif
         g_slaveRegistry[address] = newDevice;                                   // register new device
@@ -346,18 +354,19 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
 
     checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
     if (n >= 0 && twinIsNew) {                                                  // only if slave is ready
-// take over parameter to twin
-#ifdef MASTERVERBOSE
-    {
-    TraceScope trace;
-    registerPrint("take over parameter before isSlaveReady() values from slave to his twin on master side 0x");
-    Serial.println(address, HEX);
-    registerPrint("number of Steps = %d for Slave 0x", parameter.steps);
-    Serial.println(address, HEX);
-    registerPrint("sensor status = %d for Slave 0x", parameter.sensorworking);
-    Serial.println(address, HEX);
-    }
-#endif
+        {
+            #ifdef MASTERVERBOSE                                                // take over parameter to twin
+                {
+                TraceScope trace;
+                registerPrint("take over parameter before isSlaveReady() values from slave to his twin on master side 0x");
+                Serial.println(address, HEX);
+                registerPrint("number of Steps = %d for Slave 0x", parameter.steps);
+                Serial.println(address, HEX);
+                registerPrint("sensor status = %d for Slave 0x", parameter.sensorworking);
+                Serial.println(address, HEX);
+                }
+                }
+            #endif
         Twin[n]->parameter = parameter;                                         // update all twin parameter
         Twin[n]->isSlaveReady();
 
