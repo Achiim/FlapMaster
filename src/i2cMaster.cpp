@@ -375,21 +375,22 @@ void updateSlaveReadyInfo(int n, uint8_t address, uint8_t* data) {
     Twin[n]->slaveReady.bootFlag     = data[2];
     Twin[n]->slaveReady.sensorStatus = data[3];
     Twin[n]->slaveReady.position     = data[5] * 0x100 + data[4];               // MSB + LSB
-
-    // update crrresponding regisry entry
-    auto it = g_slaveRegistry.find(address);                                    // search in registry
-    if (it != g_slaveRegistry.end() && it->second != nullptr) {
-        I2CSlaveDevice* device = it->second;
-        if (device->position != Twin[n]->slaveReady.position) {
-            device->position = Twin[n]->slaveReady.position;                    // update Flap position in registry
-            #ifdef MASTERVERBOSE
-                TraceScope trace;
-                {
-                Twin[n]->twinPrintln("Updated position for address 0x%02X → %d", address, Twin[n]->slaveReady.position);
-                }
-            #endif
+    /*
+        // update crrresponding regisry entry
+        auto it = g_slaveRegistry.find(address);                                // search in registry
+        if (it != g_slaveRegistry.end() && it->second != nullptr) {
+            I2CSlaveDevice* device = it->second;
+            if (device->position != Twin[n]->slaveReady.position) {
+                device->position = Twin[n]->slaveReady.position;                // update Flap position in registry
+                #ifdef MASTERVERBOSE
+                    TraceScope trace;
+                    {
+                    Twin[n]->twinPrintln("Updated position for address 0x%02X → %d", address, Twin[n]->slaveReady.position);
+                    }
+                #endif
+            }
         }
-    }
+    */
 }
 
 // --------------------------

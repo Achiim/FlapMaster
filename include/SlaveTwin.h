@@ -74,7 +74,7 @@ class SlaveTwin {
 
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
 
-    // Registry trace
+    // Twin trace
     template <typename... Args>
     void twinPrint(const Args&... args) {
         char buf[20];
@@ -88,19 +88,6 @@ class SlaveTwin {
         tracePrintln(buf, args...);
     }
 
-    // ----------------------------
-    template <typename T>
-    void appendToStream(std::ostringstream& stream, T value) {
-        stream << value;
-    }
-    /*
-        // ----------------------------
-        template <typename T, typename... Args>
-        void appendToStream(std::ostringstream& stream, T value, Args... args) {
-            stream << value;
-            appendToStream(stream, args...);
-        }
-    */
     // 10 Flap-Modul
     int stepsByFlap[MAXIMUM_FLAPS] = {409, 409, 411, 409, 409,                  // there a 10 flaps: (4096/10=409 Rest 6)
                                       411, 409, 409, 411, 409};                 // 4096 steps (stepsPerRevolution)
