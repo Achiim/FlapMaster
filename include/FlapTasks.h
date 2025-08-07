@@ -60,7 +60,6 @@ extern TaskHandle_t g_statisticHandle;                                          
 extern TaskHandle_t g_twinHandle[numberOfTwins];                                // RTOS Task Handler
 
 // Global variables for RTOS Queue handles
-extern QueueHandle_t g_twinQueue[numberOfTwins];                                // Queue for Twin Tasks to receive remote control keys
 extern QueueHandle_t g_reportQueue;                                             // Queue for Report Task to receive remote control keys
 extern QueueHandle_t g_parserQueue;                                             // Queue for remoteParser Task to receive remote control keys
 

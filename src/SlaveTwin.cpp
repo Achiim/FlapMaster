@@ -52,19 +52,179 @@ SlaveTwin::SlaveTwin(int add) {
     parameter.speed         = 0;
     parameter.steps         = 0;
     adjustOffset            = 0;                                                // init set offset variable for adjusting calibration
+    twinQueue               = nullptr;
 }
 
 SlaveTwin* Twin[numberOfTwins];
 
 // ----------------------------
-void SlaveTwin::showFlap(char digit) {
+// read entry queue
+void SlaveTwin::readQueue() {
+    ClickEvent receivedEvent;
+    if (twinQueue != nullptr) {                                                 // if queue exists
+        if (xQueueReceive(twinQueue, &receivedEvent, portMAX_DELAY)) {
+            if (receivedEvent.key != Key21::NONE) {
+                twinControl(receivedEvent);                                     // send corresponding Flap-Command to device
+            }
+        }
+    }
+}
+
+// ----------------------------
+// create entry queue
+void SlaveTwin::createQueue() {
+    twinQueue = xQueueCreate(1, sizeof(ClickEvent));                            // Create twin Queue
+}
+
+// ----------------------------
+// send entry queue
+void SlaveTwin::sendQueue(ClickEvent receivedEvent) {
+    if (twinQueue != nullptr) {                                                 // if queue exists, send to all registered twin queues
+        xQueueOverwrite(twinQueue, &receivedEvent);
+        #ifdef TWINVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrintln("send ClickEvent.type: %s to slave", Control.clickTypeToString(receivedEvent.type));
+            twinPrintln("send Received Key21: %s to slave", Control.key21ToString(receivedEvent.key));
+            }
+        #endif
+
+    } else {
+        {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            #ifdef ERRORVERBOSE
+                twinPrintln("no slaveTwin available");
+            #endif
+        }
+    }
+}
+
+// --------------------------------------
+void SlaveTwin::twinControl(ClickEvent event) {
+    if (event.type == CLICK_SINGLE) {
+        handleSingleKey(event.key);
+    }
+    if (event.type == CLICK_DOUBLE) {
+        handleDoubleKey(event.key);
+    }
+}
+
+// --------------------------------------
+void SlaveTwin::handleDoubleKey(Key21 key) {}
+
+// --------------------------------------
+void SlaveTwin::handleSingleKey(Key21 key) {
+    switch (key) {
+        case Key21::KEY_CH_MINUS:
+            logAndRun("Send Step Measurement...", [=] { stepMeasurement(); });
+            break;
+        case Key21::KEY_CH:
+            logAndRun("Send Calibration...", [=] { Calibrate(); });
+            break;
+        case Key21::KEY_CH_PLUS:
+            logAndRun("Send Speed Measurement...", [=] { speedMeasurement(); });
+            break;
+        case Key21::KEY_PREV:
+            logAndRun("Send Prev Steps...", [=] { prevSteps(); });
+            break;
+        case Key21::KEY_NEXT:
+            logAndRun("Send Next Steps...", [=] { nextSteps(); });
+            break;
+        case Key21::KEY_PLAY_PAUSE:
+            logAndRun("Send Save Offset...", [=] { setOffset(); });
+            break;
+        case Key21::KEY_VOL_MINUS:
+            logAndRun("Send Previous Flap...", [=] { prevFlap(); });
+            break;
+        case Key21::KEY_VOL_PLUS:
+            logAndRun("Send Next Flap...", [=] { nextFlap(); });
+            break;
+        case Key21::KEY_EQ:
+            logAndRun("Send Sensor Check...", [=] { sensorCheck(); });
+            break;
+        case Key21::KEY_200_PLUS:
+            logAndRun("Send RESET to Slave...", [=] { reset(); });
+            break;
+
+        case Key21::KEY_0:
+        case Key21::KEY_1:
+        case Key21::KEY_2:
+        case Key21::KEY_3:
+        case Key21::KEY_4:
+        case Key21::KEY_5:
+        case Key21::KEY_6:
+        case Key21::KEY_7:
+        case Key21::KEY_8:
+        case Key21::KEY_9: {
+            char        digit = key21ToDigit(key);
+            std::string msg   = "Send ";
+            msg += digit;
+            msg += "...";
+            logAndRun(msg.c_str(), [=] { showFlap(digit); });
+            break;
+        }
+
+        default: {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                twinPrint("Unknown remote control key: ");
+                Serial.println(static_cast<int>(key));
+                }
+            #endif
+            break;
+        }
+    }
+}
+
+// --------------------------------------
+void SlaveTwin::logAndRun(const char* message, std::function<void()> action) {
     #ifdef TWINVERBOSE
         {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("showFlap: digit ");
-        Serial.println(digit);
+        TraceScope trace;
+        twinPrintln(message);
         }
     #endif
+    action();
+}
+
+char SlaveTwin::key21ToDigit(Key21 key) {
+    switch (key) {
+        case Key21::KEY_0:
+            return '0';
+        case Key21::KEY_1:
+            return '1';
+        case Key21::KEY_2:
+            return '2';
+        case Key21::KEY_3:
+            return '3';
+        case Key21::KEY_4:
+            return '4';
+        case Key21::KEY_5:
+            return '5';
+        case Key21::KEY_6:
+            return '6';
+        case Key21::KEY_7:
+            return '7';
+        case Key21::KEY_8:
+            return '8';
+        case Key21::KEY_9:
+            return '9';
+        default:
+            return 0;
+    }
+}
+
+// ----------------------------
+void SlaveTwin::showFlap(char digit) {                                          // --------------------------------------
+
+#ifdef TWINVERBOSE
+    {
+    TraceScope trace;                                                           // use semaphore to protect this block
+    twinPrint("showFlap: digit ");
+    Serial.println(digit);
+    }
+#endif
 
     targetFlapNumber = searchSign(digit);                                       // sign position in flapFont is number of targetFlap
 

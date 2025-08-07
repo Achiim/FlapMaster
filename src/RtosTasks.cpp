@@ -60,67 +60,15 @@ void twinRegister(void* pvParameters) {
     xTimerStart(availCheckTimer, 0);
     vTaskSuspend(nullptr);                                                      // suspend task,  Callbacks are doing the job
 }
-/*
-void twinRegister(void* pvParameters) {
-    // Initialize timestamps with offset to desynchronize 10 min availability check
-    TickType_t lastScanTimeShort    = xTaskGetTickCount();
-    TickType_t lastScanTimeLong     = xTaskGetTickCount();
-    TickType_t lastAvailabilityTime = xTaskGetTickCount() + (1000 * 60 * 2);    // +2 minute offset
 
-    Register = new FlapRegistry();                                              // Create registry object
-
-    // Initial job: discover and register unknown devices
-    Register->registerUnregistered();
-    Register->scan_i2c_bus();
-
-    while (true) {
-        // Task intervals
-        const TickType_t scanDelayTicksShort = 1000 * 10;                       // every 10 seconds
-        const TickType_t scanDelayTicksLong  = 1000 * 60 * 20;                  // every 20 minutes
-        const TickType_t availableDelayTicks = 1000 * 60 * 10;                  // every 10 minutes
-
-        TickType_t now = xTaskGetTickCount();
-
-        // If not all expected twins are registered, perform fast scan
-        if (Register->numberOfRegisterdDevices() < numberOfTwins) {
-            if (now - lastScanTimeShort >= scanDelayTicksShort) {
-                Register->scan_i2c_bus();                                       // Scan I2C bus
-                Register->registerUnregistered();                               // Register newly discovered devices
-                lastScanTimeShort = now;
-            }
-        } else {
-            // Perform long interval scan every 20 minutes
-            if (now - lastScanTimeLong >= scanDelayTicksLong) {
-                Register->scan_i2c_bus();                                       // Scan I2C bus
-                Register->registerUnregistered();                               // Register newly discovered devices
-                lastScanTimeLong = now;
-            }
-        }
-
-        // Desynchronized availability check (offset by 2 minutes)
-        if (now - lastAvailabilityTime >= availableDelayTicks) {
-            Register->check_slave_availability();                               // Verify device availability, deregister if missing
-            lastAvailabilityTime = now;
-        }
-
-        vTaskDelay(5000 / portTICK_PERIOD_MS);                                  // Delay execution by 5 seconds
-    }
-}
-*/
 // ----------------------------
 // freeRTOS Task Twin[n]
 void slaveTwinTask(void* pvParameters) {
-    int        mod = *(int*)pvParameters;                                       // Twin Number
-    ClickEvent receivedEvent;
-    g_twinQueue[mod] = xQueueCreate(1, sizeof(ClickEvent));                     // Create twin Queue
+    int mod = *(int*)pvParameters;                                              // Twin Number
+    Twin[mod]->createQueue();                                                   // Create twin Queue
 
     while (true) {
-        if (g_twinQueue[mod] != nullptr) {                                      // if queue exists
-            if (xQueueReceive(g_twinQueue[mod], &receivedEvent, portMAX_DELAY)) {
-                if (receivedEvent.key != Key21::NONE)
-                    Master->TwinControl(receivedEvent, mod);                    // send corresponding Flap-Command to device
-            }
-        }
+        Twin[mod]->readQueue();                                                 // read event/command from twin Queue
     }
 }
 

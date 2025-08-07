@@ -13,6 +13,7 @@
 
 #include <Arduino.h>
 #include "FlapTasks.h"
+#include "SlaveTwin.h"
 #include "RemoteControl.h"
 #include "RemoteParser.h"
 
@@ -37,25 +38,14 @@ void RemoteParser::dispatchToTwins() {
     for (int m = 0; m < numberOfTwins; m++) {
         auto it = g_slaveRegistry.find(g_slaveAddressPool[m]);                  // search in registry
         if (it != g_slaveRegistry.end()) {                                      // if slave is registerd
-
-            if (g_twinQueue[m] != nullptr) {                                    // if queue exists, send to all registered twin queues
-                xQueueOverwrite(g_twinQueue[m], &_receivedEvent);
-                #ifdef IRVERBOSE
-                    {
-                    TraceScope trace;                                           // use semaphore to protect this block
-                    parserPrintln("send final decision ClickEvent.type: %s to Twin", Control.clickTypeToString(receivedEvent.type));
-                    parserPrintln("send final decision Received Key21: %s to Twin", Control.key21ToString(receivedEvent.key));
-                    }
-                #endif
-
-            } else {
+            Twin[m]->sendQueue(_receivedEvent);
+            #ifdef PARSERVERBOSE
                 {
-                    TraceScope trace;                                           // use semaphore to protect this block
-                    #ifdef ERRORVERBOSE
-                        parserPrintln("no slaveTwin available");
-                    #endif
+                TraceScope trace;                                               // use semaphore to protect this block
+                parserPrintln("send final decision ClickEvent.type: %s to Twin", Control.clickTypeToString(_receivedEvent.type));
+                parserPrintln("send final decision Received Key21: %s to Twin", Control.key21ToString(_receivedEvent.key));
                 }
-            }
+            #endif
         }
     }
 }

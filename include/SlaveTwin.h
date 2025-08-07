@@ -68,6 +68,10 @@ class SlaveTwin {
     bool  isSlaveReady();                                                       // check if slave is ready
     Key21 ir2Key21(uint64_t ircode);
 
+    void readQueue();
+    void createQueue();
+    void sendQueue(ClickEvent receivedEvent);
+
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
 
     // Registry trace
@@ -189,6 +193,13 @@ constexpr std::string_view clubCodeAt(std::size_t index) {
     // clang-format on
 
    private:
+    QueueHandle_t twinQueue;
+    void          twinControl(ClickEvent event);
+    void          handleDoubleKey(Key21 key);
+    void          handleSingleKey(Key21 key);
+    void          logAndRun(const char* message, std::function<void()> action);
+    char          key21ToDigit(Key21 key);
+
     void             printSlaveReadyInfo();                                     // trace output Read Structure
     void             updateSlaveReadyInfo(uint8_t* data);                       // take over Read Structure
     i2c_cmd_handle_t buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size);
