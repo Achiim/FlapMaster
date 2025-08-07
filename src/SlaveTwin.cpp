@@ -488,10 +488,10 @@ i2c_cmd_handle_t SlaveTwin::buildShortCommand(ShortMessage shortCmd, uint8_t* an
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
     if (i2c_master_start(cmd) != ESP_OK)
-        Master->systemHalt("FATAL ERROR: I2C start failed", 3);
+        systemHalt("FATAL ERROR: I2C start failed", 3);
 
     if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
-        Master->systemHalt("FATAL ERROR: write address failed", 3);
+        systemHalt("FATAL ERROR: write address failed", 3);
 
     i2c_master_write_byte(cmd, shortCmd, true);
 
@@ -893,4 +893,41 @@ bool SlaveTwin::waitUntilSlaveReady(uint32_t timeout_ms) {
     }
 
     return false;                                                               // timed out waiting for ready
+}
+
+// --------------------------------------
+void SlaveTwin::systemHalt(const char* reason, int blinkCode) {
+    twinPrintln("===================================");
+    twinPrintln("🛑 SYSTEM HALTED!");
+    twinPrint("reason: ");
+    Serial.println(reason);
+    twinPrintln("===================================");
+
+    #ifdef LED_BUILTIN
+        const int ERROR_LED = LED_BUILTIN;                                      // oder eigene Fehler-LED
+        pinMode(ERROR_LED, OUTPUT);
+    #endif
+    while (true) {
+        #ifdef LED_BUILTIN
+            if (blinkCode > 0) {
+            for (int i = 0; i < blinkCode; ++i) {
+            digitalWrite(ERROR_LED, HIGH);
+            vTaskDelay(pdMS_TO_TICKS(200));
+            digitalWrite(ERROR_LED, LOW);
+            vTaskDelay(pdMS_TO_TICKS(200));
+            }
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            } else {                                                            // Ohne Blinkcode: LED dauerhaft an
+            digitalWrite(ERROR_LED, HIGH);
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            }
+        #endif
+        {
+            TraceScope trace;                                                   // use semaphore to protect
+            twinPrint("System halt reason: ");                                  // regelmäßige
+                                                // Konsolenmeldung
+            Serial.println(reason);
+        }
+        vTaskDelay(pdMS_TO_TICKS(5000));                                        // Delay for 5s
+    }
 }

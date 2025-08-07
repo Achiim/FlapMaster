@@ -194,6 +194,7 @@ constexpr std::string_view clubCodeAt(std::size_t index) {
 
    private:
     QueueHandle_t twinQueue;
+    void          systemHalt(const char* reason, int blinkCode);
     void          twinControl(ClickEvent event);
     void          handleDoubleKey(Key21 key);
     void          handleSingleKey(Key21 key);
