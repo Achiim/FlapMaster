@@ -142,7 +142,7 @@ void FlapReporting::reportSlaveRegistry() {
     for (const auto& [address, device] : g_slaveRegistry) {
         if (!device) {
             char buffer[64];
-            snprintf(buffer, sizeof(buffer), "║ 0x%02X ║       (nullptr)      ║   ---  ║ --- ║  ---  ║  ---  ║  --- ║ ---  ║ [invalid] ║", address);
+            snprintf(buffer, sizeof(buffer), "║ 0x%02X ║       (nullptr)      ║   ---  ║ --- ║  ---  ║  ---  ║  --- ║ ---  ║ [unknown] ║", address);
             Serial.println(buffer);
             continue;
         }
