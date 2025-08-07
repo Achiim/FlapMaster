@@ -133,17 +133,16 @@ void FlapReporting::printBar(uint32_t value, float scale, const char* symbol, ui
 }
 
 void FlapReporting::reportSlaveRegistry() {
-    Serial.println("╔══════════════════════════════════════════════════════════════════════════════════════════╗");
-    Serial.println("║                             FLAP I²C DEVICE REGISTRY                                     ║");
-    Serial.println("╠══════╦══════════════════════╦════════╦═════╦═══════╦═══════╦══════╦══════╦═══════════════╣");
-    Serial.println("║ I²C  ║ Device               ║ Offset ║ rpm ║ ms/Rev║ St/Rev║ Flaps║ Pos  ║ Sensor Status ║");
-    Serial.println("╟──────╫──────────────────────╫────────╫─────╫───────╫───────╫──────╫──────╫───────────────╢");
+    Serial.println("╔════════════════════════════════════════════════════════════════════════════════════╗");
+    Serial.println("║                             FLAP I²C DEVICE REGISTRY                               ║");
+    Serial.println("╠══════╦══════════════════════╦════════╦═════╦═══════╦═══════╦══════╦══════╦═════════╣");
+    Serial.println("║ I²C  ║ Device               ║ Offset ║ rpm ║ ms/Rev║ St/Rev║ Flaps║ Pos  ║ Sensor  ║");
+    Serial.println("╟──────╫──────────────────────╫────────╫─────╫───────╫───────╫──────╫──────╫─────────╢");
 
     for (const auto& [address, device] : g_slaveRegistry) {
         if (!device) {
             char buffer[64];
-            snprintf(buffer, sizeof(buffer), "║ 0x%02X ║       (nullptr)      ║   ---  ║ --- ║  ---  ║  ---  ║  --- ║ ---  ║     [invalid]   ║",
-                     address);
+            snprintf(buffer, sizeof(buffer), "║ 0x%02X ║       (nullptr)      ║   ---  ║ --- ║  ---  ║  ---  ║  --- ║ ---  ║ [invalid] ║", address);
             Serial.println(buffer);
             continue;
         }
@@ -159,13 +158,13 @@ void FlapReporting::reportSlaveRegistry() {
         uint16_t pos     = device->position;
 
         char line[128];
-        snprintf(line, sizeof(line), "║ 0x%02X ║ %-20s ║ %6u ║ %3u ║ %5u ║ %5u ║ %4u ║ %4u ║ %-13s ║", address, name, offset, (speedMs > 0 ? rpm : 0),
+        snprintf(line, sizeof(line), "║ 0x%02X ║ %-20s ║ %6u ║ %3u ║ %5u ║ %5u ║ %4u ║ %4u ║ %-7s ║", address, name, offset, (speedMs > 0 ? rpm : 0),
                  speedMs, steps, flaps, pos, sensorStatus);
 
         Serial.println(line);
     }
 
-    Serial.println("╚══════╩══════════════════════╩════════╩═════╩═══════╩═══════╩══════╩══════╩═══════════════╝");
+    Serial.println("╚══════╩══════════════════════╩════════╩═════╩═══════╩═══════╩══════╩══════╩═════════╝");
 }
 
 void FlapReporting::reportRtosTasks() {
