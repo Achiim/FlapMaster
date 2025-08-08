@@ -23,8 +23,8 @@ void remoteControl(void* pvParameters) {
 }
 
 // ----------------------------
-// freeRTOS Task Remote Parser
-void remoteParser(void* pvParameters) {
+// freeRTOS Task Parser
+void parserTask(void* pvParameters) {
     Parser        = new RemoteParser();                                         // create object for task
     g_parserQueue = xQueueCreate(1, sizeof(uint64_t));                          // Create parser Queue
 

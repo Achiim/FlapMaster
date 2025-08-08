@@ -88,7 +88,7 @@ void masterStartRtosTasks() {
     createReportTask();                                                         // Create report tasks
     createTwinTasks();                                                          // Create twin tasks
     createRemoteControlTask();                                                  // Create remote control
-    createRemoteParserTask();                                                   // create remote creator task
+    createParserTask();                                                         // create remote creator task
     createRegisterTwinsTask();                                                  // Create Register Twins task
 }
 
@@ -163,10 +163,9 @@ void createRegisterTwinsTask() {
 }
 
 // ---------------------------
-void createRemoteParserTask() {
+void createParserTask() {
     #ifdef MASTERVERBOSE
-        masterPrintln("start freeRTOS task: RemoteParser");
+        masterPrintln("start freeRTOS task: Parser");
     #endif
-    xTaskCreate(remoteParser, "RemoteParser", STACK_PARSER, NULL, PRIO_PARSER, &g_remoteParserHandle);
-    vTaskDelay(500 / portTICK_PERIOD_MS);                                       // give task some time for registering new devices
+    xTaskCreate(parserTask, "Parser", STACK_PARSER, NULL, PRIO_PARSER, &g_parserHandle);
 }
