@@ -280,9 +280,13 @@ bool FlapRegistry::checkSlaveHasBooted(int n, uint8_t address) {
             }
         #endif
 
-        i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS),
-                       address);                                                // Calibrate device because of reboot
-        Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
+        TwinCommand twinCmd;
+        twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
+        Twin[n]->sendQueue(twinCmd);
+
+        //        i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS),
+        //                       address);                                                // Calibrate device because of reboot
+        //        Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
 
         return true;                                                            // bootFlag resetted
     } else {
@@ -421,9 +425,11 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
             #endif
         }
         c++;                                                                    // counting calibrations
-        i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS),
-                       address);                                                // Calibrate device because of reboot
-        Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
+        TwinCommand twinCmd;
+        twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
+        Twin[n]->sendQueue(twinCmd);
+        //        Twin[n]->i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS)); // Calibrate device because of reboot
+        //        Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
 
         #ifdef MASTERVERBOSE
             {

@@ -217,7 +217,7 @@ void SlaveTwin::showFlap(int digit) {
     int steps = countStepsToMove(flapNumber, targetFlapNumber);                 // get steps to move
     if (steps > 0) {
         if (isSlaveReady()) {
-            i2cLongCommand(i2cCommandParameter(MOVE, steps), slaveAddress);
+            i2cLongCommand(i2cCommandParameter(MOVE, steps));
             flapNumber = targetFlapNumber;                                      // I assume it's okay
             if (!waitUntilSlaveReady(parameter.speed)) {                        // wait for slave to get ready; maximum time of one revolutions
                 {
@@ -240,10 +240,9 @@ void SlaveTwin::showFlap(int digit) {
 void SlaveTwin::calibration() {
     if (isSlaveReady()) {
         if (parameter.steps > 0) {                                              // happend a step-messurement?
-            i2cLongCommand(i2cCommandParameter(CALIBRATE, parameter.steps),
-                           slaveAddress);                                       // use result of measurement
+            i2cLongCommand(i2cCommandParameter(CALIBRATE, parameter.steps));    // use result of measurement
         } else {
-            i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS), slaveAddress); // use default steps
+            i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS));      // use default steps
         }
         flapNumber = 0;                                                         // we stand at Zero after that
         if (!waitUntilSlaveReady(2 * parameter.speed)) {                        // wait for slave to get ready; maximum time of 2 revolutions
@@ -266,7 +265,7 @@ void SlaveTwin::calibration() {
 void SlaveTwin::stepMeasurement() {
     if (!isSlaveReady())
         return;                                                                 // slave not ready, ignore
-    i2cLongCommand(i2cCommandParameter(STEP_MEASSURE, 0), slaveAddress);
+    i2cLongCommand(i2cCommandParameter(STEP_MEASSURE, 0));
     flapNumber = 0;                                                             // we stand at Zero after that
     if (!waitUntilSlaveReady(15 * parameter.speed)) {                           // wait for slave to get ready; maximum time of 15 revolutions
         {
@@ -288,7 +287,7 @@ void SlaveTwin::speedMeasurement() {
     if (!isSlaveReady())
         return;                                                                 // slave not ready, ignore
     uint16_t stepsToCheck = (parameter.steps > 0) ? parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
-    i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, parameter.steps), slaveAddress);
+    i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, parameter.steps));
     if (!waitUntilSlaveReady(2 * parameter.speed)) {                            // wait for slave to get ready; maximum time of 2 revolutions
         {
             #ifdef ERRORVERBOSE
@@ -310,7 +309,7 @@ void SlaveTwin::sensorCheck() {
         return;                                                                 // slave not ready, ignore
 
     uint16_t stepsToCheck = (parameter.steps > 0) ? parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
-    i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, parameter.steps), slaveAddress); // do sensor check
+    i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, parameter.steps));         // do sensor check
     if (!waitUntilSlaveReady(2 * parameter.speed)) {                            // wait for slave to get ready; maximum time of 2 revolutions
         {
             #ifdef ERRORVERBOSE
@@ -335,7 +334,7 @@ void SlaveTwin::nextFlap() {
         int steps = countStepsToMove(flapNumber, targetFlapNumber);
         if (steps > 0) {
             if (isSlaveReady()) {
-                i2cLongCommand(i2cCommandParameter(MOVE, steps), slaveAddress);
+                i2cLongCommand(i2cCommandParameter(MOVE, steps));
                 flapNumber = targetFlapNumber;
                 if (!waitUntilSlaveReady(parameter.speed)) {                    // wait for slave to get ready; maximum time 1/2 revelution
                     {
@@ -368,7 +367,7 @@ void SlaveTwin::prevFlap() {
         int steps = countStepsToMove(flapNumber, targetFlapNumber);
         if (steps > 0) {
             if (isSlaveReady()) {
-                i2cLongCommand(i2cCommandParameter(MOVE, steps), slaveAddress);
+                i2cLongCommand(i2cCommandParameter(MOVE, steps));
                 flapNumber = targetFlapNumber;
                 if (!waitUntilSlaveReady(2 * parameter.speed)) {                // wait for slave to get ready; maximum time of2 revolutions
                     {
@@ -396,7 +395,7 @@ void SlaveTwin::prevFlap() {
 void SlaveTwin::nextSteps() {
     if (isSlaveReady()) {
         if (parameter.offset + adjustOffset + ADJUSTMENT_STEPS <= parameter.steps) { // only as positiv, as to be stepped to one revolutoin
-            i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS), slaveAddress);
+            i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS));
             adjustOffset += ADJUSTMENT_STEPS;
             twinPrintln("to be stored offset: %d (not yet stored)", parameter.offset + adjustOffset);
         }
@@ -423,7 +422,7 @@ void SlaveTwin::setOffset() {
     twinPrintln("save: offset = %d | ms/Rev = %d | St/Rev = %d", parameter.offset, parameter.speed, parameter.steps);
     if (isSlaveReady()) {
         synchSlaveRegistry(parameter);                                          // take over new offset to registry
-        i2cLongCommand(i2cCommandParameter(SET_OFFSET, parameter.offset), slaveAddress);
+        i2cLongCommand(i2cCommandParameter(SET_OFFSET, parameter.offset));
     }
 }
 
@@ -433,7 +432,7 @@ void SlaveTwin::reset() {
     Serial.println(slaveAddress, HEX);
     if (isSlaveReady()) {
         Register->deregisterSlave(slaveAddress);                                // delete slave from registry, this address is free now
-        i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
+        i2cLongCommand(i2cCommandParameter(RESET, 0));                          // send reset to slave
     }
 }
 
@@ -454,6 +453,72 @@ int SlaveTwin::countStepsToMove(int from, int to) {
         return 0;                                                               // nothing to move
     }
 }
+// ----------------------------
+// purpose: write FlapMessage to i2c slave
+// - access to i2c bus is semaphore protected
+// - increment i2c statistics
+//
+// parameter:
+// mess = message to be send (3byte structure: 1byte command, 2byte parameter)
+// slaveAddress = i2c address of slave
+//
+void SlaveTwin::i2cLongCommand(LongMessage mess) {
+    uint8_t data[sizeof(LongMessage)];
+    prepareI2Cdata(mess, slaveAddress, data);
+    esp_err_t error = ESP_FAIL;
+
+    // take semaphore
+    takeI2CSemaphore();
+
+    #ifdef I2CMASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        masterPrint("send LongCommand (i2cLongCommand): 0x");
+        Serial.print(data[0], HEX);
+        Serial.print(" - ");
+        Serial.println(getCommandName(data[0]));
+        }
+    #endif
+
+    // construct command chain
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();                               // create link to command chain
+    i2c_master_start(cmd);                                                      // set i2c start condition
+    i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true);   // set i2c address of flap module
+    i2c_master_write(cmd, data, sizeof(LongMessage), true);                     // send buffer to slave
+    i2c_master_stop(cmd);                                                       // set i2c stop condition
+    error = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1));             // send command chain
+    i2c_cmd_link_delete(cmd);                                                   // delete command chain
+
+    // give semaphore
+    giveI2CSemaphore();
+
+    if (DataEvaluation)
+        DataEvaluation->increment(1, sizeof(LongMessage));                      // count I2C usage, 1 Access, 3 byte data
+
+    if (error == ESP_OK) {
+        #ifdef I2CMASTERVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            masterPrint("ACK from Slave 0x");
+            Serial.print(slaveAddress, HEX);
+            Serial.println(" received.");
+            }
+        #endif
+    } else {
+        #ifdef I2CMASTERVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            masterPrint("Error while sending to 0x");
+            Serial.print(slaveAddress, HEX);
+            Serial.print(". Errorcode: ");
+            Serial.println(esp_err_to_name(error));
+            }
+        #endif
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // count I2C usage, 1 timeout
+    }
+}
+
 // ----------------------------
 // purpose: send I2C short command, only one byte
 esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {

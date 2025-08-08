@@ -81,15 +81,10 @@ extern void availCheckCallback(TimerHandle_t xTimer);                           
 
 class FlapTask {
    public:
-    void TwinControl(ClickEvent receivedEvent, int mod);                        // overall control Twin with received remote keys
     void systemHalt(const char* reason    = "unknown error",
                     int         blinkCode = 0);                                 // fatal operation situations lead to systemHalt()
 
    private:
-    void handleSingleKey(Key21 key, int mod);                                   // remote key single pressed handle
-    void handleDoubleKey(Key21 key, int mod);                                   // remote key double pressed handle
-    void logAndRun(int mod, const char* message, std::function<void()> action); // remote key execution
-    char key21ToDigit(Key21 key);                                               // convert Key21 0...9 to digit 0...9
 };
 
 #endif                                                                          // FlapTasks_h

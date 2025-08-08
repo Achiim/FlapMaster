@@ -98,6 +98,7 @@ class SlaveTwin {
 
     // ---------------------------
     // I2C procedures
+    void      i2cLongCommand(LongMessage mess);                                 // send long command to slave
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
 
     // ---------------------------
