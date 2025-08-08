@@ -51,10 +51,10 @@ class ParserClass {                                                             
     void parserPrintln(const Args&... args) {                                   // standard parserPrint with new line
         tracePrintln("[FLAP - PARSER  ] ", args...);
     }
+    const char* twinCommandToString(TwinCommands cmd);                          // conver command to text
 
    private:
-    TwinCommand        mapEvent2Command(ClickEvent e);                          // map ClickEvent to TwinCommand
-    inline const char* twinCommandToString(TwinCommands cmd);                   // conver command to text
+    TwinCommand mapEvent2Command(ClickEvent e);                                 // map ClickEvent to TwinCommand
 };
 
 #endif                                                                          // Parser_h

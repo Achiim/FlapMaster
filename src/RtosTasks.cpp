@@ -46,8 +46,8 @@ void parserTask(void* pvParameters) {
 // freeRTOS Task Registry
 void twinRegister(void* pvParameters) {
     Register = new FlapRegistry();
-    Register->registerUnregistered();
-    Register->scan_i2c_bus();
+    Register->registerUnregistered();                                           // register all twins which are not registered yet
+    Register->scan_i2c_bus();                                                   // scan i2c bus for new twins
     shortScanTimer =
         xTimerCreate("ScanShort", pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), pdTRUE, nullptr, shortScanCallback); // 1) Short-Scan-Timer (Auto-Reload)
     longScanTimer =
@@ -62,24 +62,23 @@ void twinRegister(void* pvParameters) {
 }
 
 // ----------------------------
-// freeRTOS Task Twin[n]
+// freeRTOS Task Twin[index]
 void slaveTwinTask(void* pvParameters) {
-    int mod = *(int*)pvParameters;                                              // Twin Number
-    Twin[mod]->createQueue();                                                   // Create twin Queue
+    int twinIndex = *(int*)pvParameters;                                        // Twin Number
+    Twin[twinIndex]->createQueue();                                             // Create twin Queue
 
     while (true) {
-        Twin[mod]->readQueue();                                                 // read event/command from twin Queue
+        Twin[twinIndex]->readQueue();                                           // read event/command from twin Queue
     }
 }
 
 // ----------------------------
 // freeRTOS Task Statistic
 void statisticTask(void* param) {
-    TickType_t lastWakeTime = xTaskGetTickCount();
+    TickType_t lastWakeTime = xTaskGetTickCount();                              // get current tick count
     DataEvaluation          = new FlapStatistics();                             // create Object for statistic task
     while (true) {
         vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(60000));                   // every 1 Minute
-
         {
             TraceScope trace;                                                   // use semaphore to protect this block
             #ifdef STATISTICVERBOSE
@@ -101,10 +100,10 @@ void reportTask(void* pvParameters) {
     g_reportQueue = xQueueCreate(1, sizeof(uint32_t));                          // Create task Queue
 
     while (true) {
-        if (xQueueReceive(g_reportQueue, &receivedValue, portMAX_DELAY)) {
-            receivedKey = Control.ircodeToKey21(receivedValue);
-            if (receivedKey != Key21::NONE) {
-                if (receivedKey == Key21::KEY_100_PLUS) {
+        if (xQueueReceive(g_reportQueue, &receivedValue, portMAX_DELAY)) {      // wait for Queue message
+            receivedKey = Control.ircodeToKey21(receivedValue);                 // filter remote signal to reduce options
+            if (receivedKey != Key21::NONE) {                                   // if valid key21 was pressed
+                if (receivedKey == Key21::KEY_100_PLUS) {                       // special key for reporting
                     Reports->reportPrintln("======== Flap Master Health Overview ========");
                     Reports->reportTaskStatus();                                // Report Header
                     Reports->reportMemory();                                    // ESP32 (RAM status)

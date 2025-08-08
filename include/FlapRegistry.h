@@ -51,7 +51,7 @@ class FlapRegistry {
     void    registerUnregistered();                                             // collect all unregistered slaves
     int     updateSlaveRegistry(int n, uint8_t address, slaveParameter parameter); // register slaves in registry
     void    deregisterSlave(uint8_t slaveAddress);                              // deregister from registry
-    void    check_slave_availability();
+    void    check_slave_availability();                                         // check if slave is still available
     void    scan_i2c_bus();                                                     // search for slave in I2C bus
     int     numberOfRegisterdDevices();                                         // scan registry to evaluate number of registered devices
     uint8_t getNextAddress();                                                   // next free i2c address form slave registry

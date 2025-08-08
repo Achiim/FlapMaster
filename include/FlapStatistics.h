@@ -1,3 +1,16 @@
+// #################################################################################################################
+//
+//  ███████ ██       █████  ██████      ███████ ████████  █████  ████████ ██ ███████ ████████ ██  ██████ ███████
+//  ██      ██      ██   ██ ██   ██     ██         ██    ██   ██    ██    ██ ██         ██    ██ ██      ██
+//  █████   ██      ███████ ██████      ███████    ██    ███████    ██    ██ ███████    ██    ██ ██      ███████
+//  ██      ██      ██   ██ ██               ██    ██    ██   ██    ██    ██      ██    ██    ██ ██           ██
+//  ██      ███████ ██   ██ ██          ███████    ██    ██   ██    ██    ██ ███████    ██    ██  ██████ ███████
+//
+// ################################################################################################## by Achim ####
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=FLAP%20Statistics
+//
+
 #include <Arduino.h>
 
 #ifndef FlapStatistics_h
@@ -26,6 +39,6 @@ class FlapStatistics {
     uint32_t _busTimeoutCounter;                                                // counter for I2C timeouts
 
    private:
-    SemaphoreHandle_t _statsMutex = nullptr;
+    SemaphoreHandle_t _statsMutex = nullptr;                                    // semaphore to protect statistics access
 };
 #endif                                                                          // FlapStatistics_h

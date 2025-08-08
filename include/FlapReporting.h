@@ -13,11 +13,11 @@ class FlapReporting {
     int statistic = 0;
 
     // Report
-    template <typename... Args>
+    template <typename... Args>                                                 // Report trace
     void reportPrint(const Args&... args) {
         tracePrint("[FLAP - REPORT  ] ", args...);
     }
-    template <typename... Args>
+    template <typename... Args>                                                 // Report trace with new line
     void reportPrintln(const Args&... args) {
         tracePrintln("[FLAP - REPORT  ] ", args...);
     }
@@ -26,7 +26,7 @@ class FlapReporting {
     FlapReporting();
 
     // ----------------------------
-    uint32_t maxValueFromHistory(uint32_t* history);
+    uint32_t maxValueFromHistory(uint32_t* history);                            // get maximum value from history
 
     void reportTaskStatus();                                                    // show Task status report
     void reportMemory();                                                        // show memory usage
@@ -44,8 +44,8 @@ class FlapReporting {
 
     void        printStepsByFlapReport(SlaveTwin& twin, int wrapWidth);         // Einzelreport für einen Twin (wird intern benutzt).
     const char* selectSparklineLevel(int value, int minVal, int maxVal);        // helper to select sparkling
-    void        printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength);
-    void        printI2CHistory();
+    void        printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength); // print bar with value
+    void        printI2CHistory();                                              // print I2C history
     void        printUptime();                                                  // Helper to report up time
 
     // box drawing helpers for steps by flap report

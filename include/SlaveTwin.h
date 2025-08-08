@@ -38,22 +38,23 @@
 #include "RemoteControl.h"
 
 enum TwinCommands {
-    TWIN_NO_COMMAND,
-    TWIN_SHOW_FLAP,
-    TWIN_CALIBRATION,
-    TWIN_STEP_MEASUREMENT,
-    TWIN_SPEED_MEASUREMENT,
-    TWIN_SENSOR_CHECK,
-    TWIN_NEXT_FLAP,
-    TWIN_PREV_FLAP,
-    TWIN_NEXT_STEP,
-    TWIN_PREV_STEP,
-    TWIN_SET_OFFSET,
-    TWIN_RESET
+    TWIN_NO_COMMAND,                                                            // no command
+    TWIN_SHOW_FLAP,                                                             // show Flap with this flap number
+    TWIN_CALIBRATION,                                                           // do calibration
+    TWIN_STEP_MEASUREMENT,                                                      // measure steps for one revolution
+    TWIN_SPEED_MEASUREMENT,                                                     // measure speed in ms for one revolution
+    TWIN_SENSOR_CHECK,                                                          // check if hall sensor is working
+    TWIN_NEXT_FLAP,                                                             // move to next flap
+    TWIN_PREV_FLAP,                                                             // move to previous flap
+    TWIN_NEXT_STEP,                                                             // move to next step (25 steps) to adjust calibration
+    TWIN_PREV_STEP,                                                             // move to previous step (-25 steps) to adjust calibration
+    TWIN_SET_OFFSET,                                                            // save calibration offset in EEPROM
+    TWIN_RESET                                                                  // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
 };                                                                              // list of possible twin commands
 
-// Command that Twin will accept
+// Command that will be accepted byTwin
 struct TwinCommand {
+    ClickType     type;                                                         // type of command SINGLE, DOUBLE, LONG
     TwinCommands  twinCommand;                                                  // command to be performed by twin
     int           twinParameter;                                                // parameter for command
     QueueHandle_t responsQueue;                                                 // queue, where result shall be responded
@@ -65,9 +66,9 @@ class SlaveTwin {
     int            slaveAddress  = 0;                                           // I2C Address of the flap
     int            flapNumber    = 0;                                           // actual flap that is displayed
     int            adjustOffset  = 0;                                           // internal adjustment -> will be saved by save
-    unsigned long  lastTwinTime  = 0;
-    uint64_t       lastTwinCode  = 0;
-    Key21          lastKey       = Key21::UNKNOWN;
+    unsigned long  lastTwinTime  = 0;                                           // last time a twin command was received
+    uint64_t       lastTwinCode  = 0;                                           // last received code from remote
+    Key21          lastKey       = Key21::UNKNOWN;                              // last pressed key
     slaveParameter parameter;                                                   // parameter of Slave in EEPROM
     slaveStatus    slaveReady;                                                  // status of slave
 
@@ -77,7 +78,7 @@ class SlaveTwin {
 
     // ----------------------------
     // Command functions
-    void showFlap(char digit);                                                  // Show Flap with this char
+    void showFlap(int flapnumber);                                              // Show Flap with this char
     void calibration();                                                         // calibrate flap drum
     void stepMeasurement();                                                     // measure steps to be used for one revolution
     void speedMeasurement();                                                    // measure milisecends for one revolution
@@ -93,7 +94,7 @@ class SlaveTwin {
     void  askSlaveAboutParameter(uint8_t address, slaveParameter& parameter);   // retrieve all slave parameter
     void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
-    Key21 ir2Key21(uint64_t ircode);
+    Key21 ir2Key21(uint64_t ircode);                                            // convert IR code to Key21
 
     // ---------------------------
     // I2C procedures
@@ -101,9 +102,9 @@ class SlaveTwin {
 
     // ---------------------------
     // RTOS queue procedures
-    void readQueue();
-    void createQueue();
-    void sendQueue(ClickEvent receivedEvent);
+    void readQueue();                                                           // read command from Twin queue
+    void createQueue();                                                         // create queue for Twin commands
+    void sendQueue(TwinCommand twinCmd);                                        // send command to Twin queue
 
     // 10 Flap-Modul
     int stepsByFlap[MAXIMUM_FLAPS] = {409, 409, 411, 409, 409,                  // there a 10 flaps: (4096/10=409 Rest 6)
@@ -131,20 +132,19 @@ class SlaveTwin {
 
     // -------------------------------
     // internal Helpers
-    void             systemHalt(const char* reason, int blinkCode);
-    void             twinControl(ClickEvent event);
-    void             handleDoubleKey(Key21 key);
-    void             handleSingleKey(Key21 key);
-    void             logAndRun(const char* message, std::function<void()> action);
-    char             key21ToDigit(Key21 key);
+    void             systemHalt(const char* reason, int blinkCode);             // system halt with reason and blink code
+    void             twinControl(TwinCommand twinCmd);                          // handle Twin command
+    void             handleDoubleKey(TwinCommands cmd, int param);              // handle double key command
+    void             handleSingleKey(TwinCommands cmd, int param);              // handle single key command
+    void             logAndRun(const char* message, std::function<void()> action); // log message and run action
     void             printSlaveReadyInfo();                                     // trace output Read Structure
     void             updateSlaveReadyInfo(uint8_t* data);                       // take over Read Structure
-    i2c_cmd_handle_t buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size);
-    void             logShortRequest(ShortMessage cmd);
-    void             logShortResponse(uint8_t* answer, int size);
-    void             logShortError(ShortMessage cmd, esp_err_t err);
-    void             synchSlaveRegistry(slaveParameter parameter);
-    bool             waitUntilSlaveReady(uint32_t timeout_ms);
+    i2c_cmd_handle_t buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size); // build I2C command for short command
+    void             logShortRequest(ShortMessage cmd);                         // log sending short command
+    void             logShortResponse(uint8_t* answer, int size);               // log response to short command
+    void             logShortError(ShortMessage cmd, esp_err_t err);            // log errors for short command
+    void             synchSlaveRegistry(slaveParameter parameter);              // take over slave parameter to registry
+    bool             waitUntilSlaveReady(uint32_t timeout_ms);                  // wait until slave is ready
     int              searchSign(char digit);                                    // return flapNumber of digit
     int              countStepsToMove(int from, int to);                        // return steps to move fom "from" to "to"
 
@@ -162,15 +162,12 @@ class SlaveTwin {
         tracePrintln(buf, args...);
     }
 
-    // 40 Flap-Modul
-    // -------------
-    // String flapFont = "0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ+-?";               // this list represents the sequence
-    // of digits on the flap drum
-    //
-
-    // 10 Flap-Modul
-    // -------------
-    String flapFont = "0123456789";                                             // this list represents the sequence of digits on the flap drum
+    template <typename... Args>
+    void twinPrint(const char* fmt, const Args&... args) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress, fmt, args...);
+        tracePrint(buf);
+    }
 
     // ----------------------------
 };

@@ -69,11 +69,11 @@ SlaveTwin::SlaveTwin(int add) {
 // ----------------------------
 // read entry queue
 void SlaveTwin::readQueue() {
-    ClickEvent receivedEvent;
+    TwinCommand twinCmd;
     if (twinQueue != nullptr) {                                                 // if queue exists
-        if (xQueueReceive(twinQueue, &receivedEvent, portMAX_DELAY)) {
-            if (receivedEvent.key != Key21::NONE) {
-                twinControl(receivedEvent);                                     // send corresponding Flap-Command to device
+        if (xQueueReceive(twinQueue, &twinCmd, portMAX_DELAY)) {
+            if (twinCmd.twinCommand != TWIN_NO_COMMAND) {
+                twinControl(twinCmd);                                           // send corresponding Flap-Command to device
             }
         }
     }
@@ -82,19 +82,19 @@ void SlaveTwin::readQueue() {
 // ----------------------------
 // create entry queue
 void SlaveTwin::createQueue() {
-    twinQueue = xQueueCreate(1, sizeof(ClickEvent));                            // Create twin Queue
+    // twinQueue = xQueueCreate(1, sizeof(ClickEvent));                            // Create twin Queue
+    twinQueue = xQueueCreate(1, sizeof(TwinCommand));                           // Create twin Queue
 }
 
 // ----------------------------
 // send entry queue
-void SlaveTwin::sendQueue(ClickEvent receivedEvent) {
+void SlaveTwin::sendQueue(TwinCommand twinCmd) {
     if (twinQueue != nullptr) {                                                 // if queue exists, send to all registered twin queues
-        xQueueOverwrite(twinQueue, &receivedEvent);
+        xQueueOverwrite(twinQueue, &twinCmd);
         #ifdef TWINVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrintln("send ClickEvent.type: %s to slave", Control.clickTypeToString(receivedEvent.type));
-            twinPrintln("send Received Key21: %s to slave", Control.key21ToString(receivedEvent.key));
+            twinPrintln("send TwinCommand: %s to slave", Parser->twinCommandToString(twinCmd.twinCommand));
             }
         #endif
     } else {
@@ -108,67 +108,57 @@ void SlaveTwin::sendQueue(ClickEvent receivedEvent) {
 }
 
 // --------------------------------------
-void SlaveTwin::twinControl(ClickEvent event) {
-    if (event.type == CLICK_SINGLE) {
-        handleSingleKey(event.key);
+void SlaveTwin::twinControl(TwinCommand twinCmd) {
+    if (twinCmd.type == CLICK_SINGLE) {
+        handleSingleKey(twinCmd.twinCommand, twinCmd.twinParameter);            // handle single key command
     }
-    if (event.type == CLICK_DOUBLE) {
-        handleDoubleKey(event.key);
+    if (twinCmd.type == CLICK_DOUBLE) {
+        handleDoubleKey(twinCmd.twinCommand, twinCmd.twinParameter);
     }
 }
 
 // --------------------------------------
-void SlaveTwin::handleDoubleKey(Key21 key) {}
+void SlaveTwin::handleDoubleKey(TwinCommands cmd, int) {}
 
 // --------------------------------------
-void SlaveTwin::handleSingleKey(Key21 key) {
-    switch (key) {
-        case Key21::KEY_CH_MINUS:
+void SlaveTwin::handleSingleKey(TwinCommands cmd, int param) {
+    switch (cmd) {
+        case TWIN_STEP_MEASUREMENT:
             logAndRun("Send Step Measurement...", [=] { stepMeasurement(); });
             break;
-        case Key21::KEY_CH:
+        case TWIN_CALIBRATION:
             logAndRun("Send Calibration...", [=] { calibration(); });
             break;
-        case Key21::KEY_CH_PLUS:
+        case TWIN_SPEED_MEASUREMENT:
             logAndRun("Send Speed Measurement...", [=] { speedMeasurement(); });
             break;
-        case Key21::KEY_PREV:
+        case TWIN_PREV_STEP:
             logAndRun("Send Prev Steps...", [=] { prevSteps(); });
             break;
-        case Key21::KEY_NEXT:
+        case TWIN_NEXT_STEP:
             logAndRun("Send Next Steps...", [=] { nextSteps(); });
             break;
-        case Key21::KEY_PLAY_PAUSE:
+        case TWIN_SET_OFFSET:
             logAndRun("Send Save Offset...", [=] { setOffset(); });
             break;
-        case Key21::KEY_VOL_MINUS:
+        case TWIN_PREV_FLAP:
             logAndRun("Send Previous Flap...", [=] { prevFlap(); });
             break;
-        case Key21::KEY_VOL_PLUS:
+        case TWIN_NEXT_FLAP:
             logAndRun("Send Next Flap...", [=] { nextFlap(); });
             break;
-        case Key21::KEY_EQ:
+        case TWIN_SENSOR_CHECK:
             logAndRun("Send Sensor Check...", [=] { sensorCheck(); });
             break;
-        case Key21::KEY_200_PLUS:
+        case TWIN_RESET:
             logAndRun("Send RESET to Slave...", [=] { reset(); });
             break;
 
-        case Key21::KEY_0:
-        case Key21::KEY_1:
-        case Key21::KEY_2:
-        case Key21::KEY_3:
-        case Key21::KEY_4:
-        case Key21::KEY_5:
-        case Key21::KEY_6:
-        case Key21::KEY_7:
-        case Key21::KEY_8:
-        case Key21::KEY_9: {
-            char        digit = key21ToDigit(key);
-            std::string msg   = "Send ";
-            msg += digit;
+        case TWIN_SHOW_FLAP: {
+            std::string msg = "Send ";
+            msg += param;
             msg += "...";
-            logAndRun(msg.c_str(), [=] { showFlap(digit); });
+            logAndRun(msg.c_str(), [=] { showFlap(param); });
             break;
         }
 
@@ -176,8 +166,8 @@ void SlaveTwin::handleSingleKey(Key21 key) {
             #ifdef ERRORVERBOSE
                 {
                 TraceScope trace;
-                twinPrint("Unknown remote control key: ");
-                Serial.println(static_cast<int>(key));
+                twinPrint("Unknown twin command: ");
+                Serial.println(static_cast<int>(cmd));
                 }
             #endif
             break;
@@ -196,37 +186,11 @@ void SlaveTwin::logAndRun(const char* message, std::function<void()> action) {
     action();
 }
 
-char SlaveTwin::key21ToDigit(Key21 key) {
-    switch (key) {
-        case Key21::KEY_0:
-            return '0';
-        case Key21::KEY_1:
-            return '1';
-        case Key21::KEY_2:
-            return '2';
-        case Key21::KEY_3:
-            return '3';
-        case Key21::KEY_4:
-            return '4';
-        case Key21::KEY_5:
-            return '5';
-        case Key21::KEY_6:
-            return '6';
-        case Key21::KEY_7:
-            return '7';
-        case Key21::KEY_8:
-            return '8';
-        case Key21::KEY_9:
-            return '9';
-        default:
-            return 0;
-    }
-}
-
-// ----------------------------
+// ---------------------------------------
 // show selected digit
-void SlaveTwin::showFlap(char digit) {
-    targetFlapNumber = searchSign(digit);                                       // sign position in flapFont is number of targetFlap
+void SlaveTwin::showFlap(int digit) {
+    //    targetFlapNumber = searchSign(digit);                                       // sign position in flapFont is number of targetFlap
+    targetFlapNumber = digit;                                                   // sign position in flapFont is number of targetFlap
     if (targetFlapNumber < 0) {                                                 // search sign content of flapFont
         {
             #ifdef ERRORVERBOSE
@@ -470,22 +434,6 @@ void SlaveTwin::reset() {
     if (isSlaveReady()) {
         Register->deregisterSlave(slaveAddress);                                // delete slave from registry, this address is free now
         i2cLongCommand(i2cCommandParameter(RESET, 0), slaveAddress);            // send reset to slave
-    }
-}
-
-// ----------------------------
-int SlaveTwin::searchSign(char digit) {
-    if (numberOfFlaps > 0) {
-        for (int i = 0; i < numberOfFlaps; i++) {
-            if (digit == flapFont[i])
-                return i;                                                       // digit in flaps found
-        }
-        return -1;                                                              // digit not found
-    } else {
-        #ifdef ERRORVERBOSE
-            twinPrintln("number of Flaps not set");
-        #endif
-        return -1;                                                              // digit not found
     }
 }
 

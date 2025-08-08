@@ -76,11 +76,11 @@ extern IRrecv irController;                                                     
 
 class RemoteControl {                                                           // class to evaluate received remote control commands
    public:
-    unsigned long _lastTime       = 0;
-    uint64_t      _lastGetKeyCode = 0;
-    uint64_t      _lastCode       = 0;
-    Key21         _lastKey        = Key21::UNKNOWN;
-    Key21         _actualKey      = Key21::NONE;
+    unsigned long _lastTime       = 0;                                          // last time a key was pressed
+    uint64_t      _lastGetKeyCode = 0;                                          // last received key code
+    uint64_t      _lastCode       = 0;                                          // last received key code
+    Key21         _lastKey        = Key21::UNKNOWN;                             // last pressed key
+    Key21         _actualKey      = Key21::NONE;                                // actual pressed key
 
     // ---------------------
     // Constructor for RemoteControl

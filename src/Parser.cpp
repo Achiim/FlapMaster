@@ -40,7 +40,7 @@ void ParserClass::dispatchToTwins() {
         }
     #endif
 
-    _mappedCommand = mapEvent2Command(_receivedEvent);
+    _mappedCommand = mapEvent2Command(_receivedEvent);                          // map ClickEvent to TwinCommand
 
     #ifdef PARSERVERBOSE
         {
@@ -55,12 +55,13 @@ void ParserClass::dispatchToTwins() {
     for (int m = 0; m < numberOfTwins; m++) {
         auto it = g_slaveRegistry.find(g_slaveAddressPool[m]);                  // search in registry
         if (it != g_slaveRegistry.end()) {                                      // if slave is registerd
-            Twin[m]->sendQueue(_receivedEvent);
+                                                                //            Twin[m]->sendQueue(_receivedEvent);
+            Twin[m]->sendQueue(_mappedCommand);                                 // send mapped command to twin
             #ifdef PARSERVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block
-                parserPrintln("send final decision ClickEvent.type: %s to Twin", Control.clickTypeToString(_receivedEvent.type));
-                parserPrintln("send final decision Received Key21: %s to Twin", Control.key21ToString(_receivedEvent.key));
+                //                parserPrintln("send final decision ClickEvent.type: %s to Twin", Control.clickTypeToString(_receivedEvent.type));
+                //                parserPrintln("send final decision Received Key21: %s to Twin", Control.key21ToString(_receivedEvent.key));
                 }
             #endif
         }
@@ -177,6 +178,7 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
     cmd.twinCommand   = TWIN_NO_COMMAND;
     cmd.twinParameter = 0;
     cmd.responsQueue  = nullptr;
+    cmd.type          = event.type;                                             // set type of command
 
     switch (event.key) {
         case Key21::KEY_CH_MINUS:
@@ -295,7 +297,7 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
 }
 
 // Wandelt einen TwinCommands-Wert in einen lesbaren String um
-inline const char* ParserClass::twinCommandToString(TwinCommands cmd) {
+const char* ParserClass::twinCommandToString(TwinCommands cmd) {
     switch (cmd) {
         case TWIN_NO_COMMAND:
             return "TWIN_NO_COMMAND";

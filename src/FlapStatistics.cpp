@@ -1,14 +1,14 @@
 // #################################################################################################################
-//  ████████  █████  ███████ ██   ██     ███████ ████████  █████  ████████ ██ ███████ ████████ ██  ██████ ███████
-//     ██    ██   ██ ██      ██  ██      ██         ██    ██   ██    ██    ██ ██         ██    ██ ██      ██
-//     ██    ███████ ███████ █████       ███████    ██    ███████    ██    ██ ███████    ██    ██ ██      ███████
-//     ██    ██   ██      ██ ██  ██           ██    ██    ██   ██    ██    ██      ██    ██    ██ ██           ██
-//     ██    ██   ██ ███████ ██   ██     ███████    ██    ██   ██    ██    ██ ███████    ██    ██  ██████ ███████
 //
+//  ███████ ██       █████  ██████      ███████ ████████  █████  ████████ ██ ███████ ████████ ██  ██████ ███████
+//  ██      ██      ██   ██ ██   ██     ██         ██    ██   ██    ██    ██ ██         ██    ██ ██      ██
+//  █████   ██      ███████ ██████      ███████    ██    ███████    ██    ██ ███████    ██    ██ ██      ███████
+//  ██      ██      ██   ██ ██               ██    ██    ██   ██    ██    ██      ██    ██    ██ ██           ██
+//  ██      ███████ ██   ██ ██          ███████    ██    ██   ██    ██    ██ ███████    ██    ██  ██████ ███████
 //
 // ################################################################################################## by Achim ####
 // Banner created:
-// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=Task%20Statistics
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=FLAP%20Statistics
 //
 /*
 
@@ -55,8 +55,7 @@ FlapStatistics::FlapStatistics() {
 // every cycle transfer statisic counter to histery and switch histery index
 void FlapStatistics::makeHistory() {
     #ifdef STATISTICVERBOSE
-        masterPrintln("I²C statistic cycle - access: ", busAccessCounter, " data write: ", busDataCounter,
-        " data read: ", busReadCounter);
+        masterPrintln("I²C statistic cycle - access: ", busAccessCounter, " data write: ", busDataCounter, " data read: ", busReadCounter);
     #endif
 
     xSemaphoreTake(_statsMutex, portMAX_DELAY);
@@ -93,7 +92,6 @@ void FlapStatistics::increment(uint32_t access, uint32_t sentData, uint32_t read
     xSemaphoreGive(_statsMutex);
 
     #ifdef STATISTICVERBOSE
-        masterPrintln("I²C statistic increment - access: ", busAccessCounter, " write: ", busDataCounter,
-        " read: ", busReadCounter);
+        masterPrintln("I²C statistic increment - access: ", busAccessCounter, " write: ", busDataCounter, " read: ", busReadCounter);
     #endif
 }
