@@ -37,6 +37,26 @@
 #include "TracePrint.h"
 #include "RemoteControl.h"
 
+enum TwinCommand {
+    TWIN_SHOW_FLAP,
+    TWIN_CALIBRATION,
+    TWIN_STEP_MEASUREMENT,
+    TWIN_SPEED_MEASUREMENT,
+    TWIN_SENSOR_CHECK,
+    TWIN_NEXT_FLAP,
+    TWIN_PREV_FLAP,
+    TWIN_NEXT_STEP,
+    TWIN_PREV_STEP,
+    TWIN_SET_OFFSET,
+    TWIN_RESET
+};                                                                              // list of possible twin commands
+
+// Command that Twin will accept
+struct SlaveCommand {
+    TwinCommand   twinCMD;                                                      // command to be performed by slave
+    QueueHandle_t responsQueue;                                                 // queue, where result shall be responded
+};
+
 class SlaveTwin {
    public:
     int            numberOfFlaps = 0;                                           // the number of flaps of each flap drum
@@ -56,7 +76,7 @@ class SlaveTwin {
     // ----------------------------
     // Command functions
     void showFlap(char digit);                                                  // Show Flap with this char
-    void Calibrate();                                                           // calibrate flap drum
+    void calibration();                                                         // calibrate flap drum
     void stepMeasurement();                                                     // measure steps to be used for one revolution
     void speedMeasurement();                                                    // measure milisecends for one revolution
     void sensorCheck();                                                         // verify if hall sensor is working

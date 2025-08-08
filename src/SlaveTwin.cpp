@@ -127,7 +127,7 @@ void SlaveTwin::handleSingleKey(Key21 key) {
             logAndRun("Send Step Measurement...", [=] { stepMeasurement(); });
             break;
         case Key21::KEY_CH:
-            logAndRun("Send Calibration...", [=] { Calibrate(); });
+            logAndRun("Send Calibration...", [=] { calibration(); });
             break;
         case Key21::KEY_CH_PLUS:
             logAndRun("Send Speed Measurement...", [=] { speedMeasurement(); });
@@ -273,7 +273,7 @@ void SlaveTwin::showFlap(char digit) {
 }
 
 // ----------------------------
-void SlaveTwin::Calibrate() {
+void SlaveTwin::calibration() {
     if (isSlaveReady()) {
         if (parameter.steps > 0) {                                              // happend a step-messurement?
             i2cLongCommand(i2cCommandParameter(CALIBRATE, parameter.steps),
