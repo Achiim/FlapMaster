@@ -43,50 +43,45 @@ class SlaveTwin {
     int            slaveAddress  = 0;                                           // I2C Address of the flap
     int            flapNumber    = 0;                                           // actual flap that is displayed
     int            adjustOffset  = 0;                                           // internal adjustment -> will be saved by save
+    unsigned long  lastTwinTime  = 0;
+    uint64_t       lastTwinCode  = 0;
+    Key21          lastKey       = Key21::UNKNOWN;
     slaveParameter parameter;                                                   // parameter of Slave in EEPROM
     slaveStatus    slaveReady;                                                  // status of slave
-    unsigned long  lastTwinTime = 0;
-    uint64_t       lastTwinCode = 0;
-    Key21          lastKey      = Key21::UNKNOWN;
 
+    // ----------------------------
+    // Constructor
     SlaveTwin(int add);                                                         // Twin instance with I2C address
 
     // ----------------------------
-    void  showFlap(char digit);                                                 // Show Flap with this char
-    void  Calibrate();                                                          // calibrate flap drum
-    void  stepMeasurement();                                                    // measure steps to be used for one revolution
-    void  speedMeasurement();                                                   // measure milisecends for one revolution
-    void  sensorCheck();                                                        // verify if hall sensor is working
-    void  nextFlap();                                                           // one flap forward
-    void  prevFlap();                                                           // one flap backward
-    void  nextSteps();                                                          // calibration adjustment +50 steps
-    void  prevSteps();                                                          // calibration adjustment -50 steps
-    void  setOffset();                                                          // save calibration ofset in slave EEPROM
-    void  reset();                                                              // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
+    // Command functions
+    void showFlap(char digit);                                                  // Show Flap with this char
+    void Calibrate();                                                           // calibrate flap drum
+    void stepMeasurement();                                                     // measure steps to be used for one revolution
+    void speedMeasurement();                                                    // measure milisecends for one revolution
+    void sensorCheck();                                                         // verify if hall sensor is working
+    void nextFlap();                                                            // one flap forward
+    void prevFlap();                                                            // one flap backward
+    void nextSteps();                                                           // calibration adjustment +50 steps
+    void prevSteps();                                                           // calibration adjustment -50 steps
+    void setOffset();                                                           // save calibration ofset in slave EEPROM
+    void reset();                                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
+
+    // Helper
     void  askSlaveAboutParameter(uint8_t address, slaveParameter& parameter);   // retrieve all slave parameter
     void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
     Key21 ir2Key21(uint64_t ircode);
 
+    // ---------------------------
+    // I2C procedures
+    esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
+
+    // ---------------------------
+    // RTOS queue procedures
     void readQueue();
     void createQueue();
     void sendQueue(ClickEvent receivedEvent);
-
-    esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
-
-    // Twin trace
-    template <typename... Args>
-    void twinPrint(const Args&... args) {
-        char buf[20];
-        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
-        tracePrint(buf, args...);
-    }
-    template <typename... Args>
-    void twinPrintln(const Args&... args) {
-        char buf[20];
-        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
-        tracePrintln(buf, args...);
-    }
 
     // 10 Flap-Modul
     int stepsByFlap[MAXIMUM_FLAPS] = {409, 409, 411, 409, 409,                  // there a 10 flaps: (4096/10=409 Rest 6)
@@ -180,14 +175,19 @@ constexpr std::string_view clubCodeAt(std::size_t index) {
     // clang-format on
 
    private:
-    QueueHandle_t twinQueue;
-    void          systemHalt(const char* reason, int blinkCode);
-    void          twinControl(ClickEvent event);
-    void          handleDoubleKey(Key21 key);
-    void          handleSingleKey(Key21 key);
-    void          logAndRun(const char* message, std::function<void()> action);
-    char          key21ToDigit(Key21 key);
+    // -------------------------------
+    // private Variables
+    int           targetFlapNumber = -1;                                        // flap to be shown
+    QueueHandle_t twinQueue;                                                    // command entry queue
 
+    // -------------------------------
+    // internal Helpers
+    void             systemHalt(const char* reason, int blinkCode);
+    void             twinControl(ClickEvent event);
+    void             handleDoubleKey(Key21 key);
+    void             handleSingleKey(Key21 key);
+    void             logAndRun(const char* message, std::function<void()> action);
+    char             key21ToDigit(Key21 key);
     void             printSlaveReadyInfo();                                     // trace output Read Structure
     void             updateSlaveReadyInfo(uint8_t* data);                       // take over Read Structure
     i2c_cmd_handle_t buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size);
@@ -196,6 +196,22 @@ constexpr std::string_view clubCodeAt(std::size_t index) {
     void             logShortError(ShortMessage cmd, esp_err_t err);
     void             synchSlaveRegistry(slaveParameter parameter);
     bool             waitUntilSlaveReady(uint32_t timeout_ms);
+    int              searchSign(char digit);                                    // return flapNumber of digit
+    int              countStepsToMove(int from, int to);                        // return steps to move fom "from" to "to"
+
+    // Twin trace
+    template <typename... Args>
+    void twinPrint(const Args&... args) {
+        char buf[20];
+        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
+        tracePrint(buf, args...);
+    }
+    template <typename... Args>
+    void twinPrintln(const Args&... args) {
+        char buf[20];
+        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
+        tracePrintln(buf, args...);
+    }
 
     // 40 Flap-Modul
     // -------------
@@ -207,10 +223,6 @@ constexpr std::string_view clubCodeAt(std::size_t index) {
     // -------------
     String flapFont = "0123456789";                                             // this list represents the sequence of digits on the flap drum
 
-    int targetFlapNumber = -1;                                                  // flap to be shown
-
     // ----------------------------
-    int searchSign(char digit);                                                 // return flapNumber of digit
-    int countStepsToMove(int from, int to);                                     // return steps to move fom "from" to "to"
 };
 #endif                                                                          // SlaveTwin_h

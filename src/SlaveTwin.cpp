@@ -61,6 +61,9 @@ SlaveTwin::SlaveTwin(int add) {
     slaveReady.sensorStatus = false;
     slaveReady.taskCode     = NO_COMMAND;
     twinQueue               = nullptr;
+
+    askSlaveAboutParameter(slaveAddress, parameter);                            // get result of showFlap
+    synchSlaveRegistry(parameter);                                              // take over position to registry
 }
 
 // ----------------------------
