@@ -219,6 +219,66 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
             cmd.twinCommand = TWIN_RESET;
             return cmd;
             break;
+        case Key21::KEY_0: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 0;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_1: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 1;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_2: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 2;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_3: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 3;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_4: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 4;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_5: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 5;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_6: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 6;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_7: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 7;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_8: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 8;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_9: {
+            cmd.twinCommand   = TWIN_SHOW_FLAP;
+            cmd.twinParameter = 9;
+            return cmd;
+            break;
+        }
         default: {
             #ifdef ERRORVERBOSE
                 {
