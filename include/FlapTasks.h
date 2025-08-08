@@ -53,7 +53,7 @@
 
 // Global variables for RTOS task handles https://www.freertos.org/a00019.html#xTaskHandle
 extern TaskHandle_t g_remoteControlHandle;                                      // RTOS Task Handler
-extern TaskHandle_t g_remoteParserHandle;                                       // RTOS Task Handler
+extern TaskHandle_t g_parserHandle;                                             // RTOS Task Handler
 extern TaskHandle_t g_registryHandle;                                           // RTOS Task Handler
 extern TaskHandle_t g_reportHandle;                                             // RTOS Task Handler
 extern TaskHandle_t g_statisticHandle;                                          // RTOS Task Handler

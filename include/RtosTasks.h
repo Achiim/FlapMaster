@@ -16,7 +16,7 @@
 #define RtosTasks_h
 
 void remoteControl(void* pvParameters);                                         // free RTOS Task for receiving remote control codes
-void remoteParser(void* pvParameters);                                          // free RTOS Task for parsing remote control codes
+void parserTask(void* pvParameters);                                            // free RTOS Task for parsing remote control codes
 void twinRegister(void* pvParameters);                                          // free RTOS Task for Registry
 void reportTask(void* pvParameters);                                            // free RTOS Task for Report Task
 void statisticTask(void* param);                                                // free RTOS Task for Statistics Task

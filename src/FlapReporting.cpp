@@ -188,8 +188,8 @@ void FlapReporting::reportRtosTasks() {
     if (g_remoteControlHandle != nullptr)
         printTaskInfo(pcTaskGetName(g_remoteControlHandle), uxTaskGetStackHighWaterMark(g_remoteControlHandle), STACK_REMOTE, PRIO_REMOTE);
 
-    if (g_remoteParserHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_remoteParserHandle), uxTaskGetStackHighWaterMark(g_remoteParserHandle), STACK_PARSER, PRIO_PARSER);
+    if (g_parserHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_parserHandle), uxTaskGetStackHighWaterMark(g_parserHandle), STACK_PARSER, PRIO_PARSER);
 
     if (g_registryHandle != nullptr)
         printTaskInfo(pcTaskGetName(g_registryHandle), uxTaskGetStackHighWaterMark(g_registryHandle), STACK_REGISTRY, PRIO_REGISTRY);

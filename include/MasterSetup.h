@@ -28,6 +28,6 @@ void createStatisticTask();                                                     
 void createReportTask();                                                        // create Report task
 void createRemoteControlTask();                                                 // create Remote Control
 void createRegisterTwinsTask();                                                 // create Registry
-void createRemoteParserTask();                                                  // create remote creator task
+void createParserTask();                                                        // create remote creator task
 
 #endif                                                                          // MasterSetup_h
