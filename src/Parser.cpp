@@ -12,16 +12,21 @@
 //
 
 #include <Arduino.h>
+#include "Parser.h"
 #include "FlapTasks.h"
 #include "SlaveTwin.h"
 #include "RemoteControl.h"
-#include "Parser.h"
 
 // ---------------------
 // Constructor for Parser
 ParserClass::ParserClass() {
-    _receivedEvent.key  = Key21::NONE;                                          // reset received key
-    _receivedEvent.type = CLICK_NONE;                                           // reset received type
+    TwinCommand _mappedCommand;
+
+    _receivedEvent.key           = Key21::NONE;                                 // reset received key
+    _receivedEvent.type          = CLICK_NONE;                                  // reset received type
+    _mappedCommand.twinCommand   = TWIN_NO_COMMAND;                             // init with no command
+    _mappedCommand.twinParameter = 0;                                           // no parameter
+    _mappedCommand.responsQueue  = nullptr;                                     // no respons queue
 };
 
 // ---------------------
@@ -32,6 +37,18 @@ void ParserClass::dispatchToTwins() {
         TraceScope trace;                                                       // use semaphore to protect this block
         parserPrintln("final decision ClickEvent.type: %s", Control.clickTypeToString(_receivedEvent.type));
         parserPrintln("final decision Received Key21: %s", Control.key21ToString(_receivedEvent.key));
+        }
+    #endif
+
+    _mappedCommand = mapEvent2Command(_receivedEvent);
+
+    #ifdef PARSERVERBOSE
+        {
+        TraceScope trace;
+        parserPrint("mapping key21: ");
+        Serial.print(Control.key21ToString(_receivedEvent.key));
+        Serial.print(" to twinCommand: ");
+        Serial.println(twinCommandToString(_mappedCommand.twinCommand));
         }
     #endif
 
@@ -151,4 +168,100 @@ ClickEvent ParserClass::poll() {
         }
     }
     return {Key21::NONE, CLICK_NONE};                                           // no new Event
+}
+
+// -------------------------
+// map event to command
+TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
+    TwinCommand cmd;
+    cmd.twinCommand   = TWIN_NO_COMMAND;
+    cmd.twinParameter = 0;
+    cmd.responsQueue  = nullptr;
+
+    switch (event.key) {
+        case Key21::KEY_CH_MINUS:
+            cmd.twinCommand = TWIN_STEP_MEASUREMENT;
+            return cmd;
+            break;
+        case Key21::KEY_CH:
+            cmd.twinCommand = TWIN_CALIBRATION;
+            return cmd;
+            break;
+        case Key21::KEY_CH_PLUS:
+            cmd.twinCommand = TWIN_SPEED_MEASUREMENT;
+            return cmd;
+            break;
+        case Key21::KEY_PREV:
+            cmd.twinCommand = TWIN_PREV_STEP;
+            return cmd;
+            break;
+        case Key21::KEY_NEXT:
+            cmd.twinCommand = TWIN_NEXT_STEP;
+            return cmd;
+            break;
+        case Key21::KEY_PLAY_PAUSE:
+            cmd.twinCommand = TWIN_SET_OFFSET;
+            return cmd;
+            break;
+        case Key21::KEY_VOL_MINUS:
+            cmd.twinCommand = TWIN_PREV_FLAP;
+            return cmd;
+            break;
+        case Key21::KEY_VOL_PLUS:
+            cmd.twinCommand = TWIN_NEXT_FLAP;
+            return cmd;
+            break;
+        case Key21::KEY_EQ:
+            cmd.twinCommand = TWIN_SENSOR_CHECK;
+            return cmd;
+            break;
+        case Key21::KEY_200_PLUS:
+            cmd.twinCommand = TWIN_RESET;
+            return cmd;
+            break;
+        default: {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                parserPrint("Unknown key21: ");
+                Serial.println(static_cast<int>(event.key));
+                }
+            #endif
+            cmd.twinCommand = TWIN_NO_COMMAND;
+            return cmd;
+            break;
+        }
+    }
+}
+
+// Wandelt einen TwinCommands-Wert in einen lesbaren String um
+inline const char* ParserClass::twinCommandToString(TwinCommands cmd) {
+    switch (cmd) {
+        case TWIN_NO_COMMAND:
+            return "TWIN_NO_COMMAND";
+        case TWIN_SHOW_FLAP:
+            return "TWIN_SHOW_FLAP";
+        case TWIN_CALIBRATION:
+            return "TWIN_CALIBRATION";
+        case TWIN_STEP_MEASUREMENT:
+            return "TWIN_STEP_MEASUREMENT";
+        case TWIN_SPEED_MEASUREMENT:
+            return "TWIN_SPEED_MEASUREMENT";
+        case TWIN_SENSOR_CHECK:
+            return "TWIN_SENSOR_CHECK";
+        case TWIN_NEXT_FLAP:
+            return "TWIN_NEXT_FLAP";
+        case TWIN_PREV_FLAP:
+            return "TWIN_PREV_FLAP";
+        case TWIN_NEXT_STEP:
+            return "TWIN_NEXT_STEP";
+        case TWIN_PREV_STEP:
+            return "TWIN_PREV_STEP";
+        case TWIN_SET_OFFSET:
+            return "TWIN_SET_OFFSET";
+        case TWIN_RESET:
+            return "TWIN_RESET";
+        default:
+            return "UNKNOWN_TWIN_COMMAND";
+    }
 }

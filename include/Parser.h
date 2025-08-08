@@ -15,12 +15,14 @@
 
 #include "TracePrint.h"
 #include "RemoteControl.h"
+#include "SlaveTwin.h"
 
 class ParserClass {                                                             // class to parse received remote control keys
    public:
     uint64_t      _receivedValue;                                               // raw date from remote
     ClickEvent    _receivedEvent;                                               // click-Type + key
     ClickEvent    _evt;                                                         // update after poll
+    TwinCommand   _mappedCommand;                                               // ClickEvent Mapped to TwinCommand
     Key21         _receivedKey;                                                 // only pressed key
     Key21         _pendingKey             = Key21::NONE;                        // waiting for same click as pending key
     Key21         _lastKey                = Key21::UNKNOWN;                     // previous pressed Key21::key
@@ -51,6 +53,8 @@ class ParserClass {                                                             
     }
 
    private:
+    TwinCommand        mapEvent2Command(ClickEvent e);                          // map ClickEvent to TwinCommand
+    inline const char* twinCommandToString(TwinCommands cmd);                   // conver command to text
 };
 
 #endif                                                                          // Parser_h

@@ -37,7 +37,8 @@
 #include "TracePrint.h"
 #include "RemoteControl.h"
 
-enum TwinCommand {
+enum TwinCommands {
+    TWIN_NO_COMMAND,
     TWIN_SHOW_FLAP,
     TWIN_CALIBRATION,
     TWIN_STEP_MEASUREMENT,
@@ -52,8 +53,9 @@ enum TwinCommand {
 };                                                                              // list of possible twin commands
 
 // Command that Twin will accept
-struct SlaveCommand {
-    TwinCommand   twinCMD;                                                      // command to be performed by slave
+struct TwinCommand {
+    TwinCommands  twinCommand;                                                  // command to be performed by twin
+    int           twinParameter;                                                // parameter for command
     QueueHandle_t responsQueue;                                                 // queue, where result shall be responded
 };
 

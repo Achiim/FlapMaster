@@ -22,7 +22,6 @@
 #include "FlapStatistics.h"
 #include "FlapTasks.h"
 #include "FlapRegistry.h"
-
 #include "MasterPrint.h"
 
 // Global defines for RTOS task handles
