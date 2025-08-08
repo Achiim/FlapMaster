@@ -65,7 +65,7 @@ extern QueueHandle_t g_parserQueue;                                             
 
 // Global Objects for Tasks
 extern RemoteControl   Control;                                                 // class to receice key from remote control
-extern RemoteParser*   Parser;                                                  // Parser class to filter key from remote control
+extern ParserClass*    Parser;                                                  // Parser class to filter key from remote control
 extern FlapRegistry*   Register;                                                // class for Registry Task
 extern FlapStatistics* DataEvaluation;                                          // class to collect and evaluate operation statistics
 

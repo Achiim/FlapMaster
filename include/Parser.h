@@ -16,7 +16,7 @@
 #include "TracePrint.h"
 #include "RemoteControl.h"
 
-class RemoteParser {                                                            // class to parse received remote control keys
+class ParserClass {                                                             // class to parse received remote control keys
    public:
     uint64_t      _receivedValue;                                               // raw date from remote
     ClickEvent    _receivedEvent;                                               // click-Type + key
@@ -30,8 +30,8 @@ class RemoteParser {                                                            
     bool          _waitingForSecondClick  = false;                              // we are still within the Threshold wile we are waiting for a double
     int           _repeatCount            = 0;                                  // counter for repeated keys
 
-    // Constructor for RemoteParser
-    RemoteParser();
+    // Constructor for Parser
+    ParserClass();
 
     ClickEvent detect(Key21 receivedCode);                                      // parser vor remote control events
     ClickEvent poll();                                                          // regelmäßig (z. B. alle 10ms) im Loop/Task aufrufen

@@ -18,15 +18,15 @@
 #include "Parser.h"
 
 // ---------------------
-// Constructor for RemoteParser
-RemoteParser::RemoteParser() {
+// Constructor for Parser
+ParserClass::ParserClass() {
     _receivedEvent.key  = Key21::NONE;                                          // reset received key
     _receivedEvent.type = CLICK_NONE;                                           // reset received type
 };
 
 // ---------------------
 // dispatch keystroke to all registered devices
-void RemoteParser::dispatchToTwins() {
+void ParserClass::dispatchToTwins() {
     #ifdef PARSERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
@@ -52,7 +52,7 @@ void RemoteParser::dispatchToTwins() {
 
 // ---------------------
 // first analysis of keystroke and assume it is a SINGLE
-ClickEvent RemoteParser::detect(Key21 receivedKey) {
+ClickEvent ParserClass::detect(Key21 receivedKey) {
     unsigned long now = millis();
 
     if (receivedKey == _lastKey) {
@@ -93,7 +93,7 @@ ClickEvent RemoteParser::detect(Key21 receivedKey) {
 
 // ---------------------
 // update the first decision about ClickEvent
-void RemoteParser::analyseClickEvent() {
+void ParserClass::analyseClickEvent() {
     ClickEvent evt;
     if (Parser->_waitingForSecondClick) {
         evt = poll();                                                           // analyse further key presses
@@ -105,7 +105,7 @@ void RemoteParser::analyseClickEvent() {
 
 // ---------------------
 // read Parser input from Queue and filter
-void RemoteParser::handleQueueMessage() {
+void ParserClass::handleQueueMessage() {
     if (xQueueReceive(g_parserQueue, &_receivedValue, 0)) {
         _receivedKey = Control.ircodeToKey21(_receivedValue);                   // filter remote signal to reduce options
         if (_receivedKey != Key21::NONE && _receivedKey != Key21::UNKNOWN) {
@@ -123,7 +123,7 @@ void RemoteParser::handleQueueMessage() {
 
 // ---------------------
 // if DOUBLE click not in time, declare it as SINGLE
-ClickEvent RemoteParser::poll() {
+ClickEvent ParserClass::poll() {
     /////////only for debugging///////////////////////////////////////////
     // #ifdef IRVERBOSE
     //     TraceScope trace;
