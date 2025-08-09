@@ -100,6 +100,8 @@ class SlaveTwin {
     bool  isSlaveReady();                                                       // check if slave is ready
     Key21 ir2Key21(uint64_t ircode);                                            // convert IR code to Key21
 
+    void updateSlaveReadyInfo(uint8_t* data);                                   // take over Read Structure
+
     // ---------------------------
     // I2C procedures
     void      i2cLongCommand(LongMessage mess);                                 // send long command to slave
@@ -144,11 +146,13 @@ class SlaveTwin {
     void handleSingleKey(TwinCommands cmd, int param);                          // handle single key command
     void logAndRun(const char* message, std::function<void()> action);          // log message and run action
     void printSlaveReadyInfo();                                                 // trace output Read Structure
-    void updateSlaveReadyInfo(uint8_t* data);                                   // take over Read Structure
     void synchSlaveRegistry(slaveParameter parameter);                          // take over slave parameter to registry
     bool waitUntilSlaveReady(uint32_t timeout_ms);                              // wait until slave is ready
-    int  searchSign(char digit);                                                // return flapNumber of digit
     int  countStepsToMove(int from, int to);                                    // return steps to move fom "from" to "to"
+
+    // ---------------------------
+    // I2C Helper
+    LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter);      // prepare I2C LongCommand from paramter
 
     // -------------------------------
     // internal i2c Helpers
@@ -174,13 +178,6 @@ class SlaveTwin {
         char buf[20];
         snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
         tracePrintln(buf, args...);
-    }
-
-    template <typename... Args>
-    void twinPrint(const char* fmt, const Args&... args) {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress, fmt, args...);
-        tracePrint(buf);
     }
 
     // ----------------------------

@@ -79,7 +79,7 @@ void FlapRegistry::deregisterSlave(I2Caddress slaveAddress) {
 // ----------------------------
 // messages to introduce scan_i2c_bus
 void FlapRegistry::intro_scan_i2c() {
-    #ifdef MASTERVERBOSE
+    #ifdef REGISTRYVERBOSE
         {
         TraceScope trace;
         registerPrintln("Start I²C-Scan to register new slaves...");
@@ -87,7 +87,7 @@ void FlapRegistry::intro_scan_i2c() {
     #endif
 
     if (g_masterBooted) {
-        #ifdef MASTERVERBOSE
+        #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
             registerPrintln("System-Reset detected → Master has restarted");
@@ -114,7 +114,7 @@ int FlapRegistry::findTwinIndexByAddress(I2Caddress addr) {
 //   >=0 : index of corresponding twin
 //   -1  : slave not found / not ready / twin missing
 int FlapRegistry::scanForSlave(int poolIndex, I2Caddress addr) {
-    #ifdef MASTERVERBOSE
+    #ifdef REGISTRYVERBOSE
         {
         TraceScope trace;
         registerPrint("Scanning address pool entry #");
@@ -200,7 +200,7 @@ void FlapRegistry::error_scan_i2c(int n, I2Caddress addr) {
         {
         TraceScope trace;
         if (n == -1) {
-        registerPrint("no salve twin task with addr 0x");
+        registerPrint("no slave twin task with addr 0x");
         Serial.println(addr, HEX);                                              // no twin
         for (int a = 0; a < numberOfTwins; a++) {
         registerPrint("Master I2C-Address Pool# %d: 0x", a);
@@ -208,7 +208,7 @@ void FlapRegistry::error_scan_i2c(int n, I2Caddress addr) {
         }
         } else {
         if (n == -2) {
-        registerPrint("salve not reachable with addr 0x");
+        registerPrint("slave not reachable with addr 0x");
         Serial.println(addr, HEX);                                              // no slave reachable
         }
         }
@@ -261,7 +261,7 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
     Twin[n]->slaveReady.bootFlag = ans;                                         // transfer to Twin[n]
 
     if (Twin[n]->slaveReady.bootFlag) {
-        #ifdef MASTERVERBOSE
+        #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
             registerPrint("reset bootFlag on rebooted Slave 0x");
@@ -272,7 +272,7 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
         uint8_t ans = 0;
         Twin[n]->i2cShortCommand(CMD_RESET_BOOT, &ans, sizeof(ans));            // send reset bootFlag to slave
 
-        #ifdef MASTERVERBOSE
+        #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
             registerPrint("slave has rebooted calibrating now Slave 0x");
@@ -283,10 +283,6 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
         TwinCommand twinCmd;
         twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
         Twin[n]->sendQueue(twinCmd);
-
-        //        i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS),
-        //                       address);                                                // Calibrate device because of reboot
-        //        Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
 
         return true;                                                            // bootFlag resetted
     } else {
@@ -313,11 +309,11 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
 // return = number of calibrated devices
 //
 int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter parameter) {
-    bool twinIsNew = false;                                                     // flag, if twin is new
-    int  c         = 0;                                                         // number of calibrated devices
-    auto it        = g_slaveRegistry.find(address);                             // search in registry
+    bool slaveIsNew         = false;                                            // flag, if slave is new
+    int  calibrationCounter = 0;                                                // number of calibrated devices
+    auto it                 = g_slaveRegistry.find(address);                    // search in registry
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
-        twinIsNew                       = false;                                // twin is allready regisered
+        slaveIsNew                      = false;                                // twin is allready regisered
         I2CSlaveDevice* device          = it->second;
         device->parameter               = parameter;                            // update all parameter
         device->position                = Twin[n]->slaveReady.position;         // update Flap position
@@ -336,7 +332,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
 
     } else {
         // Device is new → register
-        twinIsNew                          = true;                              // new twin detected
+        slaveIsNew                         = true;                              // new slave detected
         I2CSlaveDevice* newDevice          = new I2CSlaveDevice();              // create new device
         newDevice->parameter               = parameter;                         // set all parameter
         newDevice->position                = Twin[n]->slaveReady.position;      // set flap position
@@ -357,9 +353,9 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
     }
 
     checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
-    if (n >= 0 && twinIsNew) {                                                  // only if slave is ready
+    if (n >= 0 && slaveIsNew) {                                                 // only if slave is ready
         {
-            #ifdef MASTERVERBOSE                                                // take over parameter to twin
+            #ifdef REGISTRYVERBOSE                                              // take over parameter to twin
                 {
                 TraceScope trace;
                 registerPrint("take over parameter before isSlaveReady() values from slave to his twin on master side 0x");
@@ -416,7 +412,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
 
     if (g_masterBooted) {                                                       // if Master booted
         {
-            #ifdef MASTERVERBOSE
+            #ifdef REGISTRYVERBOSE
                 {
                 TraceScope trace;
                 registerPrint("master has rebooted: calibrating now Slave 0x");
@@ -424,14 +420,12 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
                 }
             #endif
         }
-        c++;                                                                    // counting calibrations
+        calibrationCounter++;                                                   // counting calibrations
         TwinCommand twinCmd;
         twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
         Twin[n]->sendQueue(twinCmd);
-        //        Twin[n]->i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS)); // Calibrate device because of reboot
-        //        Twin[n]->flapNumber = 0;                                                // synchronize FlapPosition
 
-        #ifdef MASTERVERBOSE
+        #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
             registerPrint("set internal adjustment step counter to %d for rebooted Slave 0x", Twin[n]->adjustOffset);
@@ -439,7 +433,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
             }
         #endif
     }
-    return c;                                                                   // number of calibrated devices
+    return calibrationCounter;                                                  // number of calibrated devices
 }
 
 // -----------------------------------------
@@ -449,7 +443,7 @@ I2Caddress FlapRegistry::getNextAddress() {
     if (nextAddress > 0) {                                                      // valid address found
         return nextAddress;                                                     // deliver next free address
     } else {
-        #ifdef MASTERVERBOSE
+        #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
             registerPrintln("no more I2C addresses available");
@@ -463,13 +457,13 @@ I2Caddress FlapRegistry::getNextAddress() {
 // find free address in registry
 // return = one free address between minAddr to maxAddr
 // return = 0, if no address is free
-I2Caddress FlapRegistry::findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr) { //  I²C Range
+I2Caddress FlapRegistry::findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr) { //  I²C Range for slaves
     for (I2Caddress addr = minAddr; addr <= maxAddr; ++addr) {
         if (g_slaveRegistry.find(addr) == g_slaveRegistry.end()) {
-            return addr;                                                        // freie Adresse gefunden
+            return addr;                                                        // free address found
         }
     }
-    return 0;                                                                   // alle vergeben
+    return 0;                                                                   // no free addess found
 }
 
 // ---------------------------------

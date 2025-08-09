@@ -81,26 +81,6 @@ void i2csetup() {
 }
 
 // ----------------------------
-// purpose: convert command and parameter to LongMessage
-// - change byte sequence of parameter, so slave can understand
-//
-// parameter:
-// command = one byte command
-// parameter = two byte integer
-//
-// return:
-// LongMessage stucture to be send to i2c
-//
-LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter) {
-    LongMessage mess = {0x00, 0x00, 0x00};                                      // initial message
-    mess.command     = command;                                                 // get i2c command
-    mess.lowByte     = parameter & 0xFF;                                        // get i2c parameter lower byte part
-    mess.highByte    = (parameter >> 8) & 0xFF;                                 // get i2c parameter higher byte part
-
-    return mess;
-}
-
-// ----------------------------
 // purpose convert LongMessage to byte buffer, that can be send to i2c bus
 // - just memcpy
 //
@@ -188,44 +168,12 @@ int check_slaveReady(I2Caddress slaveAddress) {
     #endif
         return -2;                                                              // twin not connected
     }
-    updateSlaveReadyInfo(a, slaveAddress, data);                                // Update Slave-Status
+    Twin[a]->updateSlaveReadyInfo(data);                                        // Update Slave-Status
     #ifdef READYBUSYVERBOSE
         printSlaveReadyInfo(Twin[a]);
     #endif
 
     return a;                                                                   // return Twin[n]
-}
-
-// --------------------------
-// update position to registry
-void updateSlaveReadyInfo(int n, uint8_t address, uint8_t* data) {
-    if (data == nullptr || n < 0 || n >= numberOfTwins || Twin[n] == nullptr) {
-        masterPrintln("Invalid input for updateSlaveReadyInfo: Twin[%d] or data is null", n);
-        return;
-    }
-
-    // update twin status
-    Twin[n]->slaveReady.ready        = data[0];
-    Twin[n]->slaveReady.taskCode     = data[1];
-    Twin[n]->slaveReady.bootFlag     = data[2];
-    Twin[n]->slaveReady.sensorStatus = data[3];
-    Twin[n]->slaveReady.position     = data[5] * 0x100 + data[4];               // MSB + LSB
-    /*
-        // update crrresponding regisry entry
-        auto it = g_slaveRegistry.find(address);                                // search in registry
-        if (it != g_slaveRegistry.end() && it->second != nullptr) {
-            I2CSlaveDevice* device = it->second;
-            if (device->position != Twin[n]->slaveReady.position) {
-                device->position = Twin[n]->slaveReady.position;                // update Flap position in registry
-                #ifdef MASTERVERBOSE
-                    TraceScope trace;
-                    {
-                    Twin[n]->twinPrintln("Updated position for address 0x%02X → %d", address, Twin[n]->slaveReady.position);
-                    }
-                #endif
-            }
-        }
-    */
 }
 
 // --------------------------
@@ -327,7 +275,7 @@ bool giveI2CSemaphore() {
 
 // --------------------------
 // request ACK from slave
-esp_err_t pingI2Cslave(u_int8_t address) {
+esp_err_t pingI2Cslave(I2Caddress address) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();                               // I2C command buffer
     i2c_master_start(cmd);                                                      // Set start signal
     i2c_master_write_byte(cmd, (address << 1) | I2C_MASTER_WRITE,

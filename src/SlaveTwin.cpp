@@ -62,8 +62,12 @@ SlaveTwin::SlaveTwin(int add) {
     slaveReady.taskCode     = NO_COMMAND;
     twinQueue               = nullptr;
 
-    askSlaveAboutParameter(slaveAddress, parameter);                            // get result of showFlap
-    synchSlaveRegistry(parameter);                                              // take over position to registry
+    #ifdef TWINVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        twinPrintln("Twin Object created 0x%02x", slaveAddress);
+        }
+    #endif
 }
 
 // ----------------------------
@@ -476,7 +480,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
     #ifdef I2CMASTERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("send LongCommand (i2cLongCommand): 0x");
+        twinPrint("send LongCommand (i2cLongCommand): 0x");
         Serial.print(data[0], HEX);
         Serial.print(" - ");
         Serial.println(getCommandName(data[0]));
@@ -502,7 +506,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
         #ifdef I2CMASTERVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block
-            masterPrint("ACK from Slave 0x");
+            twinPrint("ACK from Slave 0x");
             Serial.print(slaveAddress, HEX);
             Serial.println(" received.");
             }
@@ -511,7 +515,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
         #ifdef I2CMASTERVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block
-            masterPrint("Error while sending to 0x");
+            twinPrint("Error while sending to 0x");
             Serial.print(slaveAddress, HEX);
             Serial.print(". Errorcode: ");
             Serial.println(esp_err_to_name(error));
@@ -520,6 +524,25 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
         if (DataEvaluation)
             DataEvaluation->increment(0, 0, 0, 1);                              // count I2C usage, 1 timeout
     }
+}
+// ----------------------------
+// purpose: convert command and parameter to LongMessage
+// - change byte sequence of parameter, so slave can understand
+//
+// parameter:
+// command = one byte command
+// parameter = two byte integer
+//
+// return:
+// LongMessage stucture to be send to i2c
+//
+LongMessage SlaveTwin::i2cCommandParameter(uint8_t command, u_int16_t parameter) {
+    LongMessage mess = {0x00, 0x00, 0x00};                                      // initial message
+    mess.command     = command;                                                 // get i2c command
+    mess.lowByte     = parameter & 0xFF;                                        // get i2c parameter lower byte part
+    mess.highByte    = (parameter >> 8) & 0xFF;                                 // get i2c parameter higher byte part
+
+    return mess;
 }
 
 // ----------------------------
@@ -676,7 +699,7 @@ i2c_cmd_handle_t SlaveTwin::buildMidCommand(MidMessage midCmd, I2Caddress slaveA
 void SlaveTwin::logMidRequest(MidMessage cmd, I2Caddress slaveAddress) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
-        masterPrint("Send midCommand: 0x");
+        twinPrint("Send midCommand: 0x");
         Serial.print(cmd.command, HEX);
         Serial.print(" - ");
         Serial.print(getCommandName(cmd.command));
@@ -690,7 +713,7 @@ void SlaveTwin::logMidRequest(MidMessage cmd, I2Caddress slaveAddress) {
 void SlaveTwin::logMidResponse(uint8_t* answer, int size) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
-        masterPrint("Got answer for midCommand from slave:");
+        twinPrint("Got answer for midCommand from slave:");
         for (int i = 0; i < size; i++) {
         Serial.print(" [");
         Serial.print(i);
@@ -726,9 +749,9 @@ void SlaveTwin::setNewAddress(int address) {
     #ifdef TWINVERBOSE
         uint32_t sn;
         sn = ((uint32_t)answer[0]) | ((uint32_t)answer[1] << 8) | ((uint32_t)answer[2] << 16) | ((uint32_t)answer[3] << 24);
-        registerPrint("new address 0x");
-        Serial.println(nextFreeAddress, HEX);
-        registerPrint("was received by device with serial number: ");
+        twinPrint("new address 0x");
+        Serial.println(address, HEX);
+        twinPrint("was received by device with serial number: ");
         Serial.println(formatSerialNumber(sn));
     #endif
 }
@@ -750,7 +773,7 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     // compute serialNumber from byte to integer
     parameter.serialnumber = ((uint32_t)ser[0]) | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
 
-    #ifdef REGISTRYVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("slave answered for parameter.serialnumber = ");
@@ -762,7 +785,7 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off));
     parameter.offset = 0x100 * off[1] + off[0];                                 // compute offset from byte to integer
 
-    #ifdef REGISTRYVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("slave answered for parameter.offset = ");
@@ -773,7 +796,7 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     uint8_t flaps = 0;
     i2cShortCommand(CMD_GET_FLAPS, &flaps, sizeof(flaps));                      // get number of flaps
     parameter.flaps = flaps;
-    #ifdef REGISTRYVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("slave answered for parameter.flaps = ");
@@ -784,7 +807,7 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     uint8_t speed[2] = {0, 0};
     i2cShortCommand(CMD_GET_SPEED, speed, sizeof(speed));                       // get speed of flap drum
     parameter.speed = speed[1] * 0x100 + speed[0];
-    #ifdef REGISTRYVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("slave answered for parameter.speed = ");
@@ -795,7 +818,7 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     uint8_t steps[2] = {0, 0};
     i2cShortCommand(CMD_GET_STEPS, steps, sizeof(steps));                       // get steps of flap drum
     parameter.steps = steps[1] * 0x100 + steps[0];
-    #ifdef REGISTRYVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("slave answered for parameter.steps = ");
@@ -806,7 +829,7 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     uint8_t sensor = 0;
     i2cShortCommand(CMD_GET_SENSOR, &sensor, sizeof(sensor));                   // get sensor working status
     parameter.sensorworking = sensor;
-    #ifdef REGISTRYVERBOSE
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("slave answered for parameter.sensorworking = ");
