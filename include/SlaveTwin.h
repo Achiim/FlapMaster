@@ -51,7 +51,8 @@ enum TwinCommands {
     TWIN_SET_OFFSET,                                                            // save calibration offset in EEPROM
     TWIN_RESET,                                                                 // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
     TWIN_AVAILABLE,                                                             // this command is used to check if twin is available
-    TWIN_SCAN                                                                   // this command is used to scan for twin devices
+    TWIN_SCAN,                                                                  // this command is used to scan for twin devices
+    TWIN_NEW_ADDRESS                                                            // this command is used to set the base address for the twin
 };                                                                              // list of possible twin commands
 
 // Command that will be accepted byTwin
@@ -91,6 +92,7 @@ class SlaveTwin {
     void prevSteps();                                                           // calibration adjustment -50 steps
     void setOffset();                                                           // save calibration ofset in slave EEPROM
     void reset();                                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
+    void setNewAddress(int address);                                            // set new address for the twin
 
     // Helper
     void  askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter); // retrieve all slave parameter
@@ -101,6 +103,7 @@ class SlaveTwin {
     // ---------------------------
     // I2C procedures
     void      i2cLongCommand(LongMessage mess);                                 // send long command to slave
+    esp_err_t i2cMidCommand(MidMessage midCmd, I2Caddress slaveaddress, uint8_t* answer, int size); // send mid command to slave
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
 
     // ---------------------------
@@ -135,22 +138,30 @@ class SlaveTwin {
 
     // -------------------------------
     // internal Helpers
-    void             systemHalt(const char* reason, int blinkCode);             // system halt with reason and blink code
-    void             twinControl(TwinCommand twinCmd);                          // handle Twin command
-    void             handleDoubleKey(TwinCommands cmd, int param);              // handle double key command
-    void             handleSingleKey(TwinCommands cmd, int param);              // handle single key command
-    void             logAndRun(const char* message, std::function<void()> action); // log message and run action
-    void             printSlaveReadyInfo();                                     // trace output Read Structure
-    void             updateSlaveReadyInfo(uint8_t* data);                       // take over Read Structure
+    void systemHalt(const char* reason, int blinkCode);                         // system halt with reason and blink code
+    void twinControl(TwinCommand twinCmd);                                      // handle Twin command
+    void handleDoubleKey(TwinCommands cmd, int param);                          // handle double key command
+    void handleSingleKey(TwinCommands cmd, int param);                          // handle single key command
+    void logAndRun(const char* message, std::function<void()> action);          // log message and run action
+    void printSlaveReadyInfo();                                                 // trace output Read Structure
+    void updateSlaveReadyInfo(uint8_t* data);                                   // take over Read Structure
+    void synchSlaveRegistry(slaveParameter parameter);                          // take over slave parameter to registry
+    bool waitUntilSlaveReady(uint32_t timeout_ms);                              // wait until slave is ready
+    int  searchSign(char digit);                                                // return flapNumber of digit
+    int  countStepsToMove(int from, int to);                                    // return steps to move fom "from" to "to"
+
+    // -------------------------------
+    // internal i2c Helpers
     i2c_cmd_handle_t buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size); // build I2C command for short command
+    i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size);
     void             logShortRequest(ShortMessage cmd);                         // log sending short command
     void             logShortResponse(uint8_t* answer, int size);               // log response to short command
     void             logShortError(ShortMessage cmd, esp_err_t err);            // log errors for short command
-    void             synchSlaveRegistry(slaveParameter parameter);              // take over slave parameter to registry
-    bool             waitUntilSlaveReady(uint32_t timeout_ms);                  // wait until slave is ready
-    int              searchSign(char digit);                                    // return flapNumber of digit
-    int              countStepsToMove(int from, int to);                        // return steps to move fom "from" to "to"
+    void             logMidRequest(MidMessage cmd, I2Caddress slaveAddress);    // Mid Request
+    void             logMidResponse(uint8_t* answer, int size);                 // Mid Response
+    void             logMidError(MidMessage cmd, esp_err_t err);                // Mid Error
 
+    // -------------------------------
     // Twin trace
     template <typename... Args>
     void twinPrint(const Args&... args) {
