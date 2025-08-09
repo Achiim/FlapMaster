@@ -65,7 +65,7 @@ struct TwinCommand {
 class SlaveTwin {
    public:
     int            numberOfFlaps = 0;                                           // the number of flaps of each flap drum
-    int            slaveAddress  = 0;                                           // I2C Address of the flap
+    I2Caddress     slaveAddress  = 0;                                           // I2C Address of the flap
     int            flapNumber    = 0;                                           // actual flap that is displayed
     int            adjustOffset  = 0;                                           // internal adjustment -> will be saved by save
     unsigned long  lastTwinTime  = 0;                                           // last time a twin command was received
