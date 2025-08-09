@@ -494,26 +494,10 @@ void FlapRegistry::registerUnregistered() {
                 #endif
             }
 
-            MidMessage midCmd;
-            midCmd.command   = CMD_NEW_ADDRESS;
-            midCmd.paramByte = nextFreeAddress;
-            uint8_t answer[4];
-            i2cMidCommand(midCmd, I2C_BASE_ADDRESS, answer, sizeof(answer));
-            #ifdef MASTERVERBOSE
-                uint32_t sn;
-                sn = ((uint32_t)answer[0]) | ((uint32_t)answer[1] << 8) | ((uint32_t)answer[2] << 16) | ((uint32_t)answer[3] << 24);
-                registerPrint("new address 0x");
-                Serial.println(nextFreeAddress, HEX);
-                registerPrint("was received by device with serial number: ");
-                Serial.println(formatSerialNumber(sn));
-            #endif
-        }
-    } else {
-        {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            #ifdef REGISTRYVERBOSE
-                registerPrintln("no new unregisered Slave (with I2C_BASE_ADDRESS) detected..."); // no answer to ping 0x55
-            #endif
+            TwinCommand twinCmd;
+            twinCmd.twinCommand   = TWIN_NEW_ADDRESS;                           // set command to send base address
+            twinCmd.twinParameter = nextFreeAddress;                            // set new base address
+            Twin[0]->sendQueue(twinCmd);                                        // send command to Twin[0] to set base address
         }
     }
 }

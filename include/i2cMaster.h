@@ -47,12 +47,6 @@ LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter);          
 void        i2cLongCommand(LongMessage mess, I2Caddress slaveAddress);          // Long Command to slave, do not wait for answer
 void        prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer);
 
-esp_err_t        i2cMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size); // send mid command to slave
-i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size);
-void             logMidRequest(MidMessage cmd, I2Caddress slaveAddress);        // Mid Request
-void             logMidResponse(uint8_t* answer, int size);                     // Mid Response
-void             logMidError(MidMessage cmd, esp_err_t err);                    // Mid Error
-
 void      printSlaveReadyInfo(SlaveTwin* twin);                                 // trace printing slave answer to check_slaveReady()
 int       check_slaveReady(I2Caddress slaveAddress);                            // status check isf slave is ready/busy
 void      updateSlaveReadyInfo(int n, I2Caddress slaveAddress,
