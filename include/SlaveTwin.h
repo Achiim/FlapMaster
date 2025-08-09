@@ -12,19 +12,22 @@
 // https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=SLAVE%20TWIN
 //
 /*
-
     Flap Slave Twin Definition
-
-    provides functionality on a flap module level to do
-
+    --------------------------
+    provides functionality on a flap module level to do:
     - Flap Drum calibration
     - check for Hall Sensor presence
-    - show Flap digt
+    - show Flap number
     - move one Flap (next/prev)
     - move some Steps (next/prev) to set offset steps, if desired flap is not shown after calibration
-    - save calibration to EEPROM on Flap module
+    - save parameter to EEPROM on Flap module
     - step measurement
     - speed measurement
+    - reset to factory settings
+    - set new I2C address
+    - avilability check
+    - scan for new devices
+    - remote control via IR
 
 */
 #ifndef SlaveTwin_h
@@ -113,24 +116,7 @@ class SlaveTwin {
     void readQueue();                                                           // read command from Twin queue
     void createQueue();                                                         // create queue for Twin commands
     void sendQueue(TwinCommand twinCmd);                                        // send command to Twin queue
-
-    // 10 Flap-Modul
-    int stepsByFlap[MAXIMUM_FLAPS] = {409, 409, 411, 409, 409,                  // there a 10 flaps: (4096/10=409 Rest 6)
-                                      411, 409, 409, 411, 409};                 // 4096 steps (stepsPerRevolution)
-
-    // clang-format off
-    // 40 Flap-Modul
-    // -------------
-    /*
-    int stepsByFlap[MAXIMUM_FLAPS] = {51,51,51,51,52,51,51,51,51,52,            // there are 40 flaps: here is defined how much steps
-                                    51,51,51,51,52,51,51,51,51,52,              // are needed to rotate that flap (2048/40=51 Rest 8)
-                                    51,51,51,51,52,51,51,51,51,52,              // Every 5th flap will do one step more to reach in sum
-                                    51,51,51,51,52,51,51,51,51,52};             // 2048 steps (stepsPerRevolution)
-
-
-
-    */
-    // clang-format on
+    int  stepsByFlap[MAXIMUM_FLAPS];                                            // steps needed to move flap by flap (Bresenham-artige Verteilung)
 
    private:
     // -------------------------------
