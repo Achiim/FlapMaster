@@ -108,7 +108,7 @@ LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter) {
 // mess = structure form type LongMessage (size = 3 byte)
 // outBuffer = pointer to 3 byte array to get converted ic2FlapMessage
 //
-void prepareI2Cdata(LongMessage mess, uint8_t slaveAddress, uint8_t* outBuffer) {
+void prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer) {
     memcpy(outBuffer, &mess, sizeof(LongMessage));                              // transfer i2c message to send buffer
     #ifdef I2CMASTERVERBOSE
         {
@@ -127,7 +127,7 @@ void prepareI2Cdata(LongMessage mess, uint8_t slaveAddress, uint8_t* outBuffer) 
 // ----------------------------
 // purpose: send I2C mid command, only one byte
 //
-esp_err_t i2cMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size) {
+esp_err_t i2cMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size) {
     esp_err_t ret = ESP_FAIL;
     takeI2CSemaphore();
 
@@ -156,7 +156,7 @@ esp_err_t i2cMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer
 
 // ------------------------------------------
 // helper: to build mid command
-i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size) {
+i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
     if (i2c_master_start(cmd) != ESP_OK)
@@ -180,7 +180,7 @@ i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_
 
 // ---------------------------
 // helper to log sending mid command
-void logMidRequest(MidMessage cmd, uint8_t slaveAddress) {
+void logMidRequest(MidMessage cmd, I2Caddress slaveAddress) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
         masterPrint("Send midCommand: 0x");
@@ -237,7 +237,7 @@ void logMidError(MidMessage cmd, esp_err_t err) {
 // -2  = device not connected
 // Twin with slaveAddress is update slaveRead.read, .taskCode, .bootFlag, .sensorStatus and .position
 //
-int check_slaveReady(uint8_t slaveAddress) {
+int check_slaveReady(I2Caddress slaveAddress) {
     uint8_t data[6] = {0, 0, 0, 0, 0, 0};
     #ifdef READYBUSYVERBOSE
         {
@@ -358,7 +358,7 @@ void printSlaveReadyInfo(SlaveTwin* twin) {
 
 // --------------------------
 // semaphore protected ping
-esp_err_t i2c_probe_device(uint8_t address) {
+esp_err_t i2c_probe_device(I2Caddress address) {
     if (takeI2CSemaphore()) {
         esp_err_t ret = pingI2Cslave(address);
         giveI2CSemaphore();

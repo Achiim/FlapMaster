@@ -49,7 +49,9 @@ enum TwinCommands {
     TWIN_NEXT_STEP,                                                             // move to next step (25 steps) to adjust calibration
     TWIN_PREV_STEP,                                                             // move to previous step (-25 steps) to adjust calibration
     TWIN_SET_OFFSET,                                                            // save calibration offset in EEPROM
-    TWIN_RESET                                                                  // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
+    TWIN_RESET,                                                                 // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
+    TWIN_AVAILABLE,                                                             // this command is used to check if twin is available
+    TWIN_SCAN                                                                   // this command is used to scan for twin devices
 };                                                                              // list of possible twin commands
 
 // Command that will be accepted byTwin
@@ -91,7 +93,7 @@ class SlaveTwin {
     void reset();                                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
 
     // Helper
-    void  askSlaveAboutParameter(uint8_t address, slaveParameter& parameter);   // retrieve all slave parameter
+    void  askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter); // retrieve all slave parameter
     void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
     Key21 ir2Key21(uint64_t ircode);                                            // convert IR code to Key21

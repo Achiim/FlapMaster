@@ -26,13 +26,13 @@
 
 // ----------------------------------
 // Data Structure to register FlapDevices
-std::map<uint8_t, I2CSlaveDevice*> g_slaveRegistry;
+std::map<I2Caddress, I2CSlaveDevice*> g_slaveRegistry;
 
 // -----------------------------------
 // check if all registerd slaves are still available, if not deregister
 void FlapRegistry::check_slave_availability() {
     for (auto it = g_slaveRegistry.begin(); it != g_slaveRegistry.end();) {
-        const uint8_t addr = it->first;
+        const I2Caddress addr = it->first;
 
         #ifdef REGISTRYVERBOSE
             {
@@ -70,7 +70,7 @@ void FlapRegistry::check_slave_availability() {
 
 // ----------------------------
 // erase slave from registry
-void FlapRegistry::deregisterSlave(uint8_t slaveAddress) {
+void FlapRegistry::deregisterSlave(I2Caddress slaveAddress) {
     if (!g_slaveRegistry.empty()) {
         g_slaveRegistry.erase(slaveAddress);
     }
@@ -99,7 +99,7 @@ void FlapRegistry::intro_scan_i2c() {
 
 // ----------------------------
 // Helper: finde Twin-Index zu gegebener I2C-Adresse, oder -1 wenn keiner passt
-int FlapRegistry::findTwinIndexByAddress(uint8_t addr) {
+int FlapRegistry::findTwinIndexByAddress(I2Caddress addr) {
     for (int s = 0; s < numberOfTwins; ++s) {
         if (Twin[s] && Twin[s]->slaveAddress == addr) {
             return s;
@@ -113,7 +113,7 @@ int FlapRegistry::findTwinIndexByAddress(uint8_t addr) {
 // Returns:
 //   >=0 : index of corresponding twin
 //   -1  : slave not found / not ready / twin missing
-int FlapRegistry::scanForSlave(int poolIndex, uint8_t addr) {
+int FlapRegistry::scanForSlave(int poolIndex, I2Caddress addr) {
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;
@@ -195,7 +195,7 @@ void FlapRegistry::outro_scan_i2c(int foundToCalibrate, int foundToRegister) {
 }
 // ----------------------------
 // error tracing for one slave on i2c bus
-void FlapRegistry::error_scan_i2c(int n, uint8_t addr) {
+void FlapRegistry::error_scan_i2c(int n, I2Caddress addr) {
     #ifdef REGISTRYVERBOSE
         {
         TraceScope trace;
@@ -219,11 +219,11 @@ void FlapRegistry::error_scan_i2c(int n, uint8_t addr) {
 // ----------------------------
 // Ask I2C Bus who is there, and register unknown slaves
 void FlapRegistry::scan_i2c_bus() {
-    int     foundToRegister  = 0;                                               // counter for registered slaves
-    int     foundToCalibrate = 0;                                               // counter for calibrated slaves
-    int     n                = -1;                                              // Twin[n]
-    int     c                = 0;                                               // calibrations counted
-    uint8_t addr;                                                               // slave addres
+    int        foundToRegister  = 0;                                            // counter for registered slaves
+    int        foundToCalibrate = 0;                                            // counter for calibrated slaves
+    int        n                = -1;                                           // Twin[n]
+    int        c                = 0;                                            // calibrations counted
+    I2Caddress addr;                                                            // slave addres
 
     slaveParameter parameter;                                                   // to ask slave about his parameters
     intro_scan_i2c();                                                           // inform about what is happening
@@ -247,7 +247,7 @@ void FlapRegistry::scan_i2c_bus() {
 // ------------------------------------------
 // check if slave has booted and waits for calibration
 //
-bool FlapRegistry::checkSlaveHasBooted(int n, uint8_t address) {
+bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
     uint8_t ans = 0;
 
     #ifdef REGISTRYVERBOSE
@@ -312,7 +312,7 @@ bool FlapRegistry::checkSlaveHasBooted(int n, uint8_t address) {
 //
 // return = number of calibrated devices
 //
-int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter parameter) {
+int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter parameter) {
     bool twinIsNew = false;                                                     // flag, if twin is new
     int  c         = 0;                                                         // number of calibrated devices
     auto it        = g_slaveRegistry.find(address);                             // search in registry
@@ -444,8 +444,8 @@ int FlapRegistry::updateSlaveRegistry(int n, uint8_t address, slaveParameter par
 
 // -----------------------------------------
 // get next free ic2 address from registry
-uint8_t FlapRegistry::getNextAddress() {
-    uint8_t nextAddress = findFreeAddress(I2C_MINADR, I2C_MINADR + numberOfTwins); // find address in range
+I2Caddress FlapRegistry::getNextAddress() {
+    I2Caddress nextAddress = findFreeAddress(I2C_MINADR, I2C_MINADR + numberOfTwins); // find address in range
     if (nextAddress > 0) {                                                      // valid address found
         return nextAddress;                                                     // deliver next free address
     } else {
@@ -463,8 +463,8 @@ uint8_t FlapRegistry::getNextAddress() {
 // find free address in registry
 // return = one free address between minAddr to maxAddr
 // return = 0, if no address is free
-uint8_t FlapRegistry::findFreeAddress(uint8_t minAddr, uint8_t maxAddr) {       //  I²C Range
-    for (uint8_t addr = minAddr; addr <= maxAddr; ++addr) {
+I2Caddress FlapRegistry::findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr) { //  I²C Range
+    for (I2Caddress addr = minAddr; addr <= maxAddr; ++addr) {
         if (g_slaveRegistry.find(addr) == g_slaveRegistry.end()) {
             return addr;                                                        // freie Adresse gefunden
         }
@@ -481,7 +481,7 @@ int FlapRegistry::numberOfRegisterdDevices() {
 // ------------------------------
 // register unregistered devices
 void FlapRegistry::registerUnregistered() {
-    uint8_t nextFreeAddress = 0;
+    I2Caddress nextFreeAddress = 0;
     if (i2c_probe_device(I2C_BASE_ADDRESS) == ESP_OK) {                         // is there someone new?
         nextFreeAddress = getNextAddress();                                     // get next free address for new slaves
 

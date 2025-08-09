@@ -624,7 +624,7 @@ void SlaveTwin::logShortError(ShortMessage cmd, esp_err_t err) {
 // - in:  address = address of slave to be registerd/updated
 // - out: parameter = parameter that shall be updated by this function
 //
-void SlaveTwin::askSlaveAboutParameter(uint8_t address, slaveParameter& parameter) {
+void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter) {
     // ask Flap about actual parameter
     uint8_t ser[4] = {0, 0, 0, 0};
     i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser));

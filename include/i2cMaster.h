@@ -44,21 +44,21 @@ extern SemaphoreHandle_t g_i2c_mutex;                                           
 void i2csetup();                                                                // initialize I2C Bus for Master access
 
 LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter);          // prepare I2C LongCommand from paramter
-void        i2cLongCommand(LongMessage mess, uint8_t slaveAddress);             // Long Command to slave, do not wait for answer
-void        prepareI2Cdata(LongMessage mess, uint8_t slaveAddress, uint8_t* outBuffer);
+void        i2cLongCommand(LongMessage mess, I2Caddress slaveAddress);          // Long Command to slave, do not wait for answer
+void        prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer);
 
-esp_err_t        i2cMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size); // send mid command to slave
-i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, uint8_t slaveAddress, uint8_t* answer, int size);
-void             logMidRequest(MidMessage cmd, uint8_t slaveAddress);           // Mid Request
+esp_err_t        i2cMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size); // send mid command to slave
+i2c_cmd_handle_t buildMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size);
+void             logMidRequest(MidMessage cmd, I2Caddress slaveAddress);        // Mid Request
 void             logMidResponse(uint8_t* answer, int size);                     // Mid Response
 void             logMidError(MidMessage cmd, esp_err_t err);                    // Mid Error
 
 void      printSlaveReadyInfo(SlaveTwin* twin);                                 // trace printing slave answer to check_slaveReady()
-int       check_slaveReady(uint8_t slaveAddress);                               // status check isf slave is ready/busy
-void      updateSlaveReadyInfo(int n, uint8_t slaveAddress,
+int       check_slaveReady(I2Caddress slaveAddress);                            // status check isf slave is ready/busy
+void      updateSlaveReadyInfo(int n, I2Caddress slaveAddress,
                                uint8_t* data);                                  // evaluate and remember slave answer to check_slaveReady()
-esp_err_t i2c_probe_device(uint8_t address);                                    // semaphore protected ping
-esp_err_t pingI2Cslave(u_int8_t address);                                       // just ping on I2C if slave is still online
+esp_err_t i2c_probe_device(I2Caddress address);                                 // semaphore protected ping
+esp_err_t pingI2Cslave(I2Caddress address);                                     // just ping on I2C if slave is still online
 
 bool takeI2CSemaphore();                                                        // get a semaphore
 bool giveI2CSemaphore();                                                        // release a semaphore
