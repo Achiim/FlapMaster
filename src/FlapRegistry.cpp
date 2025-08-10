@@ -274,7 +274,7 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
         #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
-            registerPrint("slave has rebooted calibrating now Slave 0x");
+            registerPrint("slave has rebooted; calibrating now Slave 0x");
             Serial.println(address, HEX);
             }
         #endif
@@ -354,17 +354,17 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
     checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
     if (n >= 0 && slaveIsNew) {                                                 // only if slave is ready
         Twin[n]->_parameter = parameter;                                        // update all twin parameter
-        Twin[n]->getSlaveState();
+                                          //        Twin[n]->getSlaveState();
 
-        #ifdef REGISTRYVERBOSE
-            {
-            TraceScope trace;
-            registerPrint("take over parameter values from slave to his twin on master side 0x");
-            Serial.println(address, HEX);
-            registerPrint("number of Steps = %d for Slave 0x", parameter.steps);
-            Serial.println(address, HEX);
-            }
-        #endif
+                                          #ifdef REGISTRYVERBOSE
+                                              {
+                                              TraceScope trace;
+                                              registerPrint("take over parameter values from slave to his twin on master side 0x");
+                                              Serial.println(address, HEX);
+                                              registerPrint("number of Steps = %d for Slave 0x", parameter.steps);
+                                              Serial.println(address, HEX);
+                                              }
+                                          #endif
 
         if (Twin[n]->_numberOfFlaps != parameter.flaps ||
             Twin[n]->_parameter.steps != parameter.steps) {                     // recompute steps by flaps based non new step measurement from slave

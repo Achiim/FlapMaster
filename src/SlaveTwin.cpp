@@ -511,7 +511,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
             {
             TraceScope trace;                                                   // use semaphore to protect this block
             twinPrint("ACK from Slave 0x");
-            Serial.print(slaveAddress, HEX);
+            Serial.print(_slaveAddress, HEX);
             Serial.println(" received.");
             }
         #endif
@@ -520,7 +520,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
             {
             TraceScope trace;                                                   // use semaphore to protect this block
             twinPrint("Error while sending to 0x");
-            Serial.print(slaveAddress, HEX);
+            Serial.print(_slaveAddress, HEX);
             Serial.print(". Errorcode: ");
             Serial.println(esp_err_to_name(error));
             }
@@ -609,7 +609,7 @@ void SlaveTwin::logShortRequest(ShortMessage cmd) {
         Serial.print(" - ");
         Serial.print(getCommandName(cmd));
         Serial.print(" to slave 0x");
-        Serial.println(slaveAddress, HEX);
+        Serial.println(_slaveAddress, HEX);
     #endif
 }
 
@@ -909,22 +909,30 @@ bool SlaveTwin::isSlaveReady() {
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("readyness/busyness check of slave 0x");
-        Serial.println(slaveAddress, HEX);
+        Serial.println(_slaveAddress, HEX);
         }
     #endif
 
     if (i2cShortCommand(CMD_IS_READY, data, sizeof(data)) != ESP_OK) {          // send  request to Slave
-    #ifdef ERRORVERBOSE
+        _slaveReady.ready = data[0];                                            // update slaveReady structure
+        #ifdef ERRORVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("(isSlaveReady) shortCommand STATE failed to: 0x");
+            Serial.println(_slaveAddress, HEX);
+            }
+        #endif
+    }
+    #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("(check_slaveReady) shortCommand STATE failed to: 0x");
-        Serial.println(_slaveAddress, HEX);
+        twinPrint("(isSlaveReady) shortCommand STATE answer from slave 0x");
+        Serial.print(_slaveAddress, HEX);
+        Serial.print(" = ");
+        Serial.println(_slaveReady.ready ? "READY" : "BUSY");
         }
     #endif
-        return false;                                                           // twin not connected
-    }
-
-    return _slaveReady.ready;                                                   // return Twin[n]
+    return _slaveReady.ready;                                                   // return ready/busy state of slave
 }
 
 // ----------------------------
@@ -941,7 +949,7 @@ bool SlaveTwin::getSlaveState() {
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         twinPrint("readyness/busyness check of slave 0x");
-        Serial.println(slaveAddress, HEX);
+        Serial.println(_slaveAddress, HEX);
         }
     #endif
 

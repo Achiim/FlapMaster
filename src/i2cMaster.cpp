@@ -104,6 +104,7 @@ void prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffe
     #endif
 }
 
+/*
 // ----------------------------
 // purpose: check if i2c slave is ready or busy
 // - access to i2c bus is protected by semaphore
@@ -137,14 +138,14 @@ int check_slaveReady(I2Caddress slaveAddress) {
         a++;
     }
 
-    if (!found || Twin[a] == nullptr) {                                         // is there a valide Twin[] Object available that can communicte with slave
-    #ifdef READYBUSYVERBOSE
+    if (!found || Twin[a] == nullptr) {                                         // is there a valide Twin[] Object available that can communicte with
+slave #ifdef READYBUSYVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
         masterPrint("corresponding twin object not found or not created for slave: 0x");
         Serial.println(slaveAddress, HEX);
         }
-    #endif
+#endif
         return -1;                                                              // return no Twin found
     }
 
@@ -175,7 +176,7 @@ int check_slaveReady(I2Caddress slaveAddress) {
 
     return a;                                                                   // return Twin[n]
 }
-
+*/
 // --------------------------
 // trace slave answer to STATUS
 void printSlaveReadyInfo(SlaveTwin* twin) {
