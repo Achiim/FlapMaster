@@ -100,7 +100,7 @@ void FlapRegistry::intro_scan_i2c() {
 // Helper: finde Twin-Index zu gegebener I2C-Adresse, oder -1 wenn keiner passt
 int FlapRegistry::findTwinIndexByAddress(I2Caddress addr) {
     for (int s = 0; s < numberOfTwins; ++s) {
-        if (Twin[s] && Twin[s]->slaveAddress == addr) {
+        if (Twin[s] && Twin[s]->_slaveAddress == addr) {
             return s;
         }
     }
@@ -257,9 +257,9 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
         }
     #endif
     Twin[n]->i2cShortCommand(CMD_GET_BOOT_FLAG, &ans, sizeof(ans));             // check if bootFlag of slave is set
-    Twin[n]->slaveReady.bootFlag = ans;                                         // transfer to Twin[n]
+    Twin[n]->_slaveReady.bootFlag = ans;                                        // transfer to Twin[n]
 
-    if (Twin[n]->slaveReady.bootFlag) {
+    if (Twin[n]->_slaveReady.bootFlag) {
         #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
@@ -315,8 +315,8 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         slaveIsNew                      = false;                                // twin is allready regisered
         I2CSlaveDevice* device          = it->second;
         device->parameter               = parameter;                            // update all parameter
-        device->position                = Twin[n]->slaveReady.position;         // update Flap position
-        device->parameter.sensorworking = Twin[n]->slaveReady.sensorStatus;     // update Sensor status
+        device->position                = Twin[n]->_slaveReady.position;        // update Flap position
+        device->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus;    // update Sensor status
         #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
@@ -334,8 +334,8 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         slaveIsNew                         = true;                              // new slave detected
         I2CSlaveDevice* newDevice          = new I2CSlaveDevice();              // create new device
         newDevice->parameter               = parameter;                         // set all parameter
-        newDevice->position                = Twin[n]->slaveReady.position;      // set flap position
-        newDevice->parameter.sensorworking = Twin[n]->slaveReady.sensorStatus;  // set Sensor status
+        newDevice->position                = Twin[n]->_slaveReady.position;     // set flap position
+        newDevice->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus; // set Sensor status
 
         #ifdef REGISTRYVERBOSE
             {
@@ -353,21 +353,8 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
 
     checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
     if (n >= 0 && slaveIsNew) {                                                 // only if slave is ready
-        {
-            #ifdef REGISTRYVERBOSE                                              // take over parameter to twin
-                {
-                TraceScope trace;
-                registerPrint("take over parameter before isSlaveReady() values from slave to his twin on master side 0x");
-                Serial.println(address, HEX);
-                registerPrint("number of Steps = %d for Slave 0x", parameter.steps);
-                Serial.println(address, HEX);
-                registerPrint("sensor status = %d for Slave 0x", parameter.sensorworking);
-                Serial.println(address, HEX);
-                }
-            #endif
-        }
-        Twin[n]->parameter = parameter;                                         // update all twin parameter
-        Twin[n]->isSlaveReady();
+        Twin[n]->_parameter = parameter;                                        // update all twin parameter
+        Twin[n]->getSlaveState();
 
         #ifdef REGISTRYVERBOSE
             {
@@ -379,8 +366,8 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
             }
         #endif
 
-        if (Twin[n]->numberOfFlaps != parameter.flaps ||
-            Twin[n]->parameter.steps != parameter.steps) {                      // recompute steps by flaps based non new step measurement from slave
+        if (Twin[n]->_numberOfFlaps != parameter.flaps ||
+            Twin[n]->_parameter.steps != parameter.steps) {                     // recompute steps by flaps based non new step measurement from slave
 
             #ifdef REGISTRYVERBOSE
                 {
@@ -391,7 +378,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
                 Serial.println(address, HEX);
                 }
             #endif
-            Twin[n]->numberOfFlaps = parameter.flaps;
+            Twin[n]->_numberOfFlaps = parameter.flaps;
             Twin[n]->calculateStepsPerFlap();                                   // number of flaps or steps per rev. has changed recalculate
 
             #ifdef REGISTRYVERBOSE
@@ -427,7 +414,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
-            registerPrint("set internal adjustment step counter to %d for rebooted Slave 0x", Twin[n]->adjustOffset);
+            registerPrint("set internal adjustment step counter to %d for rebooted Slave 0x", Twin[n]->_adjustOffset);
             Serial.println(address, HEX);
             }
         #endif

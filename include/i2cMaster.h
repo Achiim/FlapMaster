@@ -43,10 +43,7 @@ extern SemaphoreHandle_t g_i2c_mutex;                                           
 // -------------------------------
 void i2csetup();                                                                // initialize I2C Bus for Master access
 
-// LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter);          // prepare I2C LongCommand from paramter
-// void        i2cLongCommand(LongMessage mess, I2Caddress slaveAddress);          // Long Command to slave, do not wait for answer
-void prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer);
-
+void      prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer);
 int       check_slaveReady(I2Caddress slaveAddress);                            // status check isf slave is ready/busy
 esp_err_t i2c_probe_device(I2Caddress address);                                 // semaphore protected ping
 esp_err_t pingI2Cslave(I2Caddress address);                                     // just ping on I2C if slave is still online

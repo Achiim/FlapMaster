@@ -68,15 +68,15 @@ struct TwinCommand {
 
 class SlaveTwin {
    public:
-    int            numberOfFlaps = 0;                                           // the number of flaps of each flap drum
-    I2Caddress     slaveAddress  = 0;                                           // I2C Address of the flap
-    int            flapNumber    = 0;                                           // actual flap that is displayed
-    int            adjustOffset  = 0;                                           // internal adjustment -> will be saved by save
-    unsigned long  lastTwinTime  = 0;                                           // last time a twin command was received
-    uint64_t       lastTwinCode  = 0;                                           // last received code from remote
-    Key21          lastKey       = Key21::UNKNOWN;                              // last pressed key
-    slaveParameter parameter;                                                   // parameter of Slave in EEPROM
-    slaveStatus    slaveReady;                                                  // status of slave
+    int            _numberOfFlaps = 0;                                          // the number of flaps of each flap drum
+    I2Caddress     _slaveAddress  = 0;                                          // I2C Address of the flap
+    int            _flapNumber    = 0;                                          // actual flap that is displayed
+    int            _adjustOffset  = 0;                                          // internal adjustment -> will be saved by save
+    unsigned long  _lastTwinTime  = 0;                                          // last time a twin command was received
+    uint64_t       _lastTwinCode  = 0;                                          // last received code from remote
+    Key21          _lastKey       = Key21::UNKNOWN;                             // last pressed key
+    slaveParameter _parameter;                                                  // parameter of Slave in EEPROM
+    slaveStatus    _slaveReady;                                                 // status of slave
 
     // ----------------------------
     // Constructor
@@ -101,6 +101,7 @@ class SlaveTwin {
     void  askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter); // retrieve all slave parameter
     void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
+    bool  getSlaveState();                                                      // get slave state structure
     Key21 ir2Key21(uint64_t ircode);                                            // convert IR code to Key21
 
     void updateSlaveReadyInfo(uint8_t* data);                                   // take over Read Structure
@@ -156,13 +157,13 @@ class SlaveTwin {
     template <typename... Args>
     void twinPrint(const Args&... args) {
         char buf[20];
-        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
+        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", _slaveAddress);      // Prefix mit Adresse
         tracePrint(buf, args...);
     }
     template <typename... Args>
     void twinPrintln(const Args&... args) {
         char buf[20];
-        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", slaveAddress);       // Prefix mit Adresse
+        snprintf(buf, sizeof(buf), "[I2C TWIN 0x%02X  ] ", _slaveAddress);      // Prefix mit Adresse
         tracePrintln(buf, args...);
     }
 

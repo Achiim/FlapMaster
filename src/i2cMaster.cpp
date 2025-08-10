@@ -182,25 +182,25 @@ void printSlaveReadyInfo(SlaveTwin* twin) {
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("slaveReady.ready = ");
-        Serial.println(twin->slaveReady.ready ? "TRUE" : "FALSE");
+        masterPrint("_slaveReady.ready = ");
+        Serial.println(twin->_slaveReady.ready ? "TRUE" : "FALSE");
         //
-        masterPrint("slaveReady.taskCode 0x");
-        Serial.print(twin->slaveReady.taskCode, HEX);
-        Serial.print(twin->slaveReady.ready ? " - ready with " : " - busy with ");
-        Serial.println(getCommandName(twin->slaveReady.taskCode));
+        masterPrint("_slaveReady.taskCode 0x");
+        Serial.print(twin->_slaveReady.taskCode, HEX);
+        Serial.print(twin->_slaveReady.ready ? " - ready with " : " - busy with ");
+        Serial.println(getCommandName(twin->_slaveReady.taskCode));
         //
-        masterPrint("slaveReady.bootFlag = ");
-        Serial.println(twin->slaveReady.bootFlag ? "TRUE" : "FALSE");
+        masterPrint("_slaveReady.bootFlag = ");
+        Serial.println(twin->_slaveReady.bootFlag ? "TRUE" : "FALSE");
         //
-        masterPrint("slaveReady.sensorStatus = ");
-        Serial.println(twin->slaveReady.sensorStatus ? "WORKING" : "BROKEN");
+        masterPrint("_slaveReady.sensorStatus = ");
+        Serial.println(twin->_slaveReady.sensorStatus ? "WORKING" : "BROKEN");
         //
-        masterPrint("slaveReady.position = ");
-        Serial.println(twin->slaveReady.position);
+        masterPrint("_slaveReady.position = ");
+        Serial.println(twin->_slaveReady.position);
         //
         masterPrint("");
-        Serial.println(twin->slaveReady.ready ? "Slave is ready" : "Slave is busy, ignore command");
+        Serial.println(twin->_slaveReady.ready ? "Slave is ready" : "Slave is busy, ignore command");
         }
     #endif
 }

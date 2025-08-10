@@ -382,7 +382,7 @@ void FlapReporting::reportAllTwinStepsByFlap(int wrapWidth) {
 }
 
 void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
-    int count = twin.parameter.flaps;
+    int count = twin._parameter.flaps;
     if (count <= 0)
         return;
 
@@ -401,18 +401,18 @@ void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
     std::vector<Chunk> chunks;
     int                columnWidth     = 4;
     int                chunkFieldWidth = wrapWidth * 4;                         // 3 Zeichen pro Feld + 1 Leerzeichen
-    int                flapCount       = twin.parameter.flaps;
-    if (wrapWidth < twin.parameter.flaps)
+    int                flapCount       = twin._parameter.flaps;
+    if (wrapWidth < twin._parameter.flaps)
         flapCount = wrapWidth;
     int tableWidth = 10 + flapCount * columnWidth;                              // z.B. columnWidth = 4 oder 5
 
     // Header mit I²C, Seriennummer und Steps/Rev
     char addrBuf[6];
-    snprintf(addrBuf, sizeof(addrBuf), "0x%02X", twin.slaveAddress);
+    snprintf(addrBuf, sizeof(addrBuf), "0x%02X", twin._slaveAddress);
     char serialBuf[64];
-    snprintf(serialBuf, sizeof(serialBuf), "%s", formatSerialNumber(twin.parameter.serialnumber));
+    snprintf(serialBuf, sizeof(serialBuf), "%s", formatSerialNumber(twin._parameter.serialnumber));
     char stepsBuf[32];
-    snprintf(stepsBuf, sizeof(stepsBuf), " Steps/Rev: %d", twin.parameter.steps);
+    snprintf(stepsBuf, sizeof(stepsBuf), " Steps/Rev: %d", twin._parameter.steps);
 
     String headerLine = "│ ";
     headerLine += addrBuf;
@@ -466,7 +466,7 @@ void FlapReporting::drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWid
     String barsLine, stepsLine, flapLine;
 
     // Sparkline Grenzwerte holen
-    int count  = twin.parameter.flaps;
+    int count  = twin._parameter.flaps;
     int end    = min(offset + wrapWidth, count);
     int minVal = INT_MAX, maxVal = 0;
     for (int i = offset; i < end; ++i) {
@@ -475,8 +475,8 @@ void FlapReporting::drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWid
         maxVal = max(maxVal, v);
     }
 
-    int flapCount = twin.parameter.flaps;
-    if (wrapWidth < twin.parameter.flaps)
+    int flapCount = twin._parameter.flaps;
+    if (wrapWidth < twin._parameter.flaps)
         flapCount = wrapWidth;
     for (int i = 0; i < flapCount; ++i) {
         int         v   = twin.stepsByFlap[offset + i];
