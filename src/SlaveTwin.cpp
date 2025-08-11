@@ -913,7 +913,7 @@ bool SlaveTwin::isSlaveReady() {
         }
     #endif
 
-    if (i2cShortCommand(CMD_IS_READY, data, sizeof(data)) != ESP_OK) {          // send  request to Slave
+    if (i2cShortCommand(CMD_ARE_YOU_READY, data, sizeof(data)) != ESP_OK) {     // send  request to Slave
         _slaveReady.ready = data[0];                                            // update slaveReady structure
         #ifdef ERRORVERBOSE
             {
