@@ -529,7 +529,7 @@ esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int
     logShortRequest(shortCmd);
 
     i2c_cmd_handle_t cmd = buildShortCommand(shortCmd, answer, size);
-    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
+    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(500));
     i2c_cmd_link_delete(cmd);
 
     giveI2CSemaphore();
@@ -744,9 +744,33 @@ void SlaveTwin::setNewAddress(int address) {
 void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter) {
     // ask Flap about actual parameter
     uint8_t ser[4] = {0, 0, 0, 0};
-    i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser));
-    // compute serialNumber from byte to integer
-    parameter.serialnumber = ((uint32_t)ser[0]) | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
+    if (i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser)) == ESP_OK) {          // get serial number
+        {
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrint("slave answered for CMD_GET_SERIAL: ");
+                Serial.print("0x");
+                Serial.print(ser[0], HEX);
+                Serial.print(" 0x");
+                Serial.print(ser[1], HEX);
+                Serial.print(" 0x");
+                Serial.print(ser[2], HEX);
+                Serial.print(" 0x");
+                Serial.println(ser[3], HEX);
+                }
+            #endif
+        }
+        // compute serialNumber from byte to integer
+        parameter.serialnumber = ((uint32_t)ser[0]) | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
+    } else {
+        {
+            #ifdef ERRORVERBOSE
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrintln("No answer to CMD_GET_SERIAL, slave is not responing, ignore command.");
+            #endif
+        }
+    }
 
     #ifdef TWINVERBOSE
         {
@@ -757,8 +781,28 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     #endif
 
     uint8_t off[2] = {0, 0};
-    i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off));
-    parameter.offset = 0x100 * off[1] + off[0];                                 // compute offset from byte to integer
+    if (i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off)) == ESP_OK) {          // get offset of flap drum
+        {
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrint("slave answered for CMD_GET_OFFSET: ");
+                Serial.print("0x");
+                Serial.print(off[0], HEX);
+                Serial.print(" 0x");
+                Serial.println(off[1], HEX);
+                }
+            #endif
+            parameter.offset = 0x100 * off[1] + off[0];                         // compute offset from byte to integer
+        }
+    } else {
+        {
+            #ifdef ERRORVERBOSE
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrintln("No answer to CMD_GET_OFFSET, slave is not responing, ignore command.");
+            #endif
+        }
+    }
 
     #ifdef TWINVERBOSE
         {
@@ -769,48 +813,79 @@ void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& param
     #endif
 
     uint8_t flaps = 0;
-    i2cShortCommand(CMD_GET_FLAPS, &flaps, sizeof(flaps));                      // get number of flaps
-    parameter.flaps = flaps;
-    #ifdef TWINVERBOSE
+    if (i2cShortCommand(CMD_GET_FLAPS, &flaps, sizeof(flaps)) == ESP_OK) {      // get number of flaps
+        parameter.flaps = flaps;
+        #ifdef TWINVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("slave answered for parameter.flaps = ");
+            Serial.println(parameter.flaps);
+            }
+        #endif
+    } else {
         {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("slave answered for parameter.flaps = ");
-        Serial.println(parameter.flaps);
+            #ifdef ERRORVERBOSE
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrintln("No answer to CMD_GET_FLAPS, slave is not responing, ignore command.");
+            #endif
         }
-    #endif
+    }
 
     uint8_t speed[2] = {0, 0};
-    i2cShortCommand(CMD_GET_SPEED, speed, sizeof(speed));                       // get speed of flap drum
-    parameter.speed = speed[1] * 0x100 + speed[0];
-    #ifdef TWINVERBOSE
+    if (i2cShortCommand(CMD_GET_SPEED, speed, sizeof(speed)) == ESP_OK) {       // get speed of flap drum
+        parameter.speed = speed[1] * 0x100 + speed[0];
+        #ifdef TWINVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("slave answered for parameter.speed = ");
+            Serial.println(parameter.speed);
+            }
+        #endif
+    } else {
         {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("slave answered for parameter.speed = ");
-        Serial.println(parameter.speed);
+            #ifdef ERRORVERBOSE
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrintln("No answer to CMD_GET_SPEED, slave is not responing, ignore command.");
+            #endif
         }
-    #endif
+    }
 
     uint8_t steps[2] = {0, 0};
-    i2cShortCommand(CMD_GET_STEPS, steps, sizeof(steps));                       // get steps of flap drum
-    parameter.steps = steps[1] * 0x100 + steps[0];
-    #ifdef TWINVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("slave answered for parameter.steps = ");
-        Serial.println(parameter.steps);
-        }
-    #endif
+    if (i2cShortCommand(CMD_GET_STEPS, steps, sizeof(steps)) == ESP_OK) {       // get steps of flap drum
+        parameter.steps = steps[1] * 0x100 + steps[0];
+        #ifdef TWINVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("slave answered for parameter.steps = ");
+            Serial.println(parameter.steps);
+            }
+        #endif
+    } else {
+        #ifdef ERRORVERBOSE
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("No answer to CMD_GET_STEPS, slave is not responing, ignore command. ");
+            Serial.println(parameter.steps);
+        #endif
+    }
 
     uint8_t sensor = 0;
-    i2cShortCommand(CMD_GET_SENSOR, &sensor, sizeof(sensor));                   // get sensor working status
-    parameter.sensorworking = sensor;
-    #ifdef TWINVERBOSE
+    if (i2cShortCommand(CMD_GET_SENSOR, &sensor, sizeof(sensor)) == ESP_OK) {   // get sensor working status
+        parameter.sensorworking = sensor;
+        #ifdef TWINVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            twinPrint("slave answered for parameter.sensorworking = ");
+            Serial.println(parameter.sensorworking);
+            }
+        #endif
+    } else {
         {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("slave answered for parameter.sensorworking = ");
-        Serial.println(parameter.sensorworking);
+            #ifdef ERRORVERBOSE
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrintln("No answer to CMD_GET_SENSOR, slave is not responing, ignore command.");
+            #endif
         }
-    #endif
+    }
 }
 
 // ----------------------------
