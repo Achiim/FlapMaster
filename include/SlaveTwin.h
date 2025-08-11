@@ -41,21 +41,21 @@
 #include "RemoteControl.h"
 
 enum TwinCommands {
-    TWIN_NO_COMMAND,                                                            // no command
-    TWIN_SHOW_FLAP,                                                             // show Flap with this flap number
-    TWIN_CALIBRATION,                                                           // do calibration
-    TWIN_STEP_MEASUREMENT,                                                      // measure steps for one revolution
-    TWIN_SPEED_MEASUREMENT,                                                     // measure speed in ms for one revolution
-    TWIN_SENSOR_CHECK,                                                          // check if hall sensor is working
-    TWIN_NEXT_FLAP,                                                             // move to next flap
-    TWIN_PREV_FLAP,                                                             // move to previous flap
-    TWIN_NEXT_STEP,                                                             // move to next step (25 steps) to adjust calibration
-    TWIN_PREV_STEP,                                                             // move to previous step (-25 steps) to adjust calibration
-    TWIN_SET_OFFSET,                                                            // save calibration offset in EEPROM
-    TWIN_RESET,                                                                 // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
-    TWIN_AVAILABLE,                                                             // this command is used to check if twin is available
-    TWIN_SCAN,                                                                  // this command is used to scan for twin devices
-    TWIN_NEW_ADDRESS                                                            // this command is used to set the base address for the twin
+    TWIN_NO_COMMAND        = 0,                                                 // no command
+    TWIN_SHOW_FLAP         = 10,                                                // show Flap with this flap number
+    TWIN_CALIBRATION       = 20,                                                // do calibration
+    TWIN_STEP_MEASUREMENT  = 30,                                                // measure steps for one revolution
+    TWIN_SPEED_MEASUREMENT = 40,                                                // measure speed in ms for one revolution
+    TWIN_SENSOR_CHECK      = 50,                                                // check if hall sensor is working
+    TWIN_NEXT_FLAP         = 60,                                                // move to next flap
+    TWIN_PREV_FLAP         = 70,                                                // move to previous flap
+    TWIN_NEXT_STEP         = 80,                                                // move to next step (25 steps) to adjust calibration
+    TWIN_PREV_STEP         = 90,                                                // move to previous step (-25 steps) to adjust calibration
+    TWIN_SET_OFFSET        = 100,                                               // save calibration offset in EEPROM
+    TWIN_RESET             = 110,                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
+    TWIN_AVAILABLE         = 120,                                               // this command is used to check if twin is available
+    TWIN_SCAN              = 130,                                               // this command is used to scan for twin devices
+    TWIN_NEW_ADDRESS       = 140                                                // this command is used to set the base address for the twin
 };                                                                              // list of possible twin commands
 
 // Command that will be accepted byTwin
