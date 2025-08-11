@@ -55,13 +55,19 @@ void ParserClass::dispatchToTwins() {
     for (int m = 0; m < numberOfTwins; m++) {
         auto it = g_slaveRegistry.find(g_slaveAddressPool[m]);                  // search in registry
         if (it != g_slaveRegistry.end()) {                                      // if slave is registerd
-                                                                //            Twin[m]->sendQueue(_receivedEvent);
             Twin[m]->sendQueue(_mappedCommand);                                 // send mapped command to twin
             #ifdef PARSERVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block
-                //                parserPrintln("send final decision ClickEvent.type: %s to Twin", Control.clickTypeToString(_receivedEvent.type));
-                //                parserPrintln("send final decision Received Key21: %s to Twin", Control.key21ToString(_receivedEvent.key));
+                parserPrintln("send Twin_Command: %s to Twin 0x%02x", twinCommandToString(_mappedCommand.twinCommand), g_slaveAddressPool[m]);
+                parserPrintln("send Twin_Parameter: %d to Twin 0x%02x", _mappedCommand.twinParameter, g_slaveAddressPool[m]);
+                }
+            #endif
+        } else {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;                                               // use semaphore to protect this block
+                parserPrintln("Twin 0x%02x not registered", g_slaveAddressPool[m]);
                 }
             #endif
         }

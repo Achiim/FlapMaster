@@ -76,6 +76,12 @@ void SlaveTwin::readQueue() {
     TwinCommand twinCmd;
     if (twinQueue != nullptr) {                                                 // if queue exists
         if (xQueueReceive(twinQueue, &twinCmd, portMAX_DELAY)) {
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrintln("(readQueue) Twin Command received: %s", Parser->twinCommandToString(twinCmd.twinCommand));
+                }
+            #endif
             if (twinCmd.twinCommand != TWIN_NO_COMMAND) {
                 twinControl(twinCmd);                                           // send corresponding Flap-Command to device
             }
@@ -113,56 +119,45 @@ void SlaveTwin::sendQueue(TwinCommand twinCmd) {
 
 // --------------------------------------
 void SlaveTwin::twinControl(TwinCommand twinCmd) {
-    if (twinCmd.type == CLICK_SINGLE) {
-        handleSingleKey(twinCmd.twinCommand, twinCmd.twinParameter);            // handle single key command
-    }
-    if (twinCmd.type == CLICK_DOUBLE) {
-        handleDoubleKey(twinCmd.twinCommand, twinCmd.twinParameter);
-    }
-}
-
-// --------------------------------------
-void SlaveTwin::handleDoubleKey(TwinCommands cmd, int) {}
-
-// --------------------------------------
-void SlaveTwin::handleSingleKey(TwinCommands cmd, int param) {
+    TwinCommands cmd   = twinCmd.twinCommand;                                   // get command
+    int          param = twinCmd.twinParameter;                                 // get parameter
     switch (cmd) {
         case TWIN_STEP_MEASUREMENT:
-            logAndRun("Send Step Measurement...", [=] { stepMeasurement(); });
+            logAndRun("Translate to I2C comands Step Measurement...", [=] { stepMeasurement(); });
             break;
         case TWIN_CALIBRATION:
-            logAndRun("Send Calibration...", [=] { calibration(); });
+            logAndRun("Translate to I2C comands Calibration...", [=] { calibration(); });
             break;
         case TWIN_SPEED_MEASUREMENT:
-            logAndRun("Send Speed Measurement...", [=] { speedMeasurement(); });
+            logAndRun("Translate to I2C comands Speed Measurement...", [=] { speedMeasurement(); });
             break;
         case TWIN_PREV_STEP:
-            logAndRun("Send Prev Steps...", [=] { prevSteps(); });
+            logAndRun("Translate to I2C comands Prev Steps...", [=] { prevSteps(); });
             break;
         case TWIN_NEXT_STEP:
-            logAndRun("Send Next Steps...", [=] { nextSteps(); });
+            logAndRun("Translate to I2C comands Next Steps...", [=] { nextSteps(); });
             break;
         case TWIN_SET_OFFSET:
-            logAndRun("Send Save Offset...", [=] { setOffset(); });
+            logAndRun("Translate to I2C comands Save Offset...", [=] { setOffset(); });
             break;
         case TWIN_PREV_FLAP:
-            logAndRun("Send Previous Flap...", [=] { prevFlap(); });
+            logAndRun("Translate to I2C comands Previous Flap...", [=] { prevFlap(); });
             break;
         case TWIN_NEXT_FLAP:
-            logAndRun("Send Next Flap...", [=] { nextFlap(); });
+            logAndRun("Translate to I2C comands Next Flap...", [=] { nextFlap(); });
             break;
         case TWIN_SENSOR_CHECK:
-            logAndRun("Send Sensor Check...", [=] { sensorCheck(); });
+            logAndRun("Translate to I2C comands Sensor Check...", [=] { sensorCheck(); });
             break;
         case TWIN_RESET:
-            logAndRun("Send RESET to Slave...", [=] { reset(); });
+            logAndRun("Translate to I2C comands RESET to Slave...", [=] { reset(); });
             break;
         case TWIN_NEW_ADDRESS:
-            logAndRun("Send NEW ADDRESS to Slave...", [=] { setNewAddress(param); });
+            logAndRun("Translate to I2C comands NEW ADDRESS to Slave...", [=] { setNewAddress(param); });
             break;
 
         case TWIN_SHOW_FLAP: {
-            std::string msg = "Send ";
+            std::string msg = "Translate to I2C comands ";
             msg += param;
             msg += "...";
             logAndRun(msg.c_str(), [=] { showFlap(param); });
@@ -223,59 +218,49 @@ void SlaveTwin::showFlap(int digit) {
 
     int steps = countStepsToMove(_flapNumber, targetFlapNumber);                // get steps to move
     if (steps > 0) {
-        if (isSlaveReady()) {
-            i2cLongCommand(i2cCommandParameter(MOVE, steps));
-            _flapNumber = targetFlapNumber;                                     // I assume it's okay
-            if (!waitUntilSlaveReady(_parameter.speed)) {                       // wait for slave to get ready; maximum time of one revolutions
-                {
-                    #ifdef ERRORVERBOSE
-                        twinPrintln("showFlap failed or timed out on slave 0x%02X", _slaveAddress);
-                    #endif
-                    return;
-                }
-            }
-            #ifdef TWINVERBOSE
-                twinPrintln("request result of showFlap");
-            #endif
-            askSlaveAboutParameter(_slaveAddress, _parameter);                  // get result of showFlap
-            synchSlaveRegistry(_parameter);                                     // take over position to registry
-        } else {
-            #ifdef ERRORVERBOSE
-                twinPrintln("Slave not ready, cannot show Flap %d", digit);
-            #endif
-        }
-    }
-}
-
-// ----------------------------
-void SlaveTwin::calibration() {
-    if (isSlaveReady()) {
-        if (_parameter.steps > 0) {                                             // happend a step-messurement?
-            i2cLongCommand(i2cCommandParameter(CALIBRATE, _parameter.steps));   // use result of measurement
-        } else {
-            i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS));      // use default steps
-        }
-        _flapNumber = 0;                                                        // we stand at Zero after that
-        if (!waitUntilSlaveReady(2 * _parameter.speed)) {                       // wait for slave to get ready; maximum time of 2 revolutions
+        i2cLongCommand(i2cCommandParameter(MOVE, steps));
+        _flapNumber = targetFlapNumber;                                         // I assume it's okay
+        if (!waitUntilSlaveReady(_parameter.speed)) {                           // wait for slave to get ready; maximum time of one revolutions
             {
                 #ifdef ERRORVERBOSE
-                    twinPrintln("Calibration failed or timed out on slave 0x%02X", _slaveAddress);
+                    twinPrintln("showFlap failed or timed out on slave 0x%02X", _slaveAddress);
                 #endif
                 return;
             }
         }
         #ifdef TWINVERBOSE
-            twinPrintln("request result of calibration");
+            twinPrintln("request result of showFlap");
         #endif
-        askSlaveAboutParameter(_slaveAddress, _parameter);                      // get result of measurement
-        synchSlaveRegistry(_parameter);                                         // take over measured value to registry
+        askSlaveAboutParameter(_slaveAddress, _parameter);                      // get result of showFlap
+        synchSlaveRegistry(_parameter);                                         // take over position to registry
     }
 }
 
 // ----------------------------
+void SlaveTwin::calibration() {
+    if (_parameter.steps > 0) {                                                 // happend a step-messurement?
+        i2cLongCommand(i2cCommandParameter(CALIBRATE, _parameter.steps));       // use result of measurement
+    } else {
+        i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS));          // use default steps
+    }
+    _flapNumber = 0;                                                            // we stand at Zero after that
+    if (!waitUntilSlaveReady(2 * _parameter.speed)) {                           // wait for slave to get ready; maximum time of 2 revolutions
+        {
+            #ifdef ERRORVERBOSE
+                twinPrintln("Calibration failed or timed out on slave 0x%02X", _slaveAddress);
+            #endif
+            return;
+        }
+    }
+    #ifdef TWINVERBOSE
+        twinPrintln("request result of calibration");
+    #endif
+    askSlaveAboutParameter(_slaveAddress, _parameter);                          // get result of measurement
+    synchSlaveRegistry(_parameter);                                             // take over measured value to registry
+}
+
+// ----------------------------
 void SlaveTwin::stepMeasurement() {
-    if (!isSlaveReady())
-        return;                                                                 // slave not ready, ignore
     i2cLongCommand(i2cCommandParameter(STEP_MEASSURE, 0));
     _flapNumber = 0;                                                            // we stand at Zero after that
     if (!waitUntilSlaveReady(15 * _parameter.speed)) {                          // wait for slave to get ready; maximum time of 15 revolutions
@@ -295,8 +280,6 @@ void SlaveTwin::stepMeasurement() {
 
 // ----------------------------
 void SlaveTwin::speedMeasurement() {
-    if (!isSlaveReady())
-        return;                                                                 // slave not ready, ignore
     uint16_t stepsToCheck = (_parameter.steps > 0) ? _parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
     i2cLongCommand(i2cCommandParameter(SPEED_MEASSURE, _parameter.steps));
     if (!waitUntilSlaveReady(2 * _parameter.speed)) {                           // wait for slave to get ready; maximum time of 2 revolutions
@@ -316,9 +299,6 @@ void SlaveTwin::speedMeasurement() {
 
 // ----------------------------
 void SlaveTwin::sensorCheck() {
-    if (!isSlaveReady())
-        return;                                                                 // slave not ready, ignore
-
     uint16_t stepsToCheck = (_parameter.steps > 0) ? _parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
     i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, _parameter.steps));        // do sensor check
     if (!waitUntilSlaveReady(2 * _parameter.speed)) {                           // wait for slave to get ready; maximum time of 2 revolutions
@@ -344,23 +324,21 @@ void SlaveTwin::nextFlap() {
             targetFlapNumber = 0;
         int steps = countStepsToMove(_flapNumber, targetFlapNumber);
         if (steps > 0) {
-            if (isSlaveReady()) {
-                i2cLongCommand(i2cCommandParameter(MOVE, steps));
-                _flapNumber = targetFlapNumber;
-                if (!waitUntilSlaveReady(_parameter.speed)) {                   // wait for slave to get ready; maximum time 1/2 revelution
-                    {
-                        #ifdef ERRORVERBOSE
-                            twinPrintln("Next Flap failed or timed out on slave 0x%02X", _slaveAddress);
-                        #endif
-                        return;
-                    }
+            i2cLongCommand(i2cCommandParameter(MOVE, steps));
+            _flapNumber = targetFlapNumber;
+            if (!waitUntilSlaveReady(_parameter.speed)) {                       // wait for slave to get ready; maximum time 1/2 revelution
+                {
+                    #ifdef ERRORVERBOSE
+                        twinPrintln("Next Flap failed or timed out on slave 0x%02X", _slaveAddress);
+                    #endif
+                    return;
                 }
-                #ifdef TWINVERBOSE
-                    twinPrintln("request result of next flap");
-                #endif
-                askSlaveAboutParameter(_slaveAddress, _parameter);              // get result of next flap
-                synchSlaveRegistry(_parameter);                                 // take over position to registry
             }
+            #ifdef TWINVERBOSE
+                twinPrintln("request result of next flap");
+            #endif
+            askSlaveAboutParameter(_slaveAddress, _parameter);                  // get result of next flap
+            synchSlaveRegistry(_parameter);                                     // take over position to registry
         }
     } else {
         #ifdef ERRORVERBOSE
@@ -377,23 +355,21 @@ void SlaveTwin::prevFlap() {
             targetFlapNumber = _numberOfFlaps - 1;
         int steps = countStepsToMove(_flapNumber, targetFlapNumber);
         if (steps > 0) {
-            if (isSlaveReady()) {
-                i2cLongCommand(i2cCommandParameter(MOVE, steps));
-                _flapNumber = targetFlapNumber;
-                if (!waitUntilSlaveReady(2 * _parameter.speed)) {               // wait for slave to get ready; maximum time of2 revolutions
-                    {
-                        #ifdef ERRORVERBOSE
-                            twinPrintln("Previous Flap failed or timed out on slave 0x%02X", _slaveAddress);
-                        #endif
-                        return;
-                    }
+            i2cLongCommand(i2cCommandParameter(MOVE, steps));
+            _flapNumber = targetFlapNumber;
+            if (!waitUntilSlaveReady(2 * _parameter.speed)) {                   // wait for slave to get ready; maximum time of2 revolutions
+                {
+                    #ifdef ERRORVERBOSE
+                        twinPrintln("Previous Flap failed or timed out on slave 0x%02X", _slaveAddress);
+                    #endif
+                    return;
                 }
-                #ifdef TWINVERBOSE
-                    twinPrintln("request result of previous flap");
-                #endif
-                askSlaveAboutParameter(_slaveAddress, _parameter);              // get result of prev flap
-                synchSlaveRegistry(_parameter);                                 // take over position to registry
             }
+            #ifdef TWINVERBOSE
+                twinPrintln("request result of previous flap");
+            #endif
+            askSlaveAboutParameter(_slaveAddress, _parameter);                  // get result of prev flap
+            synchSlaveRegistry(_parameter);                                     // take over position to registry
         }
     } else {
         #ifdef ERRORVERBOSE
@@ -404,12 +380,10 @@ void SlaveTwin::prevFlap() {
 
 // ----------------------------
 void SlaveTwin::nextSteps() {
-    if (isSlaveReady()) {
-        if (_parameter.offset + _adjustOffset + ADJUSTMENT_STEPS <= _parameter.steps) { // only as positiv, as to be stepped to one revolutoin
-            i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS));
-            _adjustOffset += ADJUSTMENT_STEPS;
-            twinPrintln("to be stored offset: %d (not yet stored)", _parameter.offset + _adjustOffset);
-        }
+    if (_parameter.offset + _adjustOffset + ADJUSTMENT_STEPS <= _parameter.steps) { // only as positiv, as to be stepped to one revolutoin
+        i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS));
+        _adjustOffset += ADJUSTMENT_STEPS;
+        twinPrintln("to be stored offset: %d (not yet stored)", _parameter.offset + _adjustOffset);
     }
 }
 
@@ -431,20 +405,17 @@ void SlaveTwin::setOffset() {
     _adjustOffset = 0;                                                          // reset adjustement to zero
     twinPrintln("reset adjustment offset to 0");
     twinPrintln("save: offset = %d | ms/Rev = %d | St/Rev = %d", _parameter.offset, _parameter.speed, _parameter.steps);
-    if (isSlaveReady()) {
-        synchSlaveRegistry(_parameter);                                         // take over new offset to registry
-        i2cLongCommand(i2cCommandParameter(SET_OFFSET, _parameter.offset));
-    }
+
+    synchSlaveRegistry(_parameter);                                             // take over new offset to registry
+    i2cLongCommand(i2cCommandParameter(SET_OFFSET, _parameter.offset));
 }
 
 // ----------------------------
 void SlaveTwin::reset() {
     twinPrint("send reset to 0x:  ");
     Serial.println(_slaveAddress, HEX);
-    if (isSlaveReady()) {
-        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry, this address is free now
-        i2cLongCommand(i2cCommandParameter(RESET, 0));                          // send reset to slave
-    }
+    Register->deregisterSlave(_slaveAddress);                                   // delete slave from registry, this address is free now
+    i2cLongCommand(i2cCommandParameter(RESET, 0));                              // send reset to slave
 }
 
 // ----------------------------
@@ -914,15 +885,18 @@ bool SlaveTwin::isSlaveReady() {
     #endif
 
     if (i2cShortCommand(CMD_ARE_YOU_READY, data, sizeof(data)) != ESP_OK) {     // send  request to Slave
-        _slaveReady.ready = data[0];                                            // update slaveReady structure
-        #ifdef ERRORVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("(isSlaveReady) shortCommand STATE failed to: 0x");
-            Serial.println(_slaveAddress, HEX);
-            }
-        #endif
+        {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;                                               // use semaphore to protect this block
+                twinPrint("(isSlaveReady) shortCommand STATE failed to: 0x");
+                Serial.println(_slaveAddress, HEX);
+                }
+            #endif
+        }
+        return false;                                                           // twin not connected
     }
+    _slaveReady.ready = data[0];                                                // update slaveReady structure
     #ifdef TWINVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
@@ -943,12 +917,12 @@ bool SlaveTwin::isSlaveReady() {
 // true  = ready
 // Twin will be updated: slaveRead.ready, .taskCode, .bootFlag, .sensorStatus and .position
 //
-bool SlaveTwin::getSlaveState() {
+bool SlaveTwin::getFullStateOfSlave() {
     uint8_t data[6] = {0, 0, 0, 0, 0, 0};                                       // structure to receive answer for STATE
     #ifdef READYBUSYVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("readyness/busyness check of slave 0x");
+        twinPrint("get full STATE of slave 0x");
         Serial.println(_slaveAddress, HEX);
         }
     #endif
@@ -957,7 +931,7 @@ bool SlaveTwin::getSlaveState() {
     #ifdef ERRORVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("(getSlaveState) shortCommand GET_STATE failed to: 0x");
+        twinPrint("(getFullStateOfSlave) shortCommand GET_STATE failed to: 0x");
         Serial.println(_slaveAddress, HEX);
         }
     #endif
@@ -1114,11 +1088,11 @@ bool SlaveTwin::waitUntilSlaveReady(uint32_t timeout_ms) {
     uint32_t first_wait             = (rotation_ms < remaining_before_first) ? rotation_ms : remaining_before_first;
     vTaskDelay(pdMS_TO_TICKS(first_wait));
 
-    // poll every 300ms until timeout
-    const uint32_t poll_interval = 300;
+    // poll every 500ms until timeout
+    const uint32_t poll_interval = 500;
     while (static_cast<uint32_t>(millis() - start) < timeout_ms) {
         if (isSlaveReady()) {
-            getSlaveState();                                                    // update slave state
+            getFullStateOfSlave();                                              // update slave state
             return true;                                                        // slave is ready
         }
 

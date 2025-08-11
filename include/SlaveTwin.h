@@ -101,7 +101,7 @@ class SlaveTwin {
     void  askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter); // retrieve all slave parameter
     void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
-    bool  getSlaveState();                                                      // get slave state structure
+    bool  getFullStateOfSlave();                                                // get slave state structure
     Key21 ir2Key21(uint64_t ircode);                                            // convert IR code to Key21
 
     void updateSlaveReadyInfo(uint8_t* data);                                   // take over Read Structure

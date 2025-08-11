@@ -35,6 +35,7 @@ class ParserClass {                                                             
     // Constructor for Parser
     ParserClass();
 
+   public:
     ClickEvent detect(Key21 receivedCode);                                      // parser vor remote control events
     ClickEvent poll();                                                          // regelmäßig (z. B. alle 10ms) im Loop/Task aufrufen
     void       handleQueueMessage();                                            // read from ParserQueue and filter
