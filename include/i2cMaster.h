@@ -34,7 +34,7 @@
 #define I2C_MASTER_NUM I2C_NUM_0                                                // for IC2 scanner
 #define I2C_MASTER_SCL_IO 22                                                    // SCL PIN
 #define I2C_MASTER_SDA_IO 21                                                    // SDA PIN
-#define I2C_MASTER_FREQ_HZ 300000                                               // I2C Semi Fast Mode 200 kHz (400 kHz fast)
+#define I2C_MASTER_FREQ_HZ 250000                                               // I2C Semi Fast Mode 200 kHz (400 kHz fast)
 
 // Master global variables
 extern bool              g_masterBooted;                                        // global Flag if Master has fresh booted
