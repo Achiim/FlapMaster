@@ -98,7 +98,14 @@ class SlaveTwin {
     void setNewAddress(int address);                                            // set new address for the twin
 
     // Helper
-    void  askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter); // retrieve all slave parameter
+    bool  readAllParameters(slaveParameter& p);                                 // Reads all parameters from the slave device.
+    bool  readSerialNumber(uint32_t& outSerial);                                // Reads only the serial number from the slave device.
+    bool  readOffset(uint16_t& outOffset);                                      // Reads the offset value from the slave device.
+    bool  readFlaps(uint8_t& outFlaps);                                         // Reads the number of flaps from the slave device.
+    bool  readSpeed(uint16_t& outSpeed);                                        // Reads the speed value from the slave device.
+    bool  readSteps(uint16_t& outSteps);                                        // Reads the steps value from the slave device.
+    bool  readSensorWorking(bool& outSensorWorking);                            // Reads the sensor working status from the slave device.
+    void  askSlaveAboutParameter(slaveParameter& parameter);                    // retrieve all slave parameter
     void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
     bool  getFullStateOfSlave();                                                // get slave state structure
@@ -119,6 +126,10 @@ class SlaveTwin {
     void sendQueue(TwinCommand twinCmd);                                        // send command to Twin queue
     int  stepsByFlap[MAXIMUM_FLAPS];                                            // steps needed to move flap by flap (Bresenham-artige Verteilung)
 
+    // Use this from any other task instead of calling isSlaveReady() directly.
+    // Returns true if we actually touched the bus; outReady tells the result.
+    bool maybePollReady(bool& outReady);
+
    private:
     // -------------------------------
     // private Variables
@@ -129,13 +140,27 @@ class SlaveTwin {
     // internal Helpers
     void systemHalt(const char* reason, int blinkCode);                         // system halt with reason and blink code
     void twinControl(TwinCommand twinCmd);                                      // handle Twin command
-    void handleDoubleKey(TwinCommands cmd, int param);                          // handle double key command
-    void handleSingleKey(TwinCommands cmd, int param);                          // handle single key command
     void logAndRun(const char* message, std::function<void()> action);          // log message and run action
     void printSlaveReadyInfo();                                                 // trace output Read Structure
     void synchSlaveRegistry(slaveParameter parameter);                          // take over slave parameter to registry
     bool waitUntilSlaveReady(uint32_t timeout_ms);                              // wait until slave is ready
     int  countStepsToMove(int from, int to);                                    // return steps to move fom "from" to "to"
+
+    // --- Per-instance state for ETA/ready polling ---
+    bool     _inEtaWait            = false;                                     // true while ETA-based wait is running
+    uint32_t _readyPollGateUntilMs = 0;                                         // next allowed millis() for external ready polls
+    uint16_t _etaPollCount         = 0;                                         // (optional) debug counter for last ETA wait
+
+    // Tunables for external ready-poll throttling (per-instance if you like)
+    static constexpr uint16_t GLOBAL_READY_POLL_GAP_MS = 120;
+
+    // Existing helpers (as zuvor vorgeschlagen)
+    uint32_t        validMsPerRevolution() const;
+    uint16_t        validStepsPerRevolution() const;
+    uint32_t        stepsToMs(uint32_t steps) const;
+    uint32_t        estimateLongDurationMs(uint8_t cmd, uint16_t par) const;
+    static uint32_t withSafety(uint32_t eta_ms);
+    bool            waitUntilSlaveReadyETA(uint8_t cmd, uint16_t par, uint32_t timeout_ms);
 
     // ---------------------------
     // I2C Helper
@@ -151,6 +176,14 @@ class SlaveTwin {
     void             logMidRequest(MidMessage cmd, I2Caddress slaveAddress);    // Mid Request
     void             logMidResponse(uint8_t* answer, int size);                 // Mid Response
     void             logMidError(MidMessage cmd, esp_err_t err);                // Mid Error
+
+    // Logging helpers – private to SlaveTwin
+    void logHexBytes(const char* prefix, const uint8_t* buf, size_t n);
+    void logInfo(const char* prefix, const String& value);
+    void logInfoU32(const char* prefix, uint32_t v);
+    void logInfoU16(const char* prefix, uint16_t v);
+    void logInfoU8(const char* prefix, uint8_t v);
+    void logErr(const char* msg);
 
     // -------------------------------
     // Twin trace
