@@ -42,6 +42,30 @@
 // generate for each slave one twin
 SlaveTwin* Twin[numberOfTwins];
 
+// -------- tuning / defaults ---------------
+static constexpr uint32_t DEFAULT_REV_MS        = DEFAULT_SPEED;                // ~3 s pro U
+static constexpr uint16_t DEFAULT_STEPS_PER_REV = DEFAULT_STEPS;                // z. B. 4096
+
+// Plausibility checks
+static constexpr uint32_t REV_MS_MIN = (DEFAULT_REV_MS - 300);                  // 90% of Default (quick)
+static constexpr uint32_t REV_MS_MAX = (DEFAULT_REV_MS + 300);                  // 110% of Default  (slow)
+static constexpr uint16_t STEPS_MIN  = (DEFAULT_STEPS_PER_REV - 410);           // 90% of Default (less steps)
+static constexpr uint16_t STEPS_MAX  = (DEFAULT_STEPS_PER_REV + 410);           // 110% of Default  (more steps)
+
+// ETA tuning
+static constexpr uint16_t FIXED_OVERHEAD_MS = 300;                              // start/stop/ramp overhead
+static constexpr uint16_t CAL_EXTRA_MS      = 200;                              // extra fudge for CALIBRATE
+
+// We only poll in the last ~80..150 ms before ETA
+static constexpr uint8_t  QUIET_PCT_NUM      = 97;                              // quiet until ~97% of ETA
+static constexpr uint8_t  QUIET_PCT_DEN      = 100;
+static constexpr uint16_t FAST_WINDOW_MIN_MS = 80;
+static constexpr uint16_t FAST_WINDOW_MAX_MS = 150;
+
+static constexpr uint16_t FAST_INTERVAL_MS      = 25;                           // fast poll interval (ms)
+static constexpr uint16_t MIN_QUIET_MS          = 20;                           // never poll earlier than this
+static constexpr uint16_t STEP_MEASURE_DELAY_MS = 1000;                         // delay between step measurements
+
 // ---------------------------------
 // Constructor
 SlaveTwin::SlaveTwin(int add) {
@@ -231,32 +255,34 @@ void SlaveTwin::showFlap(int digit) {
         #ifdef TWINVERBOSE
             twinPrintln("request result of showFlap");
         #endif
-        askSlaveAboutParameter(_slaveAddress, _parameter);                      // get result of showFlap
+        askSlaveAboutParameter(_parameter);                                     // get result of showFlap
         synchSlaveRegistry(_parameter);                                         // take over position to registry
     }
 }
 
 // ----------------------------
+// ---- CALIBRATE mit ETA-gestütztem Warten ----
 void SlaveTwin::calibration() {
-    if (_parameter.steps > 0) {                                                 // happend a step-messurement?
-        i2cLongCommand(i2cCommandParameter(CALIBRATE, _parameter.steps));       // use result of measurement
-    } else {
-        i2cLongCommand(i2cCommandParameter(CALIBRATE, DEFAULT_STEPS));          // use default steps
+    const uint16_t steps_to_use = validStepsPerRevolution();                    // 1) Parameter wählen: gemessen & plausibel, sonst Default (STEPS_PER_ROTATION)
+    i2cLongCommand(i2cCommandParameter(CALIBRATE, steps_to_use));               // 2) LONG senden
+    _flapNumber = 0;                                                            // nach Kalibrierung auf 0
+
+    const uint32_t eta_ms =
+        estimateLongDurationMs(CALIBRATE, steps_to_use);                        // 3) ETA + Timeout berechnen und „ruhig bis kurz vor ETA“, dann Fast-Poll
+    const uint32_t timeout_ms = withSafety(eta_ms);                             // z. B. +25% min 500 ms max 5 s
+
+    if (!waitUntilSlaveReadyETA(CALIBRATE, steps_to_use, timeout_ms)) {
+        #ifdef ERRORVERBOSE
+            twinPrintln("Calibration failed or timed out on slave 0x%02X", _slaveAddress);
+        #endif
+        return;
     }
-    _flapNumber = 0;                                                            // we stand at Zero after that
-    if (!waitUntilSlaveReady(2 * _parameter.speed)) {                           // wait for slave to get ready; maximum time of 2 revolutions
-        {
-            #ifdef ERRORVERBOSE
-                twinPrintln("Calibration failed or timed out on slave 0x%02X", _slaveAddress);
-            #endif
-            return;
-        }
-    }
+
     #ifdef TWINVERBOSE
         twinPrintln("request result of calibration");
     #endif
-    askSlaveAboutParameter(_slaveAddress, _parameter);                          // get result of measurement
-    synchSlaveRegistry(_parameter);                                             // take over measured value to registry
+    askSlaveAboutParameter(_parameter);                                         // zieht neue Messwerte (speed/steps)
+    synchSlaveRegistry(_parameter);                                             // Registry aktualisieren
 }
 
 // ----------------------------
@@ -274,7 +300,7 @@ void SlaveTwin::stepMeasurement() {
     #ifdef TWINVERBOSE
         twinPrintln("request result of step measurement");
     #endif
-    askSlaveAboutParameter(_slaveAddress, _parameter);                          // get result of measurement
+    askSlaveAboutParameter(_parameter);                                         // get result of measurement
     synchSlaveRegistry(_parameter);                                             // take over measured value to registry
 }
 
@@ -293,7 +319,7 @@ void SlaveTwin::speedMeasurement() {
     #ifdef TWINVERBOSE
         twinPrintln("request result of speed measurement");
     #endif
-    askSlaveAboutParameter(_slaveAddress, _parameter);                          // get result of measurement
+    askSlaveAboutParameter(_parameter);                                         // get result of measurement
     synchSlaveRegistry(_parameter);                                             // take over measured value to registry
 }
 
@@ -312,7 +338,7 @@ void SlaveTwin::sensorCheck() {
     #ifdef TWINVERBOSE
         twinPrintln("request result of sensor check");
     #endif
-    askSlaveAboutParameter(_slaveAddress, _parameter);                          // get result of sensor
+    askSlaveAboutParameter(_parameter);                                         // get result of sensor
     synchSlaveRegistry(_parameter);                                             // take over measured value to registry
 }
 
@@ -337,7 +363,7 @@ void SlaveTwin::nextFlap() {
             #ifdef TWINVERBOSE
                 twinPrintln("request result of next flap");
             #endif
-            askSlaveAboutParameter(_slaveAddress, _parameter);                  // get result of next flap
+            askSlaveAboutParameter(_parameter);                                 // get result of next flap
             synchSlaveRegistry(_parameter);                                     // take over position to registry
         }
     } else {
@@ -368,7 +394,7 @@ void SlaveTwin::prevFlap() {
             #ifdef TWINVERBOSE
                 twinPrintln("request result of previous flap");
             #endif
-            askSlaveAboutParameter(_slaveAddress, _parameter);                  // get result of prev flap
+            askSlaveAboutParameter(_parameter);                                 // get result of prev flap
             synchSlaveRegistry(_parameter);                                     // take over position to registry
         }
     } else {
@@ -741,151 +767,156 @@ void SlaveTwin::setNewAddress(int address) {
 // - in:  address = address of slave to be registerd/updated
 // - out: parameter = parameter that shall be updated by this function
 //
-void SlaveTwin::askSlaveAboutParameter(I2Caddress address, slaveParameter& parameter) {
-    // ask Flap about actual parameter
+
+// ----------------------------------------------------------
+// Central reusable logging helpers (only active with TWINVERBOSE/ERRORVERBOSE)
+
+void SlaveTwin::logHexBytes(const char* prefix, const uint8_t* buf, size_t n) {
+    #ifdef TWINVERBOSE
+        TraceScope trace;
+        twinPrint(prefix);
+        for (size_t i = 0; i < n; ++i) {
+        Serial.print(i ? " 0x" : "0x");
+        Serial.print(buf[i], HEX);
+        }
+        Serial.println();
+    #endif
+}
+
+void SlaveTwin::logInfo(const char* prefix, const String& value) {
+    #ifdef TWINVERBOSE
+        TraceScope trace;
+        twinPrint(prefix);
+        Serial.println(value);
+    #endif
+}
+
+void SlaveTwin::logInfoU32(const char* prefix, uint32_t v) {
+    #ifdef TWINVERBOSE
+        TraceScope trace;
+        twinPrint(prefix);
+        Serial.println(v);
+    #endif
+}
+
+void SlaveTwin::logInfoU16(const char* prefix, uint16_t v) {
+    #ifdef TWINVERBOSE
+        TraceScope trace;
+        twinPrint(prefix);
+        Serial.println(v);
+    #endif
+}
+
+void SlaveTwin::logInfoU8(const char* prefix, uint8_t v) {
+    #ifdef TWINVERBOSE
+        TraceScope trace;
+        twinPrint(prefix);
+        Serial.println(v);
+    #endif
+}
+
+void SlaveTwin::logErr(const char* msg) {
+    #ifdef ERRORVERBOSE
+        TraceScope trace;
+        twinPrintln(msg);
+    #endif
+}
+
+// ----------------------------------------------------------
+// Individual read functions – fully encapsulated
+// Each function:
+//  - sends the corresponding I2C command
+//  - converts the received bytes into the target type
+//  - writes directly into the provided variable
+//  - logs success (TWINVERBOSE) and error (ERRORVERBOSE)
+//  - returns true if successful, false otherwise
+
+bool SlaveTwin::readSerialNumber(uint32_t& outSerial) {
     uint8_t ser[4] = {0, 0, 0, 0};
-    if (i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser)) == ESP_OK) {          // get serial number
-        {
-            #ifdef TWINVERBOSE
-                {
-                TraceScope trace;                                               // use semaphore to protect this block
-                twinPrint("slave answered for CMD_GET_SERIAL: ");
-                Serial.print("0x");
-                Serial.print(ser[0], HEX);
-                Serial.print(" 0x");
-                Serial.print(ser[1], HEX);
-                Serial.print(" 0x");
-                Serial.print(ser[2], HEX);
-                Serial.print(" 0x");
-                Serial.println(ser[3], HEX);
-                }
-            #endif
-        }
-        // compute serialNumber from byte to integer
-        parameter.serialnumber = ((uint32_t)ser[0]) | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
-    } else {
-        {
-            #ifdef ERRORVERBOSE
-                TraceScope trace;                                               // use semaphore to protect this block
-                twinPrintln("No answer to CMD_GET_SERIAL, slave is not responing, ignore command.");
-            #endif
-        }
+    if (i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser)) == ESP_OK) {
+        logHexBytes("slave answered for CMD_GET_SERIAL: ", ser, sizeof(ser));
+        outSerial = (uint32_t)ser[0] | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
+        logInfo("slave answered for parameter.serialnumber = ", formatSerialNumber(outSerial));
+        return true;
     }
+    logErr("No answer to CMD_GET_SERIAL, slave is not responding, ignore command.");
+    return false;
+}
 
-    #ifdef TWINVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("slave answered for parameter.serialnumber = ");
-        Serial.println(formatSerialNumber(parameter.serialnumber));
-        }
-    #endif
-
+bool SlaveTwin::readOffset(uint16_t& outOffset) {
     uint8_t off[2] = {0, 0};
-    if (i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off)) == ESP_OK) {          // get offset of flap drum
-        {
-            #ifdef TWINVERBOSE
-                {
-                TraceScope trace;                                               // use semaphore to protect this block
-                twinPrint("slave answered for CMD_GET_OFFSET: ");
-                Serial.print("0x");
-                Serial.print(off[0], HEX);
-                Serial.print(" 0x");
-                Serial.println(off[1], HEX);
-                }
-            #endif
-            parameter.offset = 0x100 * off[1] + off[0];                         // compute offset from byte to integer
-        }
-    } else {
-        {
-            #ifdef ERRORVERBOSE
-                TraceScope trace;                                               // use semaphore to protect this block
-                twinPrintln("No answer to CMD_GET_OFFSET, slave is not responing, ignore command.");
-            #endif
-        }
+    if (i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off)) == ESP_OK) {
+        logHexBytes("slave answered for CMD_GET_OFFSET: ", off, sizeof(off));
+        outOffset = (uint16_t)((uint16_t)off[1] << 8 | off[0]);
+        logInfoU16("slave answered for parameter.offset = ", outOffset);
+        return true;
     }
+    logErr("No answer to CMD_GET_OFFSET, slave is not responding, ignore command.");
+    return false;
+}
 
-    #ifdef TWINVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        twinPrint("slave answered for parameter.offset = ");
-        Serial.println(parameter.offset);
-        }
-    #endif
-
+bool SlaveTwin::readFlaps(uint8_t& outFlaps) {
     uint8_t flaps = 0;
-    if (i2cShortCommand(CMD_GET_FLAPS, &flaps, sizeof(flaps)) == ESP_OK) {      // get number of flaps
-        parameter.flaps = flaps;
-        #ifdef TWINVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("slave answered for parameter.flaps = ");
-            Serial.println(parameter.flaps);
-            }
-        #endif
-    } else {
-        {
-            #ifdef ERRORVERBOSE
-                TraceScope trace;                                               // use semaphore to protect this block
-                twinPrintln("No answer to CMD_GET_FLAPS, slave is not responing, ignore command.");
-            #endif
-        }
+    if (i2cShortCommand(CMD_GET_FLAPS, &flaps, sizeof(flaps)) == ESP_OK) {
+        outFlaps = flaps;
+        logInfoU8("slave answered for parameter.flaps = ", outFlaps);
+        return true;
     }
+    logErr("No answer to CMD_GET_FLAPS, slave is not responding, ignore command.");
+    return false;
+}
 
+bool SlaveTwin::readSpeed(uint16_t& outSpeed) {
     uint8_t speed[2] = {0, 0};
-    if (i2cShortCommand(CMD_GET_SPEED, speed, sizeof(speed)) == ESP_OK) {       // get speed of flap drum
-        parameter.speed = speed[1] * 0x100 + speed[0];
-        #ifdef TWINVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("slave answered for parameter.speed = ");
-            Serial.println(parameter.speed);
-            }
-        #endif
-    } else {
-        {
-            #ifdef ERRORVERBOSE
-                TraceScope trace;                                               // use semaphore to protect this block
-                twinPrintln("No answer to CMD_GET_SPEED, slave is not responing, ignore command.");
-            #endif
-        }
+    if (i2cShortCommand(CMD_GET_SPEED, speed, sizeof(speed)) == ESP_OK) {
+        outSpeed = (uint16_t)((uint16_t)speed[1] << 8 | speed[0]);
+        logInfoU16("slave answered for parameter.speed = ", outSpeed);
+        return true;
     }
+    logErr("No answer to CMD_GET_SPEED, slave is not responding, ignore command.");
+    return false;
+}
 
+bool SlaveTwin::readSteps(uint16_t& outSteps) {
     uint8_t steps[2] = {0, 0};
-    if (i2cShortCommand(CMD_GET_STEPS, steps, sizeof(steps)) == ESP_OK) {       // get steps of flap drum
-        parameter.steps = steps[1] * 0x100 + steps[0];
-        #ifdef TWINVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("slave answered for parameter.steps = ");
-            Serial.println(parameter.steps);
-            }
-        #endif
-    } else {
-        #ifdef ERRORVERBOSE
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("No answer to CMD_GET_STEPS, slave is not responing, ignore command. ");
-            Serial.println(parameter.steps);
-        #endif
+    if (i2cShortCommand(CMD_GET_STEPS, steps, sizeof(steps)) == ESP_OK) {
+        outSteps = (uint16_t)((uint16_t)steps[1] << 8 | steps[0]);
+        logInfoU16("slave answered for parameter.steps = ", outSteps);
+        return true;
     }
+    logErr("No answer to CMD_GET_STEPS, slave is not responding, ignore command.");
+    return false;
+}
 
+bool SlaveTwin::readSensorWorking(bool& outSensorWorking) {
     uint8_t sensor = 0;
-    if (i2cShortCommand(CMD_GET_SENSOR, &sensor, sizeof(sensor)) == ESP_OK) {   // get sensor working status
-        parameter.sensorworking = sensor;
-        #ifdef TWINVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrint("slave answered for parameter.sensorworking = ");
-            Serial.println(parameter.sensorworking);
-            }
-        #endif
-    } else {
-        {
-            #ifdef ERRORVERBOSE
-                TraceScope trace;                                               // use semaphore to protect this block
-                twinPrintln("No answer to CMD_GET_SENSOR, slave is not responing, ignore command.");
-            #endif
-        }
+    if (i2cShortCommand(CMD_GET_SENSOR, &sensor, sizeof(sensor)) == ESP_OK) {
+        outSensorWorking = sensor;
+        logInfoU8("slave answered for parameter.sensorworking = ", outSensorWorking);
+        return true;
     }
+    logErr("No answer to CMD_GET_SENSOR, slave is not responding, ignore command.");
+    return false;
+}
+
+// ----------------------------------------------------------
+// Combined function without address parameter, uses individual readers.
+// Return value: true if *all* reads were successful.
+bool SlaveTwin::readAllParameters(slaveParameter& p) {
+    bool ok = true;
+    ok &= readSerialNumber(p.serialnumber);
+    ok &= readOffset(p.offset);
+    ok &= readFlaps(p.flaps);
+    ok &= readSpeed(p.speed);
+    ok &= readSteps(p.steps);
+    ok &= readSensorWorking(p.sensorworking);
+    return ok;
+}
+
+// ----------------------------------------------------------
+// askSlaveAboutParameter now without address; only calls the combined function.
+void SlaveTwin::askSlaveAboutParameter(slaveParameter& parameter) {
+    (void)readAllParameters(parameter);
 }
 
 // ----------------------------
@@ -1217,4 +1248,133 @@ void SlaveTwin::systemHalt(const char* reason, int blinkCode) {
         }
         vTaskDelay(pdMS_TO_TICKS(5000));                                        // Delay for 5s
     }
+}
+
+bool SlaveTwin::maybePollReady(bool& outReady) {
+    // If an ETA wait is active, do not poll from outside.
+    if (_inEtaWait) {
+        outReady = false;
+        return false;
+    }
+
+    const uint32_t now = millis();
+    if (now < _readyPollGateUntilMs) {
+        outReady = false;
+        return false;                                                           // throttled: no bus access
+    }
+
+    // Perform the short "ARE YOU READY" transaction.
+    // (Assumes lower layer handles the I2C mutex.)
+    outReady = isSlaveReady();
+
+    // Gate next external poll.
+    _readyPollGateUntilMs = now + GLOBAL_READY_POLL_GAP_MS;
+    return true;                                                                // we touched the bus
+}
+
+bool SlaveTwin::waitUntilSlaveReadyETA(uint8_t cmd, uint16_t par, uint32_t timeout_ms) {
+    _inEtaWait    = true;                                                       // block external polls while we wait
+    _etaPollCount = 0;                                                          // debug counter reset
+
+    const uint32_t start  = millis();
+    const uint32_t eta_ms = estimateLongDurationMs(cmd, par);
+
+    // --- derive late fast-poll window (use your tuned constants) ---
+    // (Konstanten wie QUIET_PCT_NUM/DEN, FAST_WINDOW_MIN/MAX_MS etc. stehen file-local constexpr)
+    uint32_t window = eta_ms - (eta_ms * QUIET_PCT_NUM / QUIET_PCT_DEN);
+    if (window < FAST_WINDOW_MIN_MS)
+        window = FAST_WINDOW_MIN_MS;
+    if (window > FAST_WINDOW_MAX_MS)
+        window = FAST_WINDOW_MAX_MS;
+
+    uint32_t first_wait = (eta_ms > window) ? (eta_ms - window) : MIN_QUIET_MS;
+
+    // Respect timeout
+    uint32_t elapsed = millis() - start;
+    if (elapsed >= timeout_ms) {
+        _inEtaWait = false;
+        return false;
+    }
+    uint32_t remaining = timeout_ms - elapsed;
+    if (first_wait > remaining)
+        first_wait = remaining;
+    if (first_wait < MIN_QUIET_MS)
+        first_wait = MIN_QUIET_MS;
+
+    vTaskDelay(pdMS_TO_TICKS(first_wait));
+
+    // --- fast phase: only this loop is allowed to poll now ---
+    while ((millis() - start) < timeout_ms) {
+        if (isSlaveReady()) {
+            getFullStateOfSlave();                                              // pulls fresh measured parameters
+            _inEtaWait = false;
+            #ifdef TWINVERBOSE
+                twinPrintln("ETA-wait polls=%u", (unsigned)_etaPollCount);
+            #endif
+            return true;
+        }
+        ++_etaPollCount;
+
+        const uint32_t now = millis();
+        if ((now - start) >= timeout_ms)
+            break;
+        const uint32_t rem = timeout_ms - (now - start);
+        vTaskDelay(pdMS_TO_TICKS((FAST_INTERVAL_MS < rem) ? FAST_INTERVAL_MS : rem));
+    }
+
+    _inEtaWait = false;
+    return false;
+}
+
+// ---- plausibility-checked getters (use measured values if sane) ----------
+uint32_t SlaveTwin::validMsPerRevolution() const {
+    const uint32_t ms = _parameter.speed;                                       // measured (ms per revolution)
+    return (ms >= REV_MS_MIN && ms <= REV_MS_MAX) ? ms : DEFAULT_REV_MS;
+}
+uint16_t SlaveTwin::validStepsPerRevolution() const {
+    const uint16_t s = _parameter.steps;                                        // measured (steps per revolution)
+    return (s >= STEPS_MIN && s <= STEPS_MAX) ? s : DEFAULT_STEPS_PER_REV;
+}
+
+// Steps -> ms (rounded), integer math only
+uint32_t SlaveTwin::stepsToMs(uint32_t steps) const {
+    const uint32_t rev_ms = validMsPerRevolution();
+    const uint16_t spr    = validStepsPerRevolution();
+    const uint64_t num    = (uint64_t)steps * (uint64_t)rev_ms + (spr / 2);
+    return (uint32_t)(num / spr);
+}
+
+// Predict LONG duration in ms (command-specific)
+uint32_t SlaveTwin::estimateLongDurationMs(uint8_t cmd, uint16_t par) const {
+    const uint32_t rev_ms = validMsPerRevolution();
+
+    switch (cmd) {
+        case MOVE:
+            return stepsToMs(par) + FIXED_OVERHEAD_MS;
+        case MOVE_IN:
+        case MOVE_OUT:
+        case SPEED_MEASSURE:
+            return rev_ms + FIXED_OVERHEAD_MS;                                  // ~1 revolution
+        case CALIBRATE:
+            return rev_ms + FIXED_OVERHEAD_MS + CAL_EXTRA_MS;                   // 1 rev + fudge
+        case STEP_MEASSURE: {
+            // Per measurement: in(N) + out(N) + in(N) ≈ 3 rev + 1 s delay
+            const uint32_t perMeasure = 3U * rev_ms + STEP_MEASURE_DELAY_MS;
+            return (uint32_t)numberOfMeasurement * perMeasure + FIXED_OVERHEAD_MS;
+        }
+        case SENSOR_CHECK:
+            return (rev_ms * 8U) / 5U + FIXED_OVERHEAD_MS;                      // ≈1.6 rev
+        case SET_SPEED:
+        case SET_OFFSET:
+            return 50;                                                          // near-immediate
+        default:
+            return rev_ms + 2U * FAST_WINDOW_MIN_MS;                            // conservative
+    }
+}
+
+// Add a safety margin to ETA (+25%, min 500 ms, max 5 s)
+uint32_t SlaveTwin::withSafety(uint32_t eta_ms) {
+    const uint32_t pct = (eta_ms * 25U) / 100U;
+    const uint32_t add = (pct < 500U) ? 500U : (pct > 5000U ? 5000U : pct);
+    return eta_ms + add;
 }
