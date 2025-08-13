@@ -49,6 +49,7 @@ class FlapRegistry {
     // ----------------------------
     // public functions
     void       registerUnregistered();                                          // collect all unregistered slaves
+    void       repairOutOfPoolDevices();                                        // repair devices that are out of the address pool
     int        updateSlaveRegistry(int n, I2Caddress address, slaveParameter parameter); // register slaves in registry
     void       deregisterSlave(I2Caddress slaveAddress);                        // deregister from registry
     void       check_slave_availability();                                      // check if slave is still available
