@@ -48,6 +48,16 @@ void twinRegister(void* pvParameters) {
     Register = new FlapRegistry();
     Register->registerUnregistered();                                           // register all twins which are not registered yet
     Register->scan_i2c_bus();                                                   // scan i2c bus for new twins
+
+    #ifdef DISABLEREGISTRY
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        masterPrintln("Registry is disabled, no scan and no registry");
+        vTaskSuspend(nullptr);                                                  // suspend task,  do not use registry
+        return;
+        }
+    #endif
+
     shortScanTimer =
         xTimerCreate("ScanShort", pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), pdTRUE, nullptr, shortScanCallback); // 1) Short-Scan-Timer (Auto-Reload)
     longScanTimer =

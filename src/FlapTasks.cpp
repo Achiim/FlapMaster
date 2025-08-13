@@ -119,7 +119,7 @@ void longScanCallback(TimerHandle_t xTimer) {
 // --- Availability-Check (AVAILABILITY_CHECK_COUNTDOWN),
 // change back to Short-Scan, if devices are missing
 void availCheckCallback(TimerHandle_t xTimer) {
-    #ifdef REGISTRYVERBOSE
+    #ifdef AVAILABILITYVERBOSE
         {
         TraceScope trace;
         Register->registerPrintln("======= Device-Availability Check =============");
@@ -132,7 +132,7 @@ void availCheckCallback(TimerHandle_t xTimer) {
         if (xTimerIsTimerActive(shortScanTimer) == pdFALSE) {
             xTimerStop(longScanTimer, 0);
             xTimerStart(shortScanTimer, 0);
-            #ifdef REGISTRYVERBOSE
+            #ifdef AVAILABILITYVERBOSE
                 {
                 TraceScope trace;
                 Register->registerPrintln("switch to Short scan modus for I²C bus");
@@ -143,7 +143,7 @@ void availCheckCallback(TimerHandle_t xTimer) {
             if (xTimerIsTimerActive(longScanTimer) == pdFALSE) {
                 xTimerStop(shortScanTimer, 0);
                 xTimerStart(longScanTimer, 0);
-                #ifdef REGISTRYVERBOSE
+                #ifdef AVAILABILITYVERBOSE
                     {
                     TraceScope trace;
                     Register->registerPrintln("switch to Long scan modus for I²C bus");
