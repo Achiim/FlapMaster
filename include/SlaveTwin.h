@@ -60,7 +60,6 @@ enum TwinCommands {
 
 // Command that will be accepted byTwin
 struct TwinCommand {
-    ClickType     type;                                                         // type of command SINGLE, DOUBLE, LONG
     TwinCommands  twinCommand;                                                  // command to be performed by twin
     int           twinParameter;                                                // parameter for command
     QueueHandle_t responsQueue;                                                 // queue, where result shall be responded

@@ -52,7 +52,7 @@ static constexpr uint32_t REV_MS_MAX = (DEFAULT_REV_MS + 300);                  
 static constexpr uint16_t STEPS_MIN  = (DEFAULT_STEPS_PER_REV - 410);           // 90% of Default (less steps)
 static constexpr uint16_t STEPS_MAX  = (DEFAULT_STEPS_PER_REV + 410);           // 110% of Default  (more steps)
 
-// ETA tuning
+// ETA - Estimated Time of Arrival tuning
 static constexpr uint16_t FIXED_OVERHEAD_MS = 300;                              // start/stop/ramp overhead
 static constexpr uint16_t CAL_EXTRA_MS      = 200;                              // extra fudge for CALIBRATE
 
@@ -116,7 +116,6 @@ void SlaveTwin::readQueue() {
 // ----------------------------
 // create entry queue
 void SlaveTwin::createQueue() {
-    // twinQueue = xQueueCreate(1, sizeof(ClickEvent));                            // Create twin Queue
     twinQueue = xQueueCreate(1, sizeof(TwinCommand));                           // Create twin Queue
 }
 

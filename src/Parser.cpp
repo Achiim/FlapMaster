@@ -184,7 +184,6 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
     cmd.twinCommand   = TWIN_NO_COMMAND;
     cmd.twinParameter = 0;
     cmd.responsQueue  = nullptr;
-    cmd.type          = event.type;                                             // set type of command
 
     switch (event.key) {
         case Key21::KEY_CH_MINUS:
