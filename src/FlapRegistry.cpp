@@ -20,6 +20,7 @@
 #include "MasterPrint.h"
 #include "FlapRegistry.h"
 #include "RtosTasks.h"
+#include "FlapTasks.h"
 #include "SlaveTwin.h"
 #include "i2cMaster.h"
 
@@ -282,6 +283,12 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
         TwinCommand twinCmd;
         twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
         Twin[n]->sendQueue(twinCmd);
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            registerPrintln("send TwinCommand: %s to TWIN", Parser->twinCommandToString(twinCmd.twinCommand));
+            }
+        #endif
 
         return true;                                                            // bootFlag resetted
     } else {
@@ -410,6 +417,12 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         TwinCommand twinCmd;
         twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
         Twin[n]->sendQueue(twinCmd);
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            registerPrintln("send TwinCommand: %s to TWIN", Parser->twinCommandToString(twinCmd.twinCommand));
+            }
+        #endif
 
         #ifdef REGISTRYVERBOSE
             {
@@ -523,6 +536,12 @@ void FlapRegistry::registerUnregistered() {
             twinCmd.twinCommand   = TWIN_NEW_ADDRESS;                           // set command to send base address
             twinCmd.twinParameter = nextFreeAddress;                            // set new base address
             Twin[0]->sendQueue(twinCmd);                                        // send command to Twin[0] to set base address
+            #ifdef REGISTRYVERBOSE
+                {
+                TraceScope trace;                                               // use semaphore to protect this block
+                registerPrintln("send TwinCommand: %s to TWIN", Parser->twinCommandToString(twinCmd.twinCommand));
+                }
+            #endif
             {
                 TraceScope trace;                                               // use semaphore to protect this block
                 #ifdef SCANVERBOSE
