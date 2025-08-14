@@ -124,12 +124,6 @@ void SlaveTwin::createQueue() {
 void SlaveTwin::sendQueue(TwinCommand twinCmd) {
     if (twinQueue != nullptr) {                                                 // if queue exists, send to all registered twin queues
         xQueueOverwrite(twinQueue, &twinCmd);
-        #ifdef TWINVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            twinPrintln("send TwinCommand: %s to slave", Parser->twinCommandToString(twinCmd.twinCommand));
-            }
-        #endif
     } else {
         {
             TraceScope trace;                                                   // use semaphore to protect this block

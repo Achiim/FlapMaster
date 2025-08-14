@@ -539,7 +539,7 @@ void FlapRegistry::registerUnregistered() {
             #ifdef REGISTRYVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block
-                registerPrintln("send TwinCommand: %s to TWIN", Parser->twinCommandToString(twinCmd.twinCommand));
+                registerPrintln("send TwinCommand: %s to TWIN[0]", Parser->twinCommandToString(twinCmd.twinCommand));
                 }
             #endif
             {
