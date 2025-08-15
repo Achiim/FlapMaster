@@ -145,21 +145,28 @@ class SlaveTwin {
     bool waitUntilSlaveReady(uint32_t timeout_ms);                              // wait until slave is ready
     int  countStepsToMove(int from, int to);                                    // return steps to move fom "from" to "to"
 
-    // --- Per-instance state for ETA/ready polling ---
-    bool     _inEtaWait            = false;                                     // true while ETA-based wait is running
+    // --- Per-instance state for AYR/ready polling ---
+    bool     _inAYRwait            = false;                                     // true while AYR-based wait is running
     uint32_t _readyPollGateUntilMs = 0;                                         // next allowed millis() for external ready polls
-    uint16_t _etaPollCount         = 0;                                         // (optional) debug counter for last ETA wait
+    uint16_t _ayrPollCount         = 0;                                         // (optional) debug counter for last AYR wait
+
+    // one tiny bias per long command (ms), initialized to 0
+    int16_t _ayrBiasCalibrateMs = 0;                                            // bias for AYR duration of CALIBRATE
+    int16_t _ayrBiasMoveMs      = 0;                                            // bias for AYR duration of MOVE
+    int16_t _ayrBiasStepMs      = 0;                                            // bias for AYR duration of STEP_MEASURE
 
     // Tunables for external ready-poll throttling (per-instance if you like)
     static constexpr uint16_t GLOBAL_READY_POLL_GAP_MS = 120;
 
-    // Existing helpers (as zuvor vorgeschlagen)
+    // AYR-Limiter helpers
     uint32_t        validMsPerRevolution() const;
     uint16_t        validStepsPerRevolution() const;
     uint32_t        stepsToMs(uint32_t steps) const;
-    uint32_t        estimateLongDurationMs(uint8_t cmd, uint16_t par) const;
-    static uint32_t withSafety(uint32_t eta_ms);
-    bool            waitUntilSlaveReadyETA(uint8_t cmd, uint16_t par, uint32_t timeout_ms);
+    uint32_t        estimateAYRdurationMs(uint8_t cmd, uint16_t par);
+    static uint32_t withSafety(uint32_t ayr_ms);
+    bool            waitUntilYouAreReady(uint8_t cmd, uint16_t par, uint32_t timeout_ms);
+    void            learnAyrBias(uint8_t cmd, int32_t detect_vs_eta_ms);
+    uint32_t        applyAyrBias(uint8_t cmd, uint32_t eta) const;
 
     // ---------------------------
     // I2C Helper

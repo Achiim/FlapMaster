@@ -282,7 +282,7 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
 
         TwinCommand twinCmd;
         twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
-        Twin[n]->sendQueue(twinCmd);
+
         #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block
@@ -290,7 +290,9 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
             }
         #endif
 
-        return true;                                                            // bootFlag resetted
+        Twin[n]->sendQueue(twinCmd);                                            // send command to Twin[n] to calibrate
+        vTaskDelay(pdMS_TO_TICKS(4000));                                        // Delay for 4s
+        return true;                                                            // bootFlag resetted and calibration started
     } else {
         #ifdef SCANVERBOSE
             {

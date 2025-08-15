@@ -42,28 +42,21 @@
 // generate for each slave one twin
 SlaveTwin* Twin[numberOfTwins];
 
+// READY limiter (to limit ARE YOU READY? requests)
+static constexpr uint16_t READY_WINDOW_MS = 500;                                // length of fast-poll window before AYR
+static constexpr uint16_t READY_POLL_MS   = 100;                                // poll period inside fast window
+
 // -------- tuning / defaults ---------------
 static constexpr uint32_t DEFAULT_REV_MS        = DEFAULT_SPEED;                // ~3 s pro U
 static constexpr uint16_t DEFAULT_STEPS_PER_REV = DEFAULT_STEPS;                // z. B. 4096
 
 // Plausibility checks
 static constexpr uint32_t REV_MS_MIN = (DEFAULT_REV_MS - 300);                  // 90% of Default (quick)
-static constexpr uint32_t REV_MS_MAX = (DEFAULT_REV_MS + 300);                  // 110% of Default  (slow)
+static constexpr uint32_t REV_MS_MAX = (DEFAULT_REV_MS + 300);                  // 110% of Default (slow)
 static constexpr uint16_t STEPS_MIN  = (DEFAULT_STEPS_PER_REV - 410);           // 90% of Default (less steps)
-static constexpr uint16_t STEPS_MAX  = (DEFAULT_STEPS_PER_REV + 410);           // 110% of Default  (more steps)
+static constexpr uint16_t STEPS_MAX  = (DEFAULT_STEPS_PER_REV + 410);           // 110% of Default (more steps)
 
-// ETA - Estimated Time of Arrival tuning
-static constexpr uint16_t FIXED_OVERHEAD_MS = 300;                              // start/stop/ramp overhead
-static constexpr uint16_t CAL_EXTRA_MS      = 200;                              // extra fudge for CALIBRATE
-
-// We only poll in the last ~80..150 ms before ETA
-static constexpr uint8_t  QUIET_PCT_NUM      = 97;                              // quiet until ~97% of ETA
-static constexpr uint8_t  QUIET_PCT_DEN      = 100;
-static constexpr uint16_t FAST_WINDOW_MIN_MS = 80;
-static constexpr uint16_t FAST_WINDOW_MAX_MS = 150;
-
-static constexpr uint16_t FAST_INTERVAL_MS      = 25;                           // fast poll interval (ms)
-static constexpr uint16_t MIN_QUIET_MS          = 20;                           // never poll earlier than this
+// AYR - Estimated Time of Arrival tuning
 static constexpr uint16_t STEP_MEASURE_DELAY_MS = 1000;                         // delay between step measurements
 
 // ---------------------------------
@@ -103,7 +96,7 @@ void SlaveTwin::readQueue() {
             #ifdef TWINVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block
-                twinPrintln("(readQueue) Twin Command received: %s", Parser->twinCommandToString(twinCmd.twinCommand));
+                twinPrintln("Twin-Command received: %s", Parser->twinCommandToString(twinCmd.twinCommand));
                 }
             #endif
             if (twinCmd.twinCommand != TWIN_NO_COMMAND) {
@@ -140,41 +133,41 @@ void SlaveTwin::twinControl(TwinCommand twinCmd) {
     int          param = twinCmd.twinParameter;                                 // get parameter
     switch (cmd) {
         case TWIN_STEP_MEASUREMENT:
-            logAndRun("Translate to I2C comands Step Measurement...", [=] { stepMeasurement(); });
+            logAndRun("Translate to I2C command Step Measurement...", [=] { stepMeasurement(); });
             break;
         case TWIN_CALIBRATION:
-            logAndRun("Translate to I2C comands Calibration...", [=] { calibration(); });
+            logAndRun("Translate to I2C command Calibration...", [=] { calibration(); });
             break;
         case TWIN_SPEED_MEASUREMENT:
-            logAndRun("Translate to I2C comands Speed Measurement...", [=] { speedMeasurement(); });
+            logAndRun("Translate to I2C command Speed Measurement...", [=] { speedMeasurement(); });
             break;
         case TWIN_PREV_STEP:
-            logAndRun("Translate to I2C comands Prev Steps...", [=] { prevSteps(); });
+            logAndRun("Translate to I2C command Prev Steps...", [=] { prevSteps(); });
             break;
         case TWIN_NEXT_STEP:
-            logAndRun("Translate to I2C comands Next Steps...", [=] { nextSteps(); });
+            logAndRun("Translate to I2C command Next Steps...", [=] { nextSteps(); });
             break;
         case TWIN_SET_OFFSET:
-            logAndRun("Translate to I2C comands Save Offset...", [=] { setOffset(); });
+            logAndRun("Translate to I2C command Save Offset...", [=] { setOffset(); });
             break;
         case TWIN_PREV_FLAP:
-            logAndRun("Translate to I2C comands Previous Flap...", [=] { prevFlap(); });
+            logAndRun("Translate to I2C command Previous Flap...", [=] { prevFlap(); });
             break;
         case TWIN_NEXT_FLAP:
-            logAndRun("Translate to I2C comands Next Flap...", [=] { nextFlap(); });
+            logAndRun("Translate to I2C command Next Flap...", [=] { nextFlap(); });
             break;
         case TWIN_SENSOR_CHECK:
-            logAndRun("Translate to I2C comands Sensor Check...", [=] { sensorCheck(); });
+            logAndRun("Translate to I2C command Sensor Check...", [=] { sensorCheck(); });
             break;
         case TWIN_RESET:
-            logAndRun("Translate to I2C comands RESET to Slave...", [=] { reset(); });
+            logAndRun("Translate to I2C command RESET to Slave...", [=] { reset(); });
             break;
         case TWIN_NEW_ADDRESS:
-            logAndRun("Translate to I2C comands NEW ADDRESS to Slave...", [=] { setNewAddress(param); });
+            logAndRun("Translate to I2C command NEW ADDRESS to Slave...", [=] { setNewAddress(param); });
             break;
 
         case TWIN_SHOW_FLAP: {
-            std::string msg = "Translate to I2C comands ";
+            std::string msg = "Translate to I2C command Show Flap / MOVE ";
             msg += param;
             msg += "...";
             logAndRun(msg.c_str(), [=] { showFlap(param); });
@@ -185,7 +178,7 @@ void SlaveTwin::twinControl(TwinCommand twinCmd) {
             #ifdef ERRORVERBOSE
                 {
                 TraceScope trace;
-                twinPrint("Unknown twin command: ");
+                twinPrint("Unknown Twin-Command: ");
                 Serial.println(static_cast<int>(cmd));
                 }
             #endif
@@ -205,8 +198,9 @@ void SlaveTwin::logAndRun(const char* message, std::function<void()> action) {
     action();
 }
 
-// ---------------------------------------
-// --------- MOVE -----------------
+// --------------------------------------------
+// --------- SHOW_FLAP / MOVE -----------------
+// --------------------------------------------
 // show selected digit
 void SlaveTwin::showFlap(int digit) {
     targetFlapNumber = digit;                                                   // remember requested target flap
@@ -235,16 +229,16 @@ void SlaveTwin::showFlap(int digit) {
     if (steps_i <= 0)
         return;                                                                 // nothing to do
 
-    const uint16_t steps = (steps_i > 0xFFFF) ? 0xFFFF                          // clamp to 16-bit payload, because we use uint16_t
-                                              : static_cast<uint16_t>(steps_i); // for I2C command
+    const uint16_t steps = (steps_i > 0xFFFF) ? 0xFFFF                          // clamp to 16-bit, because we use uint16_t for I2C command
+                                              : static_cast<uint16_t>(steps_i);
 
     i2cLongCommand(i2cCommandParameter(MOVE, steps));                           // send LONG command to slave
     _flapNumber = targetFlapNumber;                                             // optimistic local update (no rollback by design)
 
-    const uint32_t eta_ms     = estimateLongDurationMs(MOVE, steps);            // estimate duration for MOVE based on speed/steps
-    const uint32_t timeout_ms = withSafety(eta_ms);                             // add safety margin (e.g. +25%, min/max caps)
+    const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, steps);             // estimate duration for MOVE based on speed/steps
+    const uint32_t timeout_ms = withSafety(ayr_ms);                             // add safety margin (e.g. +25%, min/max caps)
 
-    if (!waitUntilSlaveReadyETA(MOVE, steps, timeout_ms)) {                     // quiet-until-ETA, then fast-poll ARE_YOU_READY
+    if (!waitUntilYouAreReady(MOVE, steps, timeout_ms)) {                       // quiet-until-AYR, then fast-poll ARE_YOU_READY
     #ifdef ERRORVERBOSE
         twinPrintln("showFlap failed or timed out on slave 0x%02X", _slaveAddress);
     #endif
@@ -254,22 +248,22 @@ void SlaveTwin::showFlap(int digit) {
     #ifdef TWINVERBOSE
         twinPrintln("request result of showFlap");
     #endif
-    getFullStateOfSlave();                                                      // updates _slaveReady (ready, task, boot, sensor, position)
+    getFullStateOfSlave();                                                      // get result of move
     synchSlaveRegistry();                                                       // update registry with confirmed state
 }
 
-// ----------------------------
-// ---- CALIBRATE ----
+// --------------------------------------------
+// --------- CALIBRATIION ---------------------
+// --------------------------------------------
 void SlaveTwin::calibration() {
-    const uint16_t steps_to_use = validStepsPerRevolution();                    // 1) Parameter wählen: gemessen & plausibel, sonst Default (STEPS_PER_ROTATION)
-    i2cLongCommand(i2cCommandParameter(CALIBRATE, steps_to_use));               // 2) LONG senden
-    _flapNumber = 0;                                                            // nach Kalibrierung auf 0
+    const uint16_t steps_to_use = validStepsPerRevolution();                    // 1) validate max. steps for calibration
+    i2cLongCommand(i2cCommandParameter(CALIBRATE, steps_to_use));               // 2) send LONG
+    _flapNumber = 0;                                                            // we are at Zero after that
 
-    const uint32_t eta_ms =
-        estimateLongDurationMs(CALIBRATE, steps_to_use);                        // 3) ETA + Timeout berechnen und „ruhig bis kurz vor ETA“, dann Fast-Poll
-    const uint32_t timeout_ms = withSafety(eta_ms);                             // z. B. +25% min 500 ms max 5 s
+    const uint32_t ayr_ms     = estimateAYRdurationMs(CALIBRATE, steps_to_use); // 3) estimate duration for CALIBRATE based on speed/steps
+    const uint32_t timeout_ms = withSafety(ayr_ms);                             // z. B. +25% min 500 ms max 5 s
 
-    if (!waitUntilSlaveReadyETA(CALIBRATE, steps_to_use, timeout_ms)) {
+    if (!waitUntilYouAreReady(CALIBRATE, steps_to_use, timeout_ms)) {
         #ifdef ERRORVERBOSE
             twinPrintln("Calibration failed or timed out on slave 0x%02X", _slaveAddress);
         #endif
@@ -279,15 +273,21 @@ void SlaveTwin::calibration() {
     #ifdef TWINVERBOSE
         twinPrintln("request result of calibration");
     #endif
-    askSlaveAboutParameter(_parameter);                                         // zieht neue Messwerte (speed/steps)
-    synchSlaveRegistry();                                                       // Registry aktualisieren
+    getFullStateOfSlave();                                                      // get result of calibration
+    synchSlaveRegistry();                                                       // take over confirmed values to registry
 }
 
-// ----------------------------
+// --------------------------------------------
+// --------- STEP MEASUREMENT -----------------
+// --------------------------------------------
 void SlaveTwin::stepMeasurement() {
-    i2cLongCommand(i2cCommandParameter(STEP_MEASURE, 0));
+    i2cLongCommand(i2cCommandParameter(STEP_MEASURE, 0));                       // STEP_MEASURE does not limit the steps, so we use 0
     _flapNumber = 0;                                                            // we stand at Zero after that
-    if (!waitUntilSlaveReady(15 * _parameter.speed)) {                          // wait for slave to get ready; maximum time of 15 revolutions
+
+    const uint32_t ayr_ms     = estimateAYRdurationMs(STEP_MEASURE, 0);         // estimate duration for STEP MEASURE based on hall sensor
+    const uint32_t timeout_ms = withSafety(ayr_ms);                             // z. B. +25% min 500 ms max 5 s
+
+    if (!waitUntilYouAreReady(STEP_MEASURE, 0, timeout_ms)) {                   // wait for slave to get ready;
         {
             #ifdef ERRORVERBOSE
                 twinPrintln("Step measurement failed or timed out on slave 0x%02X", _slaveAddress);
@@ -298,33 +298,42 @@ void SlaveTwin::stepMeasurement() {
     #ifdef TWINVERBOSE
         twinPrintln("request result of step measurement");
     #endif
-    askSlaveAboutParameter(_parameter);                                         // get result of measurement
+
+    readSteps(_parameter.steps);                                                // read new steps from slave
+    getFullStateOfSlave();                                                      // get result of step measurement
     synchSlaveRegistry();                                                       // take over measured value to registry
 }
 
-// ----------------------------
+// --------------------------------------------
+// -------- SPEED MEASUREMENT -----------------
+// --------------------------------------------
 void SlaveTwin::speedMeasurement() {
-    uint16_t stepsToCheck = (_parameter.steps > 0) ? _parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
+    const uint16_t steps_to_use = validStepsPerRevolution();                    // 1) validate max. steps for speed measurement
     i2cLongCommand(i2cCommandParameter(SPEED_MEASURE, _parameter.steps));
-    if (!waitUntilSlaveReady(2 * _parameter.speed)) {                           // wait for slave to get ready; maximum time of 2 revolutions
-        {
-            #ifdef ERRORVERBOSE
-                twinPrintln("Speed measurement failed or timed out on slave 0x%02X", _slaveAddress);
-            #endif
-            return;
-        }
+
+    const uint32_t ayr_ms     = estimateAYRdurationMs(SPEED_MEASURE, steps_to_use); // estimate duration for SPEED MEASURE based on hall sensor
+    const uint32_t timeout_ms = withSafety(ayr_ms);                             // z. B. +25% min 500 ms max 5 s
+
+    if (!waitUntilYouAreReady(SPEED_MEASURE, steps_to_use, timeout_ms)) {
+        #ifdef ERRORVERBOSE
+            twinPrintln("Speed measurement failed or timed out on slave 0x%02X", _slaveAddress);
+        #endif
+        return;
     }
     #ifdef TWINVERBOSE
         twinPrintln("request result of speed measurement");
     #endif
-    askSlaveAboutParameter(_parameter);                                         // get result of measurement
+    readSpeed(_parameter.speed);                                                // get new speed from slave
+    getFullStateOfSlave();                                                      // get result of measurement
     synchSlaveRegistry();                                                       // take over measured value to registry
 }
 
-// ----------------------------
+// --------------------------------------------
+// ------------ SENSOR CHECK ------------------
+// --------------------------------------------
 void SlaveTwin::sensorCheck() {
     uint16_t stepsToCheck = (_parameter.steps > 0) ? _parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
-    i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, _parameter.steps));        // do sensor check
+    i2cLongCommand(i2cCommandParameter(SENSOR_CHECK, stepsToCheck));            // do sensor check
     if (!waitUntilSlaveReady(2 * _parameter.speed)) {                           // wait for slave to get ready; maximum time of 2 revolutions
         {
             #ifdef ERRORVERBOSE
@@ -336,11 +345,13 @@ void SlaveTwin::sensorCheck() {
     #ifdef TWINVERBOSE
         twinPrintln("request result of sensor check");
     #endif
-    askSlaveAboutParameter(_parameter);                                         // get result of sensor
+    getFullStateOfSlave();                                                      // get result of sensor check
     synchSlaveRegistry();                                                       // take over measured value to registry
 }
 
-// ----------------------------
+// --------------------------------------------
+// -------------- NEXT FLAP -------------------
+// --------------------------------------------
 void SlaveTwin::nextFlap() {
     if (_numberOfFlaps > 0) {
         targetFlapNumber = _flapNumber + 1;
@@ -350,19 +361,22 @@ void SlaveTwin::nextFlap() {
         if (steps > 0) {
             i2cLongCommand(i2cCommandParameter(MOVE, steps));
             _flapNumber = targetFlapNumber;
-            if (!waitUntilSlaveReady(_parameter.speed)) {                       // wait for slave to get ready; maximum time 1/2 revelution
-                {
-                    #ifdef ERRORVERBOSE
-                        twinPrintln("Next Flap failed or timed out on slave 0x%02X", _slaveAddress);
-                    #endif
-                    return;
-                }
-            }
-            #ifdef TWINVERBOSE
-                twinPrintln("request result of next flap");
+
+            const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, steps);     // estimate duration for MOVE based on speed/steps
+            const uint32_t timeout_ms = withSafety(ayr_ms);                     // add safety margin (e.g. +25%, min/max caps)
+
+            if (!waitUntilYouAreReady(MOVE, steps, timeout_ms)) {               // quiet-until-AYR, then fast-poll ARE_YOU_READY
+            #ifdef ERRORVERBOSE
+                twinPrintln("nextFlap failed or timed out on slave 0x%02X", _slaveAddress);
             #endif
-            askSlaveAboutParameter(_parameter);                                 // get result of next flap
-            synchSlaveRegistry();                                               // take over position to registry
+                return;                                                         // no registry sync on failure
+            }
+
+            #ifdef TWINVERBOSE
+                twinPrintln("request result of nextFlap");
+            #endif
+            getFullStateOfSlave();                                              // get result of move
+            synchSlaveRegistry();                                               // update registry with confirmed state
         }
     } else {
         #ifdef ERRORVERBOSE
@@ -371,7 +385,9 @@ void SlaveTwin::nextFlap() {
     }
 }
 
-// ----------------------------
+// --------------------------------------------
+// -------------- PREV FLAP -------------------
+// --------------------------------------------
 void SlaveTwin::prevFlap() {
     if (_numberOfFlaps > 0) {
         targetFlapNumber = _flapNumber - 1;
@@ -381,19 +397,22 @@ void SlaveTwin::prevFlap() {
         if (steps > 0) {
             i2cLongCommand(i2cCommandParameter(MOVE, steps));
             _flapNumber = targetFlapNumber;
-            if (!waitUntilSlaveReady(2 * _parameter.speed)) {                   // wait for slave to get ready; maximum time of2 revolutions
-                {
-                    #ifdef ERRORVERBOSE
-                        twinPrintln("Previous Flap failed or timed out on slave 0x%02X", _slaveAddress);
-                    #endif
-                    return;
-                }
-            }
-            #ifdef TWINVERBOSE
-                twinPrintln("request result of previous flap");
+
+            const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, steps);     // estimate duration for MOVE based on speed/steps
+            const uint32_t timeout_ms = withSafety(ayr_ms);                     // add safety margin (e.g. +25%, min/max caps)
+
+            if (!waitUntilYouAreReady(MOVE, steps, timeout_ms)) {               // quiet-until-AYR, then fast-poll ARE_YOU_READY
+            #ifdef ERRORVERBOSE
+                twinPrintln("prevFlap failed or timed out on slave 0x%02X", _slaveAddress);
             #endif
-            askSlaveAboutParameter(_parameter);                                 // get result of prev flap
-            synchSlaveRegistry();                                               // take over position to registry
+                return;                                                         // no registry sync on failure
+            }
+
+            #ifdef TWINVERBOSE
+                twinPrintln("request result of prevFlap");
+            #endif
+            getFullStateOfSlave();                                              // get result of move
+            synchSlaveRegistry();                                               // update registry with confirmed state
         }
     } else {
         #ifdef ERRORVERBOSE
@@ -832,7 +851,7 @@ void SlaveTwin::logErr(const char* msg) {
 bool SlaveTwin::readSerialNumber(uint32_t& outSerial) {
     uint8_t ser[4] = {0, 0, 0, 0};
     if (i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser)) == ESP_OK) {
-        logHexBytes("slave answered for CMD_GET_SERIAL: ", ser, sizeof(ser));
+        // logHexBytes("slave answered for CMD_GET_SERIAL: ", ser, sizeof(ser));
         outSerial = (uint32_t)ser[0] | ((uint32_t)ser[1] << 8) | ((uint32_t)ser[2] << 16) | ((uint32_t)ser[3] << 24);
         logInfo("slave answered for parameter.serialnumber = ", formatSerialNumber(outSerial));
         return true;
@@ -844,7 +863,7 @@ bool SlaveTwin::readSerialNumber(uint32_t& outSerial) {
 bool SlaveTwin::readOffset(uint16_t& outOffset) {
     uint8_t off[2] = {0, 0};
     if (i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off)) == ESP_OK) {
-        logHexBytes("slave answered for CMD_GET_OFFSET: ", off, sizeof(off));
+        // logHexBytes("slave answered for CMD_GET_OFFSET: ", off, sizeof(off));
         outOffset = (uint16_t)((uint16_t)off[1] << 8 | off[0]);
         logInfoU16("slave answered for parameter.offset = ", outOffset);
         return true;
@@ -942,7 +961,7 @@ Key21 SlaveTwin::ir2Key21(uint64_t ircode) {
         return Key21::NONE;
     }
 
-    key = Control.decodeIR(ircode);
+    key = Control->decodeIR(ircode);
     if ((int)key < (int)Key21::NONE || (int)key > (int)Key21::UNKNOWN) {
         _lastTwinTime = now;
         _lastTwinCode = ircode;
@@ -958,7 +977,7 @@ Key21 SlaveTwin::ir2Key21(uint64_t ircode) {
             Serial.print(" (0x");
             Serial.print(ircode, HEX);
             Serial.print(") - ");
-            Serial.println(Control.key21ToString(key));                         // make it visable
+            Serial.println(Control->key21ToString(key));                        // make it visable
             }
         #endif
         _lastTwinTime = now;
@@ -1248,8 +1267,8 @@ void SlaveTwin::systemHalt(const char* reason, int blinkCode) {
 // ----------------------------
 
 bool SlaveTwin::maybePollReady(bool& outReady) {
-    // If an ETA wait is active, do not poll from outside.
-    if (_inEtaWait) {
+    // If an AYR wait is active, do not poll from outside.
+    if (_inAYRwait) {
         outReady = false;
         return false;
     }
@@ -1269,107 +1288,229 @@ bool SlaveTwin::maybePollReady(bool& outReady) {
     return true;                                                                // we touched the bus
 }
 // ----------------------------
-bool SlaveTwin::waitUntilSlaveReadyETA(uint8_t cmd, uint16_t par, uint32_t timeout_ms) {
-    const uint32_t eta_ms   = estimateLongDurationMs(cmd, par);                 // predicted duration
-    const uint32_t raw_win  = eta_ms / 8u;                                      // ~12.5% of ETA
-    const uint32_t window   = (raw_win < 60u) ? 60u : (raw_win > 150u ? 150u : raw_win); // clamp 60..150 ms
-    const uint32_t tail_ms  = 250u;                                             // small grace at the end
-    const uint32_t start_ms = millis();                                         // t0
+// Wait until the slave becomes READY using Estimate Time Arrival AYR-based quiet-then-fast polling.
+// - cmd/param: the long command we just sent (used to estimate duration)
+// - timeout_ms: absolute budget; function never sleeps beyond this
+// Returns:
+// true - if READY was observed within the budget,
+// false - on timeout.
+bool SlaveTwin::waitUntilYouAreReady(uint8_t longCmd, uint16_t param, uint32_t timeout_ms) {
+    const uint32_t t0     = millis();
+    const bool     isMove = (longCmd == MOVE);
 
-    const uint32_t quiet_ms = (eta_ms > window) ? (eta_ms - window) : 0u;       // no polling before this
-    if (quiet_ms > 0u) {
-        const uint32_t cap = (quiet_ms > timeout_ms) ? timeout_ms : quiet_ms;   // respect overall timeout
-        vTaskDelay(pdMS_TO_TICKS(cap));                                         // sleep until near ETA
-        if ((millis() - start_ms) >= timeout_ms)
-            return false;                                                       // timed out
+    const uint32_t eta_ms   = estimateAYRdurationMs(longCmd, param);
+    auto           clampU32 = [](uint32_t v, uint32_t lo, uint32_t hi) -> uint32_t { return (v < lo) ? lo : (v > hi) ? hi : v; };
+
+    uint32_t fast_window_ms;
+    uint32_t poll_gap_ms;
+
+    if (isMove) {
+        // MOVE: unverändert "snappy"
+        fast_window_ms = clampU32(eta_ms / 8U, 120U, 200U);
+        poll_gap_ms    = clampU32(eta_ms / 35U, 25U, 50U);
+    } else {
+        // Alle anderen LONGs: bus-schonend
+        fast_window_ms = clampU32(eta_ms / 6U, 200U, 600U);
+        poll_gap_ms    = clampU32(eta_ms / 16U, 120U, 350U);
     }
 
-    const uint8_t  polls_core = 4;                                              // max core polls
-    const uint32_t slice_core = (window / polls_core) ? (window / polls_core) : 1u; // even spacing
+    const uint32_t quiet_ms        = (eta_ms > fast_window_ms) ? (eta_ms - fast_window_ms) : 0U;
+    const uint32_t window_start_ms = t0 + quiet_ms;
 
-    for (uint8_t i = 0; i < polls_core; ++i) {
+    // Bis zum Window-Start schlafen (in kleinen Chunks, um sauber abbrechen zu können)
+    while (millis() < window_start_ms && (millis() - t0) < timeout_ms) {
+        const uint32_t now    = millis();
+        const uint32_t remain = (window_start_ms > now) ? (window_start_ms - now) : 0U;
+        if (remain == 0)
+            break;
+        const uint32_t chunk = (remain > 25U) ? 25U : remain;
+        vTaskDelay(pdMS_TO_TICKS(chunk));
+    }
+
+    // Ab hier: absolut getaktet – niemals schneller als poll_gap_ms
+    uint32_t next_poll_due_ms   = window_start_ms;                              // erste Abfrage exakt zum Fensterbeginn
+    uint32_t polls              = 0;
+    uint32_t firstPollTimestamp = 0;
+
+    while ((millis() - t0) < timeout_ms) {
+        uint32_t now = millis();
+        if (now < next_poll_due_ms) {
+            vTaskDelay(pdMS_TO_TICKS(next_poll_due_ms - now));
+            now = millis();
+        }
+
+        if (firstPollTimestamp == 0)
+            firstPollTimestamp = now;
+
         if (isSlaveReady()) {
-            getFullStateOfSlave();
+            const uint32_t ts_ready = millis();
+
+            getFullStateOfSlave();                                              // bestehendes Verhalten
+
+            #ifdef TWINVERBOSE
+                const int32_t  first_vs_window_ms = (int32_t)firstPollTimestamp - (int32_t)window_start_ms;
+                const int32_t  detect_vs_eta_ms   = (int32_t)(ts_ready - t0) - (int32_t)eta_ms;
+                const uint32_t span_ms            = ts_ready - firstPollTimestamp;
+                twinPrintln("AYR stats: polls=%lu, firstPoll=%ld ms vs window, detect=%ld ms vs ETA, span=%lu ms", (unsigned long)polls,
+                (long)first_vs_window_ms, (long)detect_vs_eta_ms, (unsigned long)span_ms);
+            #endif
             return true;
-        }                                                                       // ready → fetch state once
-        if ((millis() - start_ms) >= timeout_ms)
-            return false;                                                       // timed out
-        const uint32_t spent = millis() - start_ms;                             // elapsed so far
-        if (spent + slice_core > timeout_ms)
-            break;                                                              // avoid overshoot
-        vTaskDelay(pdMS_TO_TICKS(slice_core));                                  // wait to next slot
+        }
+
+        ++polls;
+        // nächstes Polling strikt in der Zukunft terminieren
+        next_poll_due_ms = millis() + poll_gap_ms;
     }
 
-    const uint8_t  polls_tail = 2;                                              // tiny tail
-    const uint32_t slice_tail = tail_ms / (polls_tail ? polls_tail : 1u);       // spacing in tail
-    for (uint8_t i = 0; i < polls_tail; ++i) {
-        if (isSlaveReady()) {
-            getFullStateOfSlave();
-            return true;
-        }                                                                       // caught right after ETA
-        if ((millis() - start_ms) >= timeout_ms)
-            return false;                                                       // timed out
-        vTaskDelay(pdMS_TO_TICKS(slice_tail));                                  // short wait
-    }
-
-    return isSlaveReady();                                                      // final check (no extra delay)
+    #ifdef TWINVERBOSE
+        twinPrintln("AYR-wait TIMEOUT after polls=%lu", (unsigned long)polls);
+    #endif
+    return false;
 }
 
 // ---- plausibility-checked getters (use measured values if sane) ----------
 uint32_t SlaveTwin::validMsPerRevolution() const {
-    const uint32_t ms = _parameter.speed;                                       // measured (ms per revolution)
-    return (ms >= REV_MS_MIN && ms <= REV_MS_MAX) ? ms : DEFAULT_REV_MS;
+    const uint32_t v = _parameter.speed ? _parameter.speed : DEFAULT_REV_MS;    // measured or default
+    if (v < REV_MS_MIN || v > REV_MS_MAX)
+        return DEFAULT_REV_MS;                                                  // clamp to default on out-of-range
+    return v;
 }
+
 uint16_t SlaveTwin::validStepsPerRevolution() const {
-    const uint16_t s = _parameter.steps;                                        // measured (steps per revolution)
-    return (s >= STEPS_MIN && s <= STEPS_MAX) ? s : DEFAULT_STEPS_PER_REV;
+    const uint16_t s = _parameter.steps ? _parameter.steps : DEFAULT_STEPS_PER_REV; // measured or default
+    if (s < STEPS_MIN || s > STEPS_MAX)
+        return DEFAULT_STEPS_PER_REV;                                           // clamp to default on out-of-range
+    return s;
 }
 
 // Steps -> ms (rounded), integer math only
 uint32_t SlaveTwin::stepsToMs(uint32_t steps) const {
     const uint32_t rev_ms = validMsPerRevolution();
     const uint16_t spr    = validStepsPerRevolution();
-    const uint64_t num    = (uint64_t)steps * (uint64_t)rev_ms + (spr / 2);
-    return (uint32_t)(num / spr);
+    const uint64_t num    = (uint64_t)steps * (uint64_t)rev_ms + (spr / 2);     // +0.5 for rounding
+    return (spr ? (uint32_t)(num / spr) : rev_ms);                              // guard if spr==0
 }
 
+// -----------------------------
 // Predict LONG duration in ms (command-specific)
-uint32_t SlaveTwin::estimateLongDurationMs(uint8_t cmd, uint16_t par) const {
-    const uint32_t rev_ms = validMsPerRevolution();                             // ms per revolution (plausibilized)
-    const uint16_t rev_st = validStepsPerRevolution();                          // steps per revolution (plausibilized)
+// Returns command-specific ETA in ms (pure model; no window logic here)
+// ---------------------------------------
+// ETA-Schätzer für AYR-Limiter (Command-spezifisch)
+uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t cmd, uint16_t param) {
+    const uint32_t rev_ms = validMsPerRevolution();
+    const uint16_t spr    = validStepsPerRevolution();
+
+    auto clampU32 = [](uint32_t v, uint32_t lo, uint32_t hi) -> uint32_t { return (v < lo) ? lo : (v > hi) ? hi : v; };
+
+    auto ms_for_steps = [&](uint32_t steps) -> uint32_t {
+        const uint64_t num = (uint64_t)steps * rev_ms + spr / 2;
+        return (uint32_t)(num / spr);
+    };
+
+    auto shortest_delta = [&](uint16_t cur, uint16_t tgt) -> uint16_t {
+        uint16_t diff = (cur > tgt) ? (cur - tgt) : (tgt - cur);
+        if (diff >= spr)
+            diff %= spr;
+        return (diff > (uint16_t)(spr - diff)) ? (uint16_t)(spr - diff) : diff;
+    };
 
     switch (cmd) {
         case MOVE: {
-            const uint32_t start_ms  = 20;                                      // I2C + dispatch overhead
-            const uint32_t settle_ms = 15;                                      // small mechanical settle
-            const uint32_t denom     = (rev_st ? rev_st : 1);                   // guard division by zero
-            const uint32_t move_ms   = (uint64_t)par * rev_ms / denom;          // scale by steps
-            return start_ms + move_ms + settle_ms;                              // predicted duration
+            const uint16_t cur   = _slaveReady.position;                        // aktueller Steps-Stand aus Registry
+            const uint16_t tgt   = param;                                       // Zielposition in Steps
+            const uint16_t delta = shortest_delta(cur, tgt);
+            const uint32_t base  = ms_for_steps(delta);
+
+            const uint32_t overhead = (delta < 600U) ? 40U : (delta < 1600U) ? 120U : 220U;
+
+            int32_t eta = (int32_t)base + (int32_t)overhead;
+
+            // per-Slave MOVE-Bias
+            eta += (_slaveAddress == 0x56) ? 120 : -80;
+
+            return (eta > 0) ? (uint32_t)eta : 0U;
         }
-        case MOVE_IN:
-        case MOVE_OUT:
-        case SPEED_MEASURE:
-            return rev_ms + FIXED_OVERHEAD_MS;                                  // ~1 revolution
-        case CALIBRATE:
-            return rev_ms + FIXED_OVERHEAD_MS + CAL_EXTRA_MS;                   // 1 rev + fudge
+        case CALIBRATE: {
+            // ≈ 1 U + 1000 ms settle; typisch ~3.8 s @ ~2.8 s/U
+            // Clamp hält die ETA eng genug fürs Fast-Window, ohne zu früh zu pollen.
+            const uint32_t eta = rev_ms + 1000U;
+            return clampU32(eta, rev_ms + 850U, rev_ms + 1400U);
+        }
+        case SPEED_MEASURE: {
+            int32_t eta = (int32_t)rev_ms + 250;
+            eta += (_slaveAddress == 0x56) ? 200 : 150;
+            return (eta > 0) ? (uint32_t)eta : 0U;
+        }
         case STEP_MEASURE: {
-            // Per measurement: in(N) + out(N) + in(N) ≈ 3 rev + 1 s delay
-            const uint32_t perMeasure = 3U * rev_ms + STEP_MEASURE_DELAY_MS;
-            return (uint32_t)numberOfMeasurement * perMeasure + FIXED_OVERHEAD_MS;
+            int32_t eta = (int32_t)((uint64_t)rev_ms * 103ULL / 10ULL) + 400;   // ≈10.3U
+            eta += (_slaveAddress == 0x56) ? 1800 : 4200;
+            return (eta > 0) ? (uint32_t)eta : 0U;
         }
-        case SENSOR_CHECK:
-            return (rev_ms * 8U) / 5U + FIXED_OVERHEAD_MS;                      // ≈1.6 rev
-        case SET_SPEED:
-        case SET_OFFSET:
-            return 50;                                                          // near-immediate
+        case SENSOR_CHECK: {
+            int32_t eta = (int32_t)rev_ms + 200;
+            eta += 150;                                                         // beide gleich starten
+            return (eta > 0) ? (uint32_t)eta : 0U;
+        }
         default:
-            return rev_ms + 2U * FAST_WINDOW_MIN_MS;                            // conservative
+            return rev_ms + 250;
     }
 }
 
-// Add a safety margin to ETA (+25%, min 500 ms, max 5 s)
-uint32_t SlaveTwin::withSafety(uint32_t eta_ms) {
-    const uint32_t pct = (eta_ms * 25U) / 100U;
+// Add a safety margin to AYR (+25%, min 500 ms, max 5 s)
+uint32_t SlaveTwin::withSafety(uint32_t ayr_ms) {
+    const uint32_t pct = (ayr_ms * 25U) / 100U;
     const uint32_t add = (pct < 500U) ? 500U : (pct > 5000U ? 5000U : pct);
-    return eta_ms + add;
+    return ayr_ms + add;
+}
+
+uint32_t SlaveTwin::applyAyrBias(uint8_t cmd, uint32_t eta) const {
+    int16_t bias = 0;
+    switch (cmd) {
+        case CALIBRATE:
+            bias = _ayrBiasCalibrateMs;
+            break;
+        case MOVE:
+            bias = _ayrBiasMoveMs;
+            break;
+        case STEP_MEASURE:
+            bias = _ayrBiasStepMs;
+            break;
+        default:
+            bias = 0;
+            break;
+    }
+    // clamp bias to ±800 ms to avoid runaway
+    if (bias < -800)
+        bias = -800;
+    if (bias > 800)
+        bias = 800;
+
+    int32_t eta_biased = (int32_t)eta + (int32_t)bias;
+    if (eta_biased < 100)
+        eta_biased = 100;                                                       // never below 100 ms
+    return (uint32_t)eta_biased;
+}
+
+void SlaveTwin::learnAyrBias(uint8_t cmd, int32_t detect_vs_eta_ms) {
+    // simple EWMA step: bias := bias + detect/4, clamped
+    int16_t* slot = nullptr;
+    switch (cmd) {
+        case CALIBRATE:
+            slot = &_ayrBiasCalibrateMs;
+            break;
+        case MOVE:
+            slot = &_ayrBiasMoveMs;
+            break;
+        case STEP_MEASURE:
+            slot = &_ayrBiasStepMs;
+            break;
+        default:
+            return;
+    }
+    int32_t upd = (int32_t)(*slot) + (detect_vs_eta_ms / 4);                    // sanft, stabil
+    if (upd < -800)
+        upd = -800;
+    if (upd > 800)
+        upd = 800;
+    *slot = (int16_t)upd;
 }
