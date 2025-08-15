@@ -35,8 +35,8 @@ void ParserClass::dispatchToTwins() {
     #ifdef PARSERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        parserPrintln("final decision ClickEvent.type: %s", Control.clickTypeToString(_receivedEvent.type));
-        parserPrintln("final decision Received Key21: %s", Control.key21ToString(_receivedEvent.key));
+        parserPrintln("final decision ClickEvent.type: %s", Control->clickTypeToString(_receivedEvent.type));
+        parserPrintln("final decision Received Key21: %s", Control->key21ToString(_receivedEvent.key));
         }
     #endif
 
@@ -46,7 +46,7 @@ void ParserClass::dispatchToTwins() {
         {
         TraceScope trace;
         parserPrint("mapping key21: ");
-        Serial.print(Control.key21ToString(_receivedEvent.key));
+        Serial.print(Control->key21ToString(_receivedEvent.key));
         Serial.print(" to twinCommand: ");
         Serial.println(twinCommandToString(_mappedCommand.twinCommand));
         }
@@ -131,14 +131,14 @@ void ParserClass::analyseClickEvent() {
 // read Parser input from Queue and filter
 void ParserClass::handleQueueMessage() {
     if (xQueueReceive(g_parserQueue, &_receivedValue, 0)) {
-        _receivedKey = Control.ircodeToKey21(_receivedValue);                   // filter remote signal to reduce options
+        _receivedKey = Control->ircodeToKey21(_receivedValue);                  // filter remote signal to reduce options
         if (_receivedKey != Key21::NONE && _receivedKey != Key21::UNKNOWN) {
             _receivedEvent = Parser->detect(_receivedKey);                      // valid key21 was pressed
             #ifdef PARSERVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block
-                Parser->parserPrintln("from Queue ClickEvent.type: %s", Control.clickTypeToString(_receivedEvent.type));
-                Parser->parserPrintln("from Received Key21: %s", Control.key21ToString(_receivedEvent.key));
+                Parser->parserPrintln("from Queue ClickEvent.type: %s", Control->clickTypeToString(_receivedEvent.type));
+                Parser->parserPrintln("from Received Key21: %s", Control->key21ToString(_receivedEvent.key));
                 }
             #endif
         }

@@ -20,6 +20,7 @@
 #include "i2cMaster.h"
 #include "SlaveTwin.h"
 #include "FlapTasks.h"
+#include "RemoteControl.h"
 #include "RtosTasks.h"
 #include "FlapStatistics.h"
 #include "MasterSetup.h"
@@ -35,7 +36,10 @@ void masterIntroduction() {
 // ---------------------------
 void masterI2Csetup() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("introduce as I2C Master to I2C bus");
+        }
     #endif
     i2csetup();                                                                 // Register as Master to I2C bus
 }
@@ -43,16 +47,30 @@ void masterI2Csetup() {
 // ---------------------------
 void masterAddressPool() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("generate I2C Address Pool");
+        }
     #endif
     if (!initAddressPool()) {                                                   // Register as Master to I2C bus
-        masterPrintln("ERROR: I2C Address Pool too big, not supported");
+        {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;                                               // use semaphore to protect this block
+                masterPrintln("ERROR: I2C Address Pool too small for numberOfTwins, not supported");
+                }
+            #endif
+            return;                                                             // exit if address pool is too small
+        }
     } else {
         #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
             masterPrint("I2C Address Pool generated 0x");
             Serial.print(g_slaveAddressPool[0], HEX);
             Serial.print(" - 0x");
             Serial.println(g_slaveAddressPool[numberOfTwins - 1], HEX);
+            }
         #endif
     }
 }
@@ -60,7 +78,10 @@ void masterAddressPool() {
 // ---------------------------
 void masterRemoteControl() {
     #ifdef MASTERVERBOSE
-        masterPrintln("create remote control object for Key21 control");
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        masterPrintln("create IR receiver object for Key21 remote control");
+        }
     #endif
     // Create IR Receiver
     irController.enableIRIn();                                                  // start remote control receiver
@@ -69,12 +90,18 @@ void masterRemoteControl() {
 // ---------------------------
 void masterSlaveControlObject() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("create Master control object, to control TWINs");
+        }
     #endif
-    Master = new FlapTask();                                                    // create Master control object, to control TWINs
+    Master = new FlapTask();                                                    // create Master frame object
 
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("create Slave TWIN objects and command queues");
+        }
     #endif
     // create Master control object, to control TWINs
     for (int m = 0; m < numberOfTwins; m++) {
@@ -95,14 +122,20 @@ void masterStartRtosTasks() {
 // ---------------------------
 void masterOutrodution() {
     #ifdef MASTERVERBOSE
+        TraceScope trace;                                                       // use semaphore to protect this block
+        {
         masterPrintln("I²C Master is up and running...");
+        }
     #endif
 }
 
 // ---------------------------
 void createTwinTasks() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("start freeRTOS task: SlaveTwin 0..%d", numberOfTwins - 1);
+        }
     #endif
 
     int twinNumber[numberOfTwins];                                              // storage for Twin Number
@@ -111,20 +144,26 @@ void createTwinTasks() {
         char taskName[16];
         snprintf(taskName, sizeof(taskName), "SlaveTwin-%02d", i + 1);
         #ifdef MEMORYVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
             masterPrint("starting freeRTOS task: ");
             Serial.println(taskName);
             uint32_t heepBefore = ESP.getFreeHeap();
             masterPrint("free heap before start of task: ");
             Serial.println(heepBefore);
+            }
         #endif
         xTaskCreate(slaveTwinTask, taskName, STACK_TWIN, &twinNumber[i], PRIO_TWIN, &g_twinHandle[i]);
         vTaskDelay(200 / portTICK_PERIOD_MS);                                   // start next twin task with some delay
         #ifdef MEMORYVERBOSE
-            uint32_t heepAfter = ESP.getFreeHeap();
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            uint32_t   heepAfter = ESP.getFreeHeap();
             masterPrint("free heap after start of task: ");
             Serial.println(heepAfter);
             masterPrint("used heap by task (in bytes): ");
             Serial.println(heepBefore - heepAfter);
+            }
         #endif
     }
 }
@@ -132,7 +171,10 @@ void createTwinTasks() {
 // ---------------------------
 void createRemoteControlTask() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("start freeRTOS task: remote control receiver for Key21 control");
+        }
     #endif
     xTaskCreate(remoteControl, "RemoteControl", STACK_REMOTE, NULL, PRIO_REMOTE, &g_remoteControlHandle);
 }
@@ -140,7 +182,10 @@ void createRemoteControlTask() {
 // ---------------------------
 void createStatisticTask() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("start freeRTOS task: StatisticTask");
+        }
     #endif
     xTaskCreate(statisticTask, "StatisticTask", STACK_STATISTICS, NULL, PRIO_STATISTICS, &g_statisticHandle);
 }
@@ -148,7 +193,10 @@ void createStatisticTask() {
 // ---------------------------
 void createReportTask() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("start freeRTOS task: ReportTask and corresponding queue");
+        }
     #endif
     xTaskCreate(reportTask, "ReportTask", STACK_REPORT, NULL, PRIO_REPORT, &g_reportHandle);
 }
@@ -156,7 +204,10 @@ void createReportTask() {
 // ---------------------------
 void createRegisterTwinsTask() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("start freeRTOS task: TwinRegister");
+        }
     #endif
     xTaskCreate(twinRegister, "TwinRegister", STACK_REGISTRY, NULL, PRIO_REGISTRY, &g_registryHandle);
     vTaskDelay(500 / portTICK_PERIOD_MS);                                       // give task some time for registering new devices
@@ -165,7 +216,10 @@ void createRegisterTwinsTask() {
 // ---------------------------
 void createParserTask() {
     #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
         masterPrintln("start freeRTOS task: Parser");
+        }
     #endif
     xTaskCreate(parserTask, "Parser", STACK_PARSER, NULL, PRIO_PARSER, &g_parserHandle);
 }

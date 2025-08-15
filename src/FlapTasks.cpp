@@ -37,7 +37,7 @@ QueueHandle_t g_reportQueue = nullptr;
 QueueHandle_t g_parserQueue = nullptr;
 
 // Global Objects for Tasks
-RemoteControl   Control;                                                        // Remote Control with 21 keys
+RemoteControl*  Control        = nullptr;                                       // Remote Control with 21 keys
 ParserClass*    Parser         = nullptr;                                       // Parser to filter 21 keys and convert to twin commands
 FlapRegistry*   Register       = nullptr;                                       // Object for Registry Task
 FlapStatistics* DataEvaluation = nullptr;                                       // Object for Statistics Task

@@ -30,12 +30,19 @@
 #include "MasterPrint.h"
 #include "FlapTasks.h"
 
-IRrecv         irController(IR_RECEIVER_PIN);
+IRrecv irController(IR_RECEIVER_PIN);
+
 decode_results results;
 
 // ---------------------
 // Constructor for RemoteControl
 RemoteControl::RemoteControl() {
+    #ifdef IRVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        controlPrintln("RemoteControl instance created");
+        }
+    #endif
     _lastKey   = Key21::UNKNOWN;                                                // no key pressed on remote control
     _actualKey = Key21::NONE;                                                   // no key pressed on remote control
 };
@@ -77,7 +84,7 @@ Key21 RemoteControl::ircodeToKey21(uint64_t ircode) {
         return Key21::NONE;
     }
 
-    key = Control.decodeIR(ircode);                                             // convert to Key21
+    key = Control->decodeIR(ircode);                                            // convert to Key21
     if ((int)key < (int)Key21::NONE || (int)key > (int)Key21::UNKNOWN) {
         _lastTime = now;                                                        // remember presstime
         _lastCode = ircode;                                                     // rember this pressed code as last one
@@ -93,7 +100,7 @@ Key21 RemoteControl::ircodeToKey21(uint64_t ircode) {
             Serial.print(" (0x");
             Serial.print(ircode, HEX);
             Serial.print(") - ");
-            Serial.println(Control.key21ToString(key));                         // make it visable
+            Serial.println(Control->key21ToString(key));                        // make it visable
             }
         #endif
         _lastTime = now;
@@ -239,4 +246,4 @@ const char* RemoteControl::key21ToString(Key21 key) {
         default:
             return "[INVALID]";
     }
-}
+};

@@ -16,8 +16,9 @@
 // ----------------------------
 // freeRTOS Task Remote Control
 void remoteControl(void* pvParameters) {
+    Control = new RemoteControl();                                              // create object for task
     while (true) {
-        Control.getRemote();
+        Control->getRemote();
         vTaskDelay(pdMS_TO_TICKS(10));                                          // Delay for 10ms
     }
 }
@@ -65,9 +66,10 @@ void twinRegister(void* pvParameters) {
     availCheckTimer = xTimerCreate("AvailChk", pdMS_TO_TICKS(AVAILABILITY_CHECK_COUNTDOWN), pdTRUE, nullptr,
                                    availCheckCallback);                         // 3) Availability-Check-Timer (Auto-Reload)
 
-    xTimerStart(shortScanTimer, 0);                                             // starte Short-Scan now
-    vTaskDelay(pdMS_TO_TICKS(2 * 60 * 1000));                                   // start Availability-Check with 2 Min-Offset
+    vTaskDelay(pdMS_TO_TICKS(1 * 60 * 1000));                                   // start Availability-Check with 1 Min-Offset
     xTimerStart(availCheckTimer, 0);
+
+    xTimerStart(shortScanTimer, 0);                                             // starte Short-Scan now
     vTaskSuspend(nullptr);                                                      // suspend task,  Callbacks are doing the job
 }
 
@@ -91,10 +93,13 @@ void statisticTask(void* param) {
         vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(60000));                   // every 1 Minute
         {
             TraceScope trace;                                                   // use semaphore to protect this block
-            #ifdef STATISTICVERBOSE
-                masterPrintln("I²C statistic cycle - access: ", DataEvaluation->busAccessCounter, " data write: ", DataEvaluation->busDataCounter,
-                " data read: ", DataEvaluation->busReadCounter);
-            #endif
+            if (DataEvaluation != nullptr) {
+                DataEvaluation->increment();                                    // increment statistic counter
+                #ifdef STATISTICVERBOSE
+                    masterPrintln("I²C statistic cycle - access: ", DataEvaluation->_busAccessCounter, " data write: ", DataEvaluation->_busDataCounter,
+                    " data read: ", DataEvaluation->_busReadCounter);
+                #endif
+            }
         }
         DataEvaluation->makeHistory();                                          // transfer counter to next history cycle
     }
@@ -111,7 +116,7 @@ void reportTask(void* pvParameters) {
 
     while (true) {
         if (xQueueReceive(g_reportQueue, &receivedValue, portMAX_DELAY)) {      // wait for Queue message
-            receivedKey = Control.ircodeToKey21(receivedValue);                 // filter remote signal to reduce options
+            receivedKey = Control->ircodeToKey21(receivedValue);                // filter remote signal to reduce options
             if (receivedKey != Key21::NONE) {                                   // if valid key21 was pressed
                 if (receivedKey == Key21::KEY_100_PLUS) {                       // special key for reporting
                     Reports->reportPrintln("======== Flap Master Health Overview ========");
