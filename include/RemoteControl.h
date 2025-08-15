@@ -86,6 +86,7 @@ class RemoteControl {                                                           
     // Constructor for RemoteControl
     RemoteControl();
 
+   public:
     // ---------------------
     // public functions
     void        getRemote();                                                    // get original raw data from IR receiver

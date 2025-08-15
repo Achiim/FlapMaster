@@ -31,14 +31,14 @@
 template <typename... Args>
 void masterPrint(const Args&... args) {
     Serial.print("[I²C FLAP MASTER] ");                                         // 1) print Prefix every time
-    (Serial.print(args), ...);                                                  // 2) print all arguments
+    ((Serial.print(String(args))), ...);                                        // 2) print all arguments
 }
 
 /// masterPrintln mit beliebig vielen Argumenten: Prefix + args + Zeilenumbruch
 template <typename... Args>
 void masterPrintln(const Args&... args) {
     Serial.print("[I²C FLAP MASTER] ");                                         // 1) print Prefix every time
-    (Serial.print(args), ...);                                                  // 2) print all arguments
+    ((Serial.print(String(args))), ...);                                        // 2) print all arguments
     Serial.println();                                                           // 3) abschließenden Newline
 }
 

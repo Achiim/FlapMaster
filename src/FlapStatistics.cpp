@@ -54,11 +54,20 @@ FlapStatistics::FlapStatistics() {
 // -------------------------------------------------------------------------
 // every cycle transfer statisic counter to histery and switch histery index
 void FlapStatistics::makeHistory() {
+    xSemaphoreTake(_statsMutex, portMAX_DELAY);
+
     #ifdef STATISTICVERBOSE
-        masterPrintln("I²C statistic cycle - access: ", busAccessCounter, " data write: ", busDataCounter, " data read: ", busReadCounter);
+        TraceScope trace;                                                       // use semaphore to protect this block
+        {
+        masterPrint("I²C statistic cycle - access: ");
+        Serial.print(_busAccessCounter);
+        Serial.print(" send: ");
+        Serial.print(_busDataCounter);
+        Serial.print(" read: ");
+        Serial.println(_busReadCounter);
+        }
     #endif
 
-    xSemaphoreTake(_statsMutex, portMAX_DELAY);
     _accessHistory[_historyIndex]  = _busAccessCounter;                         // transfer counter to history
     _dataHistory[_historyIndex]    = _busDataCounter;                           // transfer counter to history
     _readHistory[_historyIndex]    = _busReadCounter;                           // transfer counter to history
@@ -92,6 +101,14 @@ void FlapStatistics::increment(uint32_t access, uint32_t sentData, uint32_t read
     xSemaphoreGive(_statsMutex);
 
     #ifdef STATISTICVERBOSE
-        masterPrintln("I²C statistic increment - access: ", busAccessCounter, " write: ", busDataCounter, " read: ", busReadCounter);
+        TraceScope trace;                                                       // use semaphore to protect this block
+        {
+        masterPrint("I²C statistic increment - access: ");
+        Serial.print(_busAccessCounter);
+        Serial.print(" send: ");
+        Serial.print(_busDataCounter);
+        Serial.print(" read: ");
+        Serial.println(_busReadCounter);
+        }
     #endif
 }
