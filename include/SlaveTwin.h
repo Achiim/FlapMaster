@@ -159,14 +159,15 @@ class SlaveTwin {
     static constexpr uint16_t GLOBAL_READY_POLL_GAP_MS = 120;
 
     // AYR-Limiter helpers
-    uint32_t        validMsPerRevolution() const;
-    uint16_t        validStepsPerRevolution() const;
-    uint32_t        stepsToMs(uint32_t steps) const;
-    uint32_t        estimateAYRdurationMs(uint8_t cmd, uint16_t par);
-    static uint32_t withSafety(uint32_t ayr_ms);
-    bool            waitUntilYouAreReady(uint8_t cmd, uint16_t par, uint32_t timeout_ms);
-    void            learnAyrBias(uint8_t cmd, int32_t detect_vs_eta_ms);
-    uint32_t        applyAyrBias(uint8_t cmd, uint32_t eta) const;
+    uint32_t validMsPerRevolution() const;
+    uint16_t validStepsPerRevolution() const;
+    uint32_t stepsToMs(uint32_t steps) const;
+    uint32_t estimateAYRdurationMs(uint8_t cmd, uint16_t par) const;
+    uint32_t withSafety(uint32_t ms, uint8_t longCmd) const;
+    bool     waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_slave, uint32_t timeout_ms);
+    void     learnAyrBias(uint8_t cmd, int32_t detect_vs_eta_ms);
+    uint32_t applyAyrBias(uint8_t cmd, uint32_t eta) const;
+    uint32_t timeFromStepsMs(uint32_t steps) const;
 
     // ---------------------------
     // I2C Helper
@@ -190,6 +191,11 @@ class SlaveTwin {
     void logInfoU16(const char* prefix, uint16_t v);
     void logInfoU8(const char* prefix, uint8_t v);
     void logErr(const char* msg);
+
+    // --- helpers ---------------------------------------------------------------
+    static inline uint16_t normalizeOffset(uint16_t off, uint16_t spr) {
+        return (spr == 0) ? 0 : (off % spr);                                    // 0..spr-1
+    }
 
     // -------------------------------
     // Twin trace
