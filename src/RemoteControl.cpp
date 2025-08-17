@@ -50,13 +50,16 @@ RemoteControl::RemoteControl() {
 // ---------------------
 void RemoteControl::getRemote() {
     getIRcode();
-    ///---------Donn't trace here-----------
     if (_lastGetKeyCode != 0) {
-        controlPrint("IR code received ");
-        Serial.println(_lastGetKeyCode);                                        // demage the IR receiver
+        #ifdef IRVERBOSE
+            {
+            TraceScope trace;
+            controlPrint("IR code received ");
+            Serial.println(_lastGetKeyCode);                                    // trace all raw data
+            }
+        #endif
         _lastGetKeyCode = 0;
     }
-    ///---------Donn't trace here-----------
 };
 
 // ---------------------
