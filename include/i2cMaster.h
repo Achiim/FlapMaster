@@ -50,10 +50,6 @@ void      printSlaveReadyInfo(SlaveTwin* twin);                                 
 bool      takeI2CSemaphore();                                                   // get a semaphore
 bool      giveI2CSemaphore();                                                   // release a semaphore
 
-esp_err_t ping(uint8_t a);
-void      i2c_master_init();
-void      i2c_bus_recovery();
-
 // --------------------------------
 
 #endif                                                                          // i2cMaster_h
