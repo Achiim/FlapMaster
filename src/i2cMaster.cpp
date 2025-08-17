@@ -49,7 +49,7 @@ void i2csetup() {
                          .master{.clk_speed = I2C_MASTER_FREQ_HZ}};
 
     esp_err_t err;
-    err = i2c_param_config(I2C_NUM_0, &conf);
+    err = i2c_param_config(I2C_MASTER_NUM, &conf);
     if (err != ESP_OK) {
         {
             TraceScope trace;                                                   // use semaphore to protect this block
@@ -59,7 +59,7 @@ void i2csetup() {
         }
     }
 
-    err = i2c_driver_install(I2C_NUM_0, conf.mode, 0, 0, 0);
+    err = i2c_driver_install(I2C_MASTER_NUM, conf.mode, 0, 0, 0);
     if (err != ESP_OK) {
         {
             TraceScope trace;                                                   // use semaphore to protect this block
@@ -301,11 +301,70 @@ esp_err_t pingI2Cslave(I2Caddress address) {
             {
             TraceScope trace;                                                   // use semaphore to protect this block
             masterPrint("ping failed (pingI2Cslave) with 0x");
-            Serial.println(address, HEX);
+            Serial.print(address, HEX);
+            Serial.print(" esp-error = ");
+            Serial.println(esp_err_to_name(ret));
             }
             if (DataEvaluation && address != I2C_BASE_ADDRESS)
             DataEvaluation->increment(0, 0, 0, 1);                              // count I2C usage, 1 timeout
         #endif
     }
     return ret;
+}
+
+void i2c_bus_recovery() {
+    gpio_set_direction(I2C_MASTER_SCL_IO, GPIO_MODE_OUTPUT);
+    gpio_set_direction(I2C_MASTER_SDA_IO, GPIO_MODE_INPUT);
+    for (int i = 0; i < 9; ++i) {
+        if (gpio_get_level(I2C_MASTER_SDA_IO))
+            break;
+        gpio_set_level(I2C_MASTER_SCL_IO, 0);
+        ets_delay_us(5);
+        gpio_set_level(I2C_MASTER_SCL_IO, 1);
+        ets_delay_us(5);
+    }
+    // STOP
+    gpio_set_direction(I2C_MASTER_SDA_IO, GPIO_MODE_OUTPUT);
+    gpio_set_level(I2C_MASTER_SDA_IO, 0);
+    ets_delay_us(5);
+    gpio_set_level(I2C_MASTER_SCL_IO, 1);
+    ets_delay_us(5);
+    gpio_set_level(I2C_MASTER_SDA_IO, 1);
+    ets_delay_us(5);
+}
+
+void i2c_master_init() {
+    i2c_config_t c     = {};
+    c.mode             = I2C_MODE_MASTER;
+    c.sda_io_num       = I2C_MASTER_SDA_IO;
+    c.scl_io_num       = I2C_MASTER_SCL_IO;
+    c.sda_pullup_en    = GPIO_PULLUP_ENABLE;                                    // externe 3V3-Pullups? -> DISABLE
+    c.scl_pullup_en    = GPIO_PULLUP_ENABLE;
+    c.master.clk_speed = I2C_MASTER_FREQ_HZ;
+
+    // direkt VOR i2c_param_config(...) ausführen:
+    gpio_set_direction((gpio_num_t)I2C_MASTER_SDA_IO, GPIO_MODE_INPUT);
+    gpio_set_direction((gpio_num_t)I2C_MASTER_SCL_IO, GPIO_MODE_INPUT);
+    printf("[SMOKE] Idle levels: SDA=%d SCL=%d (erwartet: beide 1)\n", gpio_get_level((gpio_num_t)I2C_MASTER_SDA_IO),
+           gpio_get_level((gpio_num_t)I2C_MASTER_SCL_IO));
+
+    ESP_ERROR_CHECK(i2c_param_config(I2C_MASTER_NUM, &c));
+    ESP_ERROR_CHECK(i2c_driver_install(I2C_MASTER_NUM, I2C_MODE_MASTER, 0, 0, 0));
+
+    printf("[MASTER] I2C init: port=%d, SDA=%d, SCL=%d, F=%d\n", I2C_MASTER_NUM, I2C_MASTER_SDA_IO, I2C_MASTER_SCL_IO, I2C_MASTER_FREQ_HZ);
+
+    // nach erfolgreichem i2c_driver_install(...) im Smoke-Test:
+    if (!g_i2c_mutex) {
+        g_i2c_mutex = xSemaphoreCreateMutex();
+    }
+}
+
+esp_err_t ping(uint8_t a) {
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (a << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_stop(cmd);
+    esp_err_t r = i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, pdMS_TO_TICKS(100));
+    i2c_cmd_link_delete(cmd);
+    return r;
 }

@@ -32,8 +32,8 @@
 #include <FlapGlobal.h>
 
 #define I2C_MASTER_NUM I2C_NUM_0                                                // for IC2 scanner
-#define I2C_MASTER_SCL_IO 22                                                    // SCL PIN
-#define I2C_MASTER_SDA_IO 21                                                    // SDA PIN
+#define I2C_MASTER_SCL_IO GPIO_NUM_22                                           // SCL PIN
+#define I2C_MASTER_SDA_IO GPIO_NUM_21                                           // SDA PIN
 #define I2C_MASTER_FREQ_HZ 250000                                               // I2C Semi Fast Mode 200 kHz (400 kHz fast)
 
 // Master global variables
@@ -43,13 +43,17 @@ extern SemaphoreHandle_t g_i2c_mutex;                                           
 // -------------------------------
 void i2csetup();                                                                // initialize I2C Bus for Master access
 
-void prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer);
-// int       check_slaveReady(I2Caddress slaveAddress);                            // status check isf slave is ready/busy
+void      prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer);
 esp_err_t i2c_probe_device(I2Caddress address);                                 // semaphore protected ping
 esp_err_t pingI2Cslave(I2Caddress address);                                     // just ping on I2C if slave is still online
 void      printSlaveReadyInfo(SlaveTwin* twin);                                 // print slave ready/busy information
 bool      takeI2CSemaphore();                                                   // get a semaphore
 bool      giveI2CSemaphore();                                                   // release a semaphore
+
+esp_err_t ping(uint8_t a);
+void      i2c_master_init();
+void      i2c_bus_recovery();
+
 // --------------------------------
 
 #endif                                                                          // i2cMaster_h
