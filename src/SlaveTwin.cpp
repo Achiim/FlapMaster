@@ -302,7 +302,7 @@ void SlaveTwin::calibration() {
         }
     #endif
 
-    if (!waitUntilYouAreReady(CALIBRATE, steps_to_use, timeout_ms)) {
+    if (!waitUntilYouAreReady(CALIBRATE, steps_to_est, timeout_ms)) {
         #ifdef ERRORVERBOSE
             {
             TraceScope trace;
@@ -1358,19 +1358,6 @@ bool SlaveTwin::maybePollReady(bool& outReady) {
     return true;                                                                // we touched the bus
 }
 
-// Schätzt nur anhand von Steps und bekannter Geschwindigkeit/Acceleration.
-// Ersetze stepsPerSecond()/accel* durch deine echten Parameter/Funktionen.
-uint32_t SlaveTwin::timeFromStepsMs(uint32_t steps) const {
-    // steps per second = stepsPerRev / (msPerRev/1000) = stepsPerRev * 1000 / msPerRev
-    const uint32_t rev_ms   = (_parameter.speed ? _parameter.speed : 1);        // guard /0
-    const uint32_t sps      = (_parameter.steps * 1000u) / rev_ms;              // FIX: Reihenfolge
-    const uint32_t accel_ms = 60u + 60u;                                        // unverändert (Platzhalter)
-    if (sps == 0)
-        return 0;
-    const uint32_t run_ms = (steps * 1000u + sps - 1u) / sps;                   // ceil(steps/sps)*1000
-    return run_ms + accel_ms;
-}
-
 // Für unterschiedliche Commands ggf. andere Safety-Kappen
 uint32_t SlaveTwin::withSafety(uint32_t ms, uint8_t longCmd) const {
     uint32_t inflated;
@@ -1560,24 +1547,42 @@ uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const
     const uint16_t spr    = validStepsPerRevolution();
     const uint16_t offset = normalizeOffset(_parameter.offset, spr);
 
+    // margin ensures the single AYR poll happens shortly AFTER the real end (≤ 300 ms late)
+    uint32_t margin_ms = (((uint32_t)READY_POLL_MS + 50u) > 150u) ? ((uint32_t)READY_POLL_MS + 50u) : 150u;
+    if (margin_ms > 300u)
+        margin_ms = 300u;                                                       // hard cap to meet the ≤300 ms goal
+
+    uint32_t eta = 0;                                                           // will be computed per command
+
     switch (longCmd) {
         case CALIBRATE: {
-            // Worst-Case: bis Sensor gefunden (<= 1 Umdrehung) + Offset zum virtuellen Nullpunkt
-            const uint32_t search_steps = spr;                                  // konservativ (statt Ø ~spr/2)
-            // 2-Segmente-ETA: Suche + Offset additiv (konservativ bzgl. Rampen)
-            const uint32_t t_search = timeFromStepsMs(search_steps);
-            const uint32_t t_offset = timeFromStepsMs(offset);
-            return t_search + t_offset;
+            // Worst case: up to one full revolution to find sensor + offset travel to logical zero
+            const uint32_t t_search = stepsToMs((uint32_t)spr);
+            const uint32_t t_offset = stepsToMs((uint32_t)offset);
+            eta                     = t_search + t_offset + margin_ms;
+            break;
         }
         case MOVE: {
-            const uint32_t steps = static_cast<uint32_t>(param);
-            return timeFromStepsMs(steps);
+            // param = relative steps
+            const uint32_t base_ms = stepsToMs((uint32_t)param);
+            eta                    = base_ms + margin_ms;
+            break;
         }
         default: {
-            const uint32_t steps = static_cast<uint32_t>(param);
-            return timeFromStepsMs(steps);
+            // Conservative default for other LONGs: one revolution + small margin
+            const uint32_t rev_ms = validMsPerRevolution();
+            eta                   = rev_ms + margin_ms;
+            break;
         }
     }
+
+    // Central clamp to avoid pathological ETAs (no new defines; purely local bounds)
+    if (eta < 500u)
+        eta = 500u;                                                             // avoid too-early single poll on tiny moves
+    else if (eta > 60000u)
+        eta = 60000u;                                                           // cap extremely long estimates at 60 s
+
+    return eta;
 }
 
 uint32_t SlaveTwin::applyAyrBias(uint8_t cmd, uint32_t eta) const {
