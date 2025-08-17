@@ -1002,8 +1002,8 @@ bool SlaveTwin::readAllParameters(slaveParameter& p) {
 
 // ----------------------------------------------------------
 // askSlaveAboutParameter now without address; only calls the combined function.
-void SlaveTwin::askSlaveAboutParameter(slaveParameter& parameter) {
-    (void)readAllParameters(parameter);
+bool SlaveTwin::askSlaveAboutParameter(slaveParameter& parameter) {
+    return readAllParameters(parameter);
 }
 
 // ----------------------------

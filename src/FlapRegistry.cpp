@@ -235,9 +235,18 @@ void FlapRegistry::scan_i2c_bus() {
             error_scan_i2c(n, addr);                                            // trace scan error messages
         } else {
             foundToRegister++;
-            Twin[n]->askSlaveAboutParameter(parameter);                         // get actual parameter from
-            c = updateSlaveRegistry(n, addr, parameter);                        // register slave
-            foundToCalibrate += c;                                              // count calibrations
+            if (Twin[n]->askSlaveAboutParameter(parameter)) {                   // get actual parameter from
+                c = updateSlaveRegistry(n, addr, parameter);                    // register slave
+                foundToCalibrate += c;                                          // count calibrations
+            } else {
+                #ifdef SCANVERBOSE
+                    {
+                    TraceScope trace;
+                    registerPrint("connot register, not answering Slave 0x");
+                    Serial.println(addr, HEX);
+                    }
+                #endif
+            }
         }
     }
 

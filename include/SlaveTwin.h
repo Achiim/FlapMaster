@@ -104,7 +104,7 @@ class SlaveTwin {
     bool  readSpeed(uint16_t& outSpeed);                                        // Reads the speed value from the slave device.
     bool  readSteps(uint16_t& outSteps);                                        // Reads the steps value from the slave device.
     bool  readSensorWorking(bool& outSensorWorking);                            // Reads the sensor working status from the slave device.
-    void  askSlaveAboutParameter(slaveParameter& parameter);                    // retrieve all slave parameter
+    bool  askSlaveAboutParameter(slaveParameter& parameter);                    // retrieve all slave parameter
     void  calculateStepsPerFlap();                                              // compute steps needed to move flap by flap
     bool  isSlaveReady();                                                       // check if slave is ready
     bool  getFullStateOfSlave();                                                // get slave state structure
