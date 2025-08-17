@@ -1399,7 +1399,7 @@ bool SlaveTwin::waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_sla
 
     // 1) ETA berechnen und "kurz nach ETA" die erste Abfrage planen
     const uint32_t eta_ms        = estimateAYRdurationMs(longCmd, param_sent_to_slave); // "kurz nach" der Schätzung
-    const uint32_t overshoot_ms  = (longCmd == MOVE) ? 300u : 20u;              // NEU (nur MOVE bekommt +300 ms Nachlauf)
+    const uint32_t overshoot_ms  = (longCmd == MOVE) ? 280u : 20u;              // NEU (nur MOVE bekommt +280 ms Nachlauf)
     const uint32_t first_poll_at = eta_ms + overshoot_ms;                       // Ziel: 1. Poll ≈ sofort READY
 
     // 2) Bis knapp nach ETA GAR NICHT pollen (Minimal-AYR)
@@ -1547,16 +1547,16 @@ uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const
     const uint16_t spr    = validStepsPerRevolution();
     const uint16_t offset = normalizeOffset(_parameter.offset, spr);
 
-    // margin ensures the single AYR poll happens shortly AFTER the real end (≤ 300 ms late)
+    // Base margin used by most commands (kept as-is)
     uint32_t margin_ms = (((uint32_t)READY_POLL_MS + 50u) > 150u) ? ((uint32_t)READY_POLL_MS + 50u) : 150u;
     if (margin_ms > 300u)
-        margin_ms = 300u;                                                       // hard cap to meet the ≤300 ms goal
+        margin_ms = 300u;
 
-    uint32_t eta = 0;                                                           // will be computed per command
+    uint32_t eta = 0;
 
     switch (longCmd) {
         case CALIBRATE: {
-            // Worst case: up to one full revolution to find sensor + offset travel to logical zero
+            // up to one revolution to find sensor + offset to logical zero
             const uint32_t t_search = stepsToMs((uint32_t)spr);
             const uint32_t t_offset = stepsToMs((uint32_t)offset);
             eta                     = t_search + t_offset + margin_ms;
@@ -1568,19 +1568,35 @@ uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const
             eta                    = base_ms + margin_ms;
             break;
         }
-        default: {
-            // Conservative default for other LONGs: one revolution + small margin
+        case SPEED_MEASURE: {
+            // Measurement lasts about one revolution; slightly larger minimal margin for robustness
             const uint32_t rev_ms = validMsPerRevolution();
-            eta                   = rev_ms + margin_ms;
+            uint32_t       sp_margin_ms =
+                (((uint32_t)READY_POLL_MS + 50u) > 280u) ? ((uint32_t)READY_POLL_MS + 50u) : 280u; // bump min to ~280 ms (≤ 300 ms cap)
+            if (sp_margin_ms > 300u)
+                sp_margin_ms = 300u;
+
+            eta = rev_ms + sp_margin_ms;
+            break;
+        }
+        default: {
+            // Conservative fallback: one revolution + slightly larger minimal margin
+            const uint32_t rev_ms = validMsPerRevolution();
+
+            uint32_t def_margin_ms = (((uint32_t)READY_POLL_MS + 50u) > 200u) ? ((uint32_t)READY_POLL_MS + 50u) : 200u;
+            if (def_margin_ms > 300u)
+                def_margin_ms = 300u;
+
+            eta = rev_ms + def_margin_ms;
             break;
         }
     }
 
-    // Central clamp to avoid pathological ETAs (no new defines; purely local bounds)
+    // Central clamp (safety)
     if (eta < 500u)
-        eta = 500u;                                                             // avoid too-early single poll on tiny moves
+        eta = 500u;
     else if (eta > 60000u)
-        eta = 60000u;                                                           // cap extremely long estimates at 60 s
+        eta = 60000u;
 
     return eta;
 }
