@@ -56,6 +56,7 @@ class FlapRegistry {
     void       scan_i2c_bus();                                                  // search for slave in I2C bus
     int        numberOfRegisterdDevices();                                      // scan registry to evaluate number of registered devices
     I2Caddress getNextAddress();                                                // next free i2c address form slave registry
+    bool       registryLookup(I2Caddress addr);
 
     // public trace functions
     template <typename... Args>                                                 // Registry trace
@@ -77,5 +78,6 @@ class FlapRegistry {
     int        scanForSlave(int i, I2Caddress addrs);                           // scan one slave
     I2Caddress findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr);         // free address from register
     int        findTwinIndexByAddress(I2Caddress addr);                         // find Twin by slaveAddress
+    bool       registered(I2Caddress addr);
 };
 #endif                                                                          // FlapRegistry_h

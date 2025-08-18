@@ -156,8 +156,12 @@ int FlapRegistry::scanForSlave(int poolIndex, I2Caddress addr) {
     if (twinIndex < 0) {
         return -1;                                                              // no matching twin
     }
+    return twinIndex;
+}
 
-    // Registry lookup (for diagnostics)
+// ------------------------------------
+// Registry lookup (for diagnostics)
+bool FlapRegistry::registered(I2Caddress addr) {
     auto it = g_slaveRegistry.find(addr);
     if (it != g_slaveRegistry.end() && it->second != nullptr) {
         #ifdef SCANVERBOSE
@@ -167,9 +171,9 @@ int FlapRegistry::scanForSlave(int poolIndex, I2Caddress addr) {
             Serial.println(addr, HEX);
             }
         #endif
+        return true;
     }
-
-    return twinIndex;
+    return false;
 }
 
 // ----------------------------
@@ -234,15 +238,25 @@ void FlapRegistry::scan_i2c_bus() {
         if (n < 0) {
             error_scan_i2c(n, addr);                                            // trace scan error messages
         } else {
-            foundToRegister++;
-            if (Twin[n]->askSlaveAboutParameter(parameter)) {                   // get actual parameter from
-                c = updateSlaveRegistry(n, addr, parameter);                    // register slave
-                foundToCalibrate += c;                                          // count calibrations
+            if (!registered(addr)) {                                            // is slave is not registered -> register
+                foundToRegister++;
+                if (Twin[n]->askSlaveAboutParameter(parameter)) {               // get actual parameter from
+                    c = updateSlaveRegistry(n, addr, parameter);                // register slave
+                    foundToCalibrate += c;                                      // count calibrations
+                } else {
+                    #ifdef SCANVERBOSE
+                        {
+                        TraceScope trace;
+                        registerPrint("connot register, not answering Slave 0x");
+                        Serial.println(addr, HEX);
+                        }
+                    #endif
+                }
             } else {
                 #ifdef SCANVERBOSE
                     {
                     TraceScope trace;
-                    registerPrint("connot register, not answering Slave 0x");
+                    registerPrint("allready registered Slave 0x");
                     Serial.println(addr, HEX);
                     }
                 #endif
