@@ -47,6 +47,7 @@ void parserTask(void* pvParameters) {
 // freeRTOS Task Registry
 void twinRegister(void* pvParameters) {
     Register = new FlapRegistry();
+    Register->repairOutOfPoolDevices();                                         // repair devices that are out of the address pool
     Register->registerUnregistered();                                           // register all twins which are not registered yet
     Register->scan_i2c_bus();                                                   // scan i2c bus for new twins
 

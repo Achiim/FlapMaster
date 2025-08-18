@@ -543,7 +543,6 @@ void FlapRegistry::repairOutOfPoolDevices() {
 // ------------------------------
 // register unregistered devices
 void FlapRegistry::registerUnregistered() {
-    repairOutOfPoolDevices();                                                   // repair devices that are out of the address pool
     I2Caddress nextFreeAddress = 0;
     if (i2c_probe_device(I2C_BASE_ADDRESS) == ESP_OK) {                         // is there someone new?
         nextFreeAddress = getNextAddress();                                     // get next free address for new slaves
