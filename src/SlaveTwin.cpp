@@ -1397,86 +1397,104 @@ uint32_t SlaveTwin::withSafety(uint32_t ms, uint8_t longCmd) const {
 bool SlaveTwin::waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_slave, uint32_t timeout_ms) {
     const uint32_t t0 = millis();
 
-    // 1) ETA berechnen und "kurz nach ETA" die erste Abfrage planen
-    const uint32_t eta_ms        = estimateAYRdurationMs(longCmd, param_sent_to_slave); // "kurz nach" der Schätzung
-    const uint32_t overshoot_ms  = (longCmd == MOVE) ? 280u : 20u;              // NEU (nur MOVE bekommt +280 ms Nachlauf)
-    const uint32_t first_poll_at = eta_ms + overshoot_ms;                       // Ziel: 1. Poll ≈ sofort READY
+    // 1) Compute ETA (may be adjusted below)
+    uint32_t eta_ms = estimateAYRdurationMs(longCmd, param_sent_to_slave);
 
-    // 2) Bis knapp nach ETA GAR NICHT pollen (Minimal-AYR)
+    // SENSOR_CHECK failsafe: ensure ETA ≥ scaled(stepsToMs(param), ~1.6x) + small tail.
+    if (longCmd == SENSOR_CHECK) {
+        const uint32_t base_ms   = stepsToMs((uint32_t)param_sent_to_slave);
+        const uint32_t scaled_ms = (base_ms * 8u + 4u) / 5u;                    // ≈ 1.6x
+        const uint32_t min_eta   = scaled_ms + 120u;                            // keep ≤ 300 ms late overall
+        if (eta_ms < min_eta)
+            eta_ms = min_eta;
+    }
+
+    const uint32_t overshoot_ms  = (longCmd == MOVE) ? 280u : (longCmd == SENSOR_CHECK ? 200u : 20u);
+    const uint32_t first_poll_at = eta_ms + overshoot_ms;                       // goal: first poll hits READY
+
+    // NEW: make sure timeout never expires before we complete the first fast window
+    {
+        const uint32_t min_timeout = first_poll_at + (uint32_t)READY_WINDOW_MS + (uint32_t)READY_POLL_MS;
+        if (timeout_ms < min_timeout)
+            timeout_ms = min_timeout;
+    }
+
+    // 2) Quiet until just after ETA (minimal AYR)
     while (true) {
         const uint32_t elapsed = millis() - t0;
         if (elapsed >= first_poll_at)
             break;
         if (elapsed > timeout_ms) {
-            #ifdef ERRORVERBOSE
+            #ifdef AYRVERBOSE
                 {
                 TraceScope trace;
                 twinPrint("AYR TIMEOUT (quiet) cmd=0x");
                 Serial.print(longCmd, HEX);
-                twinPrint(" param=");
+                Serial.print(" param=");
                 Serial.print(param_sent_to_slave);
-                twinPrint(" budget_ms=");
+                Serial.print(" budget_ms=");
                 Serial.println(timeout_ms);
                 }
             #endif
             return false;
         }
-        delay(5);
+        TickType_t ticks = pdMS_TO_TICKS(5);                                    // wait 5 ms
+        if (ticks == 0)
+            ticks = 1;                                                          // mind. 1 Tick schlafen
+        vTaskDelay(ticks);
     }
 
-    // 3) Erster Poll: wenn Schätzung gut war, jetzt sofort READY
+    // 3) First poll
     uint32_t polls        = 0;
     bool     seenBusy     = false;
     uint32_t firstBusy_ms = 0;
 
-    // --- erster Poll
     {
         const bool ready = isSlaveReady();
         polls++;
         if (ready) {
-            #ifdef TWINVERBOSE
+            #ifdef AYRVERBOSE
                 {
                 TraceScope     trace;
                 const uint32_t elapsed = millis() - t0;
                 twinPrint("AYR success cmd=0x");
                 Serial.print(longCmd, HEX);
-                twinPrint(" param=");
+                Serial.print(" param=");
                 Serial.print(param_sent_to_slave);
-                twinPrint(" elapsed_ms=");
+                Serial.print(" elapsed_ms=");
                 Serial.print(elapsed);
-                twinPrint(" eta_ms=");
+                Serial.print(" eta_ms=");
                 Serial.print(eta_ms);
-                twinPrint(" polls=");
+                Serial.print(" polls=");
                 Serial.println(polls);
                 }
             #endif
             return true;
         }
-        // -> BUSY gesehen
         seenBusy     = true;
         firstBusy_ms = millis() - t0;
     }
 
-    // 4) Grobes Nachpollen bis Timeout (möglichst wenige AYR)
-    //    - Grundtakt "coarse": z.B. 200 ms (innerhalb 20–500 ms Wunsch)
-    //    - im allerletzten Stück vor Timeout feinere Abtastung (z.B. 20 ms)
-    const uint16_t coarse_interval_ms = 200u;                                   // kannst du später auf 500u o.ä. setzen
-    const uint16_t fine_window_ms     = 200u;                                   // "Endspurt" vor Timeout
+    // 4) Coarse follow-up until timeout (keep AYR count low)
+    const uint16_t coarse_interval_ms = 200u;
+    const uint16_t fine_window_ms     = 200u;
     for (;;) {
         const uint32_t now     = millis();
         const uint32_t elapsed = now - t0;
         if (elapsed > timeout_ms) {
-            #ifdef ERRORVERBOSE
+            #ifdef AYRVERBOSE
                 {
                 TraceScope trace;
                 twinPrint("AYR TIMEOUT cmd=0x");
                 Serial.print(longCmd, HEX);
-                twinPrint(" param=");
+                Serial.print(" param=");
                 Serial.print(param_sent_to_slave);
-                twinPrint(" polls=");
+                Serial.print(" polls=");
                 Serial.print(polls);
-                twinPrint(" seenBusy=");
-                Serial.println(seenBusy ? 1 : 0);
+                Serial.print(" seenBusy=");
+                Serial.print(seenBusy ? 1 : 0);
+                Serial.print(" eta_ms=");
+                Serial.println(eta_ms);
                 }
             #endif
             return false;
@@ -1489,23 +1507,23 @@ bool SlaveTwin::waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_sla
         const bool ready = isSlaveReady();
         polls++;
         if (ready) {
-            #ifdef TWINVERBOSE
+            #ifdef AYRVERBOSE
                 {
                 TraceScope     trace;
                 const uint32_t elapsed2 = millis() - t0;
                 twinPrint("AYR success cmd=0x");
                 Serial.print(longCmd, HEX);
-                twinPrint(" param=");
+                Serial.print(" param=");
                 Serial.print(param_sent_to_slave);
-                twinPrint(" elapsed_ms=");
+                Serial.print(" elapsed_ms=");
                 Serial.print(elapsed2);
-                twinPrint(" eta_ms=");
+                Serial.print(" eta_ms=");
                 Serial.print(eta_ms);
-                twinPrint(" polls=");
+                Serial.print(" polls=");
                 Serial.print(polls);
-                twinPrint(" seenBusy=");
+                Serial.print(" seenBusy=");
                 Serial.print(seenBusy ? 1 : 0);
-                twinPrint(" firstBusy_ms=");
+                Serial.print(" firstBusy_ms=");
                 Serial.println(firstBusy_ms);
                 }
             #endif
@@ -1578,6 +1596,19 @@ uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const
 
             eta = rev_ms + sp_margin_ms;
             break;
+        }
+        case SENSOR_CHECK: {
+            // Runs exactly 'param' steps (counts detections, no early stop).
+            // On some devices (e.g., 0x56) this is effectively slower than nominal → scale by ~1.6x.
+            const uint32_t base_ms   = stepsToMs((uint32_t)param);              // nominal
+            const uint32_t scaled_ms = (base_ms * 8u + 4u) / 5u;                // ≈ 1.6x with rounding
+
+            // Small tail so the single AYR poll lands shortly AFTER "done" (stay ≤ 300 ms late).
+            margin_ms = (READY_POLL_MS > 120u) ? (uint32_t)READY_POLL_MS : 120u;
+            if (margin_ms > 300u)
+                margin_ms = 300u;
+
+            eta = scaled_ms + margin_ms;
         }
         default: {
             // Conservative fallback: one revolution + slightly larger minimal margin
