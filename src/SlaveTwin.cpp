@@ -22,9 +22,10 @@
     - show Flap digt
     - move one Flap (next/prev)
     - move some Steps (next/prev) to set offset steps, if desired flap is not shown after calibration
-    - save calibration to EEPROM on Flap module
+    - save calibration to EEPROM of Flap module
     - step measurement
     - speed measurement
+    - ARE YOU READY request limitation, to avoid heavy i2c bus load
 
 */
 
@@ -41,24 +42,72 @@
 // ----------------------------
 // generate for each slave one twin
 SlaveTwin* Twin[numberOfTwins];
+/*
+// ================= READY limiter (ARE-YOU-READY rate limiting) =================
+//
+// After issuing a LONG command we stay quiet until the ETA (estimated time of arrival),
+// then we open a short "fast-poll window" in which we probe readiness (ARE YOU READY)
+// at a higher rate. This avoids hammering the i2c bus while still detecting completion
+// of LONG command quickly.
 
-// READY limiter (to limit ARE YOU READY? requests)
-static constexpr uint16_t READY_WINDOW_MS = 500;                                // length of fast-poll window before AYR
-static constexpr uint16_t READY_POLL_MS   = 100;                                // poll period inside fast window
+// Length (in milliseconds) of the fast-poll window that starts at ETA.
+// Within this window the master may send up to READY_WINDOW_MS / READY_POLL_MS
+// AYR probes. If the slave is still busy after the window, we fall back to the
+// coarse (rough) follow-up logic (or timeout).
+static constexpr uint16_t READY_WINDOW_MS = 500;                                // duration of sending AYR shortCommands in ms
 
-// -------- tuning / defaults ---------------
-static constexpr uint32_t DEFAULT_REV_MS        = DEFAULT_SPEED;                // ~3 s pro U
-static constexpr uint16_t DEFAULT_STEPS_PER_REV = DEFAULT_STEPS;                // z. B. 4096
+// Period (in milliseconds) between AYR probes inside the fast-poll window.
+// Smaller → quicker detection but more I²C traffic; larger → fewer probes but
+// potentially more latency. With 100 ms and a 500 ms window we attempt at most
+// 5 polls per LONG. Typical safe range: 50–200 ms.
+static constexpr uint16_t READY_POLL_MS = 100;                                  // interval of sending AYR shortCommands in ms (during READY_WINDOW)
 
-// Plausibility checks
-static constexpr uint32_t REV_MS_MIN = (DEFAULT_REV_MS - 300);                  // 90% of Default (quick)
-static constexpr uint32_t REV_MS_MAX = (DEFAULT_REV_MS + 300);                  // 110% of Default (slow)
-static constexpr uint16_t STEPS_MIN  = (DEFAULT_STEPS_PER_REV - 410);           // 90% of Default (less steps)
-static constexpr uint16_t STEPS_MAX  = (DEFAULT_STEPS_PER_REV + 410);           // 110% of Default (more steps)
+// ===================== tuning / defaults (fallbacks) ==========================
+//
+// Used as per-slave parameters are known/validated and as guardrails.
+// All times are milliseconds unless stated otherwise.
 
-// AYR - Estimated Time of Arrival tuning
-static constexpr uint16_t STEP_MEASURE_DELAY_MS = 1000;                         // delay between step measurements
+// Default time for one full revolution (fallback speed) used for ETA estimates
+// and plausibility checks when the slave has not reported/calibrated speed yet.
+// Example default ≈ 3000 ms (~3 s per revolution).
+static constexpr uint32_t DEFAULT_REV_MS = DEFAULT_SPEED;
 
+// Default number of steps per full revolution (fallback steps-per-rev) used
+// for step↔time conversions and plausibility checks. Example default = 4096.
+static constexpr uint16_t DEFAULT_STEPS_PER_REV = DEFAULT_STEPS;
+
+// Minimum spacing (in ms) between successive global AYR probes across twins.
+// Acts as a bus-level backoff to avoid back-to-back readiness polls that could
+// congest the I²C bus when multiple devices complete around the same time.
+static constexpr uint16_t GLOBAL_READY_POLL_GAP_MS = 120;
+
+// =========================== plausibility checks ==============================
+//
+// Clamps and sanity bounds applied to parameters recovered from EEPROM or
+// reported by slaves. Prevents wild values from breaking ETA math.
+
+// Allowed range for revolution time. With DEFAULT_REV_MS ≈ 3000 ms these bounds
+// are roughly 90–110% of default (i.e., quick vs. slow units). Adjust the ±
+// slack if you change the default. Values outside are clamped/ignored.
+static constexpr uint32_t REV_MS_MIN = (DEFAULT_REV_MS - 300);
+static constexpr uint32_t REV_MS_MAX = (DEFAULT_REV_MS + 300);
+
+// Allowed range for steps per revolution. With DEFAULT_STEPS_PER_REV = 4096,
+// ±410 is roughly 90–110%. Values outside indicate bad calibration/data and
+// are clamped/ignored to keep step↔time conversions stable.
+static constexpr uint16_t STEPS_MIN = (DEFAULT_STEPS_PER_REV - 410);
+static constexpr uint16_t STEPS_MAX = (DEFAULT_STEPS_PER_REV + 410);
+
+// =================== AYR / measurement related tuning =========================
+//
+// Delay between consecutive step measurements during speed characterization
+// (e.g., when performing SPEED_MEASURE). Gives the motor/mechanics time to
+// settle and avoids oversampling the bus. Increase if the mechanism needs more
+// time to stabilize between reads; decrease to speed up characterization.
+static constexpr uint16_t STEP_MEASURE_DELAY_MS = 1000;
+//
+// ================= READY limiter (ARE-YOU-READY rate limiting) =================
+*/
 // ---------------------------------
 // Constructor
 SlaveTwin::SlaveTwin(int add) {
@@ -271,15 +320,14 @@ void SlaveTwin::showFlap(int digit) {
 // --------- CALIBRATIION ---------------------
 // --------------------------------------------
 void SlaveTwin::calibration() {
-    const uint16_t spr          = validStepsPerRevolution();
-    const uint16_t steps_to_use = spr;                                          // Gerät scannt max. 1 Umdrehung
-    const uint16_t off_norm     = normalizeOffset(_parameter.offset, spr);
+    const uint16_t steps_to_use = validStepsPerRevolution();                    // plausibilization of steps
+    const uint16_t off_norm     = normalizeOffset(_parameter.offset, steps_to_use);
     const uint32_t steps_to_est = static_cast<uint32_t>(steps_to_use) + off_norm;
 
     i2cLongCommand(i2cCommandParameter(CALIBRATE, steps_to_use));
-    _flapNumber = 0;                                                            // nach Calibrate auf physikalischem Nullpunkt (virtuell kommt danach)
+    _flapNumber = 0;                                                            // we reached Zero (flap 0)
 
-    const uint32_t eta_ms     = estimateAYRdurationMs(CALIBRATE, steps_to_est);
+    const uint32_t eta_ms     = estimateAYRdurationMs(CALIBRATE, steps_to_est); // etimate duration of CALIBRATE
     const uint32_t timeout_ms = withSafety(eta_ms, CALIBRATE);
 
     #ifdef TWINVERBOSE
@@ -1104,11 +1152,11 @@ bool SlaveTwin::isSlaveReady() {
 
 // ----------------------------
 // purpose: get slave state  data structure
-// - read data structure slaveReady (structure slaveStatus .read, .taskCode, ...)
+// - will ask slave about .ready, .taskCode, .bootFlag, .sensorStatus and .position
 // return:
-// false  = busy
-// true  = ready
-// Twin will be updated: slaveRead.ready, .taskCode, .bootFlag, .sensorStatus and .position
+//          false  = busy
+//          true  = ready
+//          Twin will be updated: _slaveReady.ready, .taskCode, .bootFlag, .sensorStatus and .position
 //
 bool SlaveTwin::getFullStateOfSlave() {
     uint8_t data[6] = {0, 0, 0, 0, 0, 0};                                       // structure to receive answer for STATE
@@ -1136,7 +1184,7 @@ bool SlaveTwin::getFullStateOfSlave() {
         printSlaveReadyInfo();
     #endif
 
-    return _slaveReady.ready;                                                   // return Twin[n]
+    return _slaveReady.ready;                                                   // return read state
 }
 
 // --------------------------
@@ -1180,11 +1228,9 @@ void SlaveTwin::printSlaveReadyInfo() {
 
 // ----------------------------
 // purpose:
-// - updates Register, if device is known
+// - updates Register, if device is allready registerd
 // - don't register new device
-// - updates Registry with parameter handed over as parameter
-// variable:
-// parameter = parameter to be stored in registry for slave
+// - updates Registry with Twin's _parameter
 //
 void SlaveTwin::synchSlaveRegistry() {
     auto it = g_slaveRegistry.find(_slaveAddress);                              // search in registry
@@ -1254,6 +1300,16 @@ void SlaveTwin::synchSlaveRegistry() {
                 {
                 TraceScope trace;
                 twinPrintln("Device sensor status in registry updated of slave 0x%02X to: %d", _slaveAddress, _slaveReady.sensorStatus);
+                }
+            #endif
+        }
+        if (device->bootFlag != _slaveReady.bootFlag) {
+            device->bootFlag = _slaveReady.bootFlag;                            // update bootFlag
+            #ifdef TWINVERBOSE
+                {
+                TraceScope trace;
+                twinPrint("Device bootFlag in registry updated of slave 0x%02X to: ", _slaveAddress);
+                Serial.println(_slaveReady.bootFlag);
                 }
             #endif
         }
@@ -1333,353 +1389,4 @@ void SlaveTwin::systemHalt(const char* reason, int blinkCode) {
         }
         vTaskDelay(pdMS_TO_TICKS(5000));                                        // Delay for 5s
     }
-}
-// ----------------------------
-
-bool SlaveTwin::maybePollReady(bool& outReady) {
-    // If an AYR wait is active, do not poll from outside.
-    if (_inAYRwait) {
-        outReady = false;
-        return false;
-    }
-
-    const uint32_t now = millis();
-    if (now < _readyPollGateUntilMs) {
-        outReady = false;
-        return false;                                                           // throttled: no bus access
-    }
-
-    // Perform the short "ARE YOU READY" transaction.
-    // (Assumes lower layer handles the I2C mutex.)
-    outReady = isSlaveReady();
-
-    // Gate next external poll.
-    _readyPollGateUntilMs = now + GLOBAL_READY_POLL_GAP_MS;
-    return true;                                                                // we touched the bus
-}
-
-// Für unterschiedliche Commands ggf. andere Safety-Kappen
-uint32_t SlaveTwin::withSafety(uint32_t ms, uint8_t longCmd) const {
-    uint32_t inflated;
-    uint32_t min_ms;
-    uint32_t max_ms;
-
-    if (longCmd == MOVE) {
-        // Für kleine Moves: Start-/Dispatch-Latenz (~250ms) mit abdecken
-        const uint32_t start_overhead_ms = 300u;
-        inflated                         = (ms * 130u) / 100u + start_overhead_ms; // +30% + 300ms
-        min_ms                           = 800u;                                // statt 500ms
-        max_ms                           = 5000u;
-    } else if (longCmd == CALIBRATE) {
-        inflated = (ms * 125u) / 100u;                                          // unverändert
-        min_ms   = 500u;
-        max_ms   = 30000u;
-    } else {
-        inflated = (ms * 125u) / 100u;
-        min_ms   = 500u;
-        max_ms   = 5000u;
-    }
-
-    if (inflated < min_ms)
-        inflated = min_ms;
-    if (inflated > max_ms)
-        inflated = max_ms;
-    return inflated;
-}
-
-// ----------------------------
-// Wait until the slave becomes READY using Estimate Time Arrival AYR-based quiet-then-fast polling.
-// - cmd/param: the long command we just sent (used to estimate duration)
-// - timeout_ms: absolute budget; function never sleeps beyond this
-// Returns:
-// true - if READY was observed within the budget,
-// false - on timeout.
-bool SlaveTwin::waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_slave, uint32_t timeout_ms) {
-    const uint32_t t0 = millis();
-
-    // 1) Compute ETA (may be adjusted below)
-    uint32_t eta_ms = estimateAYRdurationMs(longCmd, param_sent_to_slave);
-
-    // SENSOR_CHECK failsafe: ensure ETA ≥ scaled(stepsToMs(param), ~1.6x) + small tail.
-    if (longCmd == SENSOR_CHECK) {
-        const uint32_t base_ms   = stepsToMs((uint32_t)param_sent_to_slave);
-        const uint32_t scaled_ms = (base_ms * 8u + 4u) / 5u;                    // ≈ 1.6x
-        const uint32_t min_eta   = scaled_ms + 120u;                            // keep ≤ 300 ms late overall
-        if (eta_ms < min_eta)
-            eta_ms = min_eta;
-    }
-
-    const uint32_t overshoot_ms  = (longCmd == MOVE) ? 280u : (longCmd == SENSOR_CHECK ? 200u : 20u);
-    const uint32_t first_poll_at = eta_ms + overshoot_ms;                       // goal: first poll hits READY
-
-    // NEW: make sure timeout never expires before we complete the first fast window
-    {
-        const uint32_t min_timeout = first_poll_at + (uint32_t)READY_WINDOW_MS + (uint32_t)READY_POLL_MS;
-        if (timeout_ms < min_timeout)
-            timeout_ms = min_timeout;
-    }
-
-    // 2) Quiet until just after ETA (minimal AYR)
-    while (true) {
-        const uint32_t elapsed = millis() - t0;
-        if (elapsed >= first_poll_at)
-            break;
-        if (elapsed > timeout_ms) {
-            #ifdef AYRVERBOSE
-                {
-                TraceScope trace;
-                twinPrint("AYR TIMEOUT (quiet) cmd=0x");
-                Serial.print(longCmd, HEX);
-                Serial.print(" param=");
-                Serial.print(param_sent_to_slave);
-                Serial.print(" budget_ms=");
-                Serial.println(timeout_ms);
-                }
-            #endif
-            return false;
-        }
-        TickType_t ticks = pdMS_TO_TICKS(5);                                    // wait 5 ms
-        if (ticks == 0)
-            ticks = 1;                                                          // mind. 1 Tick schlafen
-        vTaskDelay(ticks);
-    }
-
-    // 3) First poll
-    uint32_t polls        = 0;
-    bool     seenBusy     = false;
-    uint32_t firstBusy_ms = 0;
-
-    {
-        const bool ready = isSlaveReady();
-        polls++;
-        if (ready) {
-            #ifdef AYRVERBOSE
-                {
-                TraceScope     trace;
-                const uint32_t elapsed = millis() - t0;
-                twinPrint("AYR success cmd=0x");
-                Serial.print(longCmd, HEX);
-                Serial.print(" param=");
-                Serial.print(param_sent_to_slave);
-                Serial.print(" elapsed_ms=");
-                Serial.print(elapsed);
-                Serial.print(" eta_ms=");
-                Serial.print(eta_ms);
-                Serial.print(" polls=");
-                Serial.println(polls);
-                }
-            #endif
-            return true;
-        }
-        seenBusy     = true;
-        firstBusy_ms = millis() - t0;
-    }
-
-    // 4) Coarse follow-up until timeout (keep AYR count low)
-    const uint16_t coarse_interval_ms = 200u;
-    const uint16_t fine_window_ms     = 200u;
-    for (;;) {
-        const uint32_t now     = millis();
-        const uint32_t elapsed = now - t0;
-        if (elapsed > timeout_ms) {
-            #ifdef AYRVERBOSE
-                {
-                TraceScope trace;
-                twinPrint("AYR TIMEOUT cmd=0x");
-                Serial.print(longCmd, HEX);
-                Serial.print(" param=");
-                Serial.print(param_sent_to_slave);
-                Serial.print(" polls=");
-                Serial.print(polls);
-                Serial.print(" seenBusy=");
-                Serial.print(seenBusy ? 1 : 0);
-                Serial.print(" eta_ms=");
-                Serial.println(eta_ms);
-                }
-            #endif
-            return false;
-        }
-
-        const uint32_t remaining = timeout_ms - elapsed;
-        const uint16_t sleep_ms  = (remaining <= fine_window_ms) ? 20u : coarse_interval_ms;
-        delay(sleep_ms);
-
-        const bool ready = isSlaveReady();
-        polls++;
-        if (ready) {
-            #ifdef AYRVERBOSE
-                {
-                TraceScope     trace;
-                const uint32_t elapsed2 = millis() - t0;
-                twinPrint("AYR success cmd=0x");
-                Serial.print(longCmd, HEX);
-                Serial.print(" param=");
-                Serial.print(param_sent_to_slave);
-                Serial.print(" elapsed_ms=");
-                Serial.print(elapsed2);
-                Serial.print(" eta_ms=");
-                Serial.print(eta_ms);
-                Serial.print(" polls=");
-                Serial.print(polls);
-                Serial.print(" seenBusy=");
-                Serial.print(seenBusy ? 1 : 0);
-                Serial.print(" firstBusy_ms=");
-                Serial.println(firstBusy_ms);
-                }
-            #endif
-            return true;
-        }
-    }
-}
-
-// ---- plausibility-checked getters (use measured values if sane) ----------
-uint32_t SlaveTwin::validMsPerRevolution() const {
-    const uint32_t v = _parameter.speed ? _parameter.speed : DEFAULT_REV_MS;    // measured or default
-    if (v < REV_MS_MIN || v > REV_MS_MAX)
-        return DEFAULT_REV_MS;                                                  // clamp to default on out-of-range
-    return v;
-}
-
-uint16_t SlaveTwin::validStepsPerRevolution() const {
-    const uint16_t s = _parameter.steps ? _parameter.steps : DEFAULT_STEPS_PER_REV; // measured or default
-    if (s < STEPS_MIN || s > STEPS_MAX)
-        return DEFAULT_STEPS_PER_REV;                                           // clamp to default on out-of-range
-    return s;
-}
-
-// Steps -> ms (rounded), integer math only
-uint32_t SlaveTwin::stepsToMs(uint32_t steps) const {
-    const uint32_t rev_ms = validMsPerRevolution();
-    const uint16_t spr    = validStepsPerRevolution();
-    const uint64_t num    = (uint64_t)steps * (uint64_t)rev_ms + (spr / 2);     // +0.5 for rounding
-    return (spr ? (uint32_t)(num / spr) : rev_ms);                              // guard if spr==0
-}
-
-// -----------------------------
-// Predict LONG duration in ms (command-specific)
-// Returns command-specific ETA in ms (pure model; no window logic here)
-// ---------------------------------------
-// ETA-Schätzer für AYR-Limiter (Command-spezifisch)
-// Zentrale ETA mit Semantik pro Command:
-uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const {
-    const uint16_t spr    = validStepsPerRevolution();
-    const uint16_t offset = normalizeOffset(_parameter.offset, spr);
-
-    // Base margin used by most commands (kept as-is)
-    uint32_t margin_ms = (((uint32_t)READY_POLL_MS + 50u) > 150u) ? ((uint32_t)READY_POLL_MS + 50u) : 150u;
-    if (margin_ms > 300u)
-        margin_ms = 300u;
-
-    uint32_t eta = 0;
-
-    switch (longCmd) {
-        case CALIBRATE: {
-            // up to one revolution to find sensor + offset to logical zero
-            const uint32_t t_search = stepsToMs((uint32_t)spr);
-            const uint32_t t_offset = stepsToMs((uint32_t)offset);
-            eta                     = t_search + t_offset + margin_ms;
-            break;
-        }
-        case MOVE: {
-            // param = relative steps
-            const uint32_t base_ms = stepsToMs((uint32_t)param);
-            eta                    = base_ms + margin_ms;
-            break;
-        }
-        case SPEED_MEASURE: {
-            // Measurement lasts about one revolution; slightly larger minimal margin for robustness
-            const uint32_t rev_ms = validMsPerRevolution();
-            uint32_t       sp_margin_ms =
-                (((uint32_t)READY_POLL_MS + 50u) > 280u) ? ((uint32_t)READY_POLL_MS + 50u) : 280u; // bump min to ~280 ms (≤ 300 ms cap)
-            if (sp_margin_ms > 300u)
-                sp_margin_ms = 300u;
-
-            eta = rev_ms + sp_margin_ms;
-            break;
-        }
-        case SENSOR_CHECK: {
-            // Runs exactly 'param' steps (counts detections, no early stop).
-            // On some devices (e.g., 0x56) this is effectively slower than nominal → scale by ~1.6x.
-            const uint32_t base_ms   = stepsToMs((uint32_t)param);              // nominal
-            const uint32_t scaled_ms = (base_ms * 8u + 4u) / 5u;                // ≈ 1.6x with rounding
-
-            // Small tail so the single AYR poll lands shortly AFTER "done" (stay ≤ 300 ms late).
-            margin_ms = (READY_POLL_MS > 120u) ? (uint32_t)READY_POLL_MS : 120u;
-            if (margin_ms > 300u)
-                margin_ms = 300u;
-
-            eta = scaled_ms + margin_ms;
-        }
-        default: {
-            // Conservative fallback: one revolution + slightly larger minimal margin
-            const uint32_t rev_ms = validMsPerRevolution();
-
-            uint32_t def_margin_ms = (((uint32_t)READY_POLL_MS + 50u) > 200u) ? ((uint32_t)READY_POLL_MS + 50u) : 200u;
-            if (def_margin_ms > 300u)
-                def_margin_ms = 300u;
-
-            eta = rev_ms + def_margin_ms;
-            break;
-        }
-    }
-
-    // Central clamp (safety)
-    if (eta < 500u)
-        eta = 500u;
-    else if (eta > 60000u)
-        eta = 60000u;
-
-    return eta;
-}
-
-uint32_t SlaveTwin::applyAyrBias(uint8_t cmd, uint32_t eta) const {
-    int16_t bias = 0;
-    switch (cmd) {
-        case CALIBRATE:
-            bias = _ayrBiasCalibrateMs;
-            break;
-        case MOVE:
-            bias = _ayrBiasMoveMs;
-            break;
-        case STEP_MEASURE:
-            bias = _ayrBiasStepMs;
-            break;
-        default:
-            bias = 0;
-            break;
-    }
-    // clamp bias to ±800 ms to avoid runaway
-    if (bias < -800)
-        bias = -800;
-    if (bias > 800)
-        bias = 800;
-
-    int32_t eta_biased = (int32_t)eta + (int32_t)bias;
-    if (eta_biased < 100)
-        eta_biased = 100;                                                       // never below 100 ms
-    return (uint32_t)eta_biased;
-}
-
-void SlaveTwin::learnAyrBias(uint8_t cmd, int32_t detect_vs_eta_ms) {
-    // simple EWMA step: bias := bias + detect/4, clamped
-    int16_t* slot = nullptr;
-    switch (cmd) {
-        case CALIBRATE:
-            slot = &_ayrBiasCalibrateMs;
-            break;
-        case MOVE:
-            slot = &_ayrBiasMoveMs;
-            break;
-        case STEP_MEASURE:
-            slot = &_ayrBiasStepMs;
-            break;
-        default:
-            return;
-    }
-    int32_t upd = (int32_t)(*slot) + (detect_vs_eta_ms / 4);                    // sanft, stabil
-    if (upd < -800)
-        upd = -800;
-    if (upd > 800)
-        upd = 800;
-    *slot = (int16_t)upd;
 }
