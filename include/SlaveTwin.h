@@ -160,7 +160,6 @@ class SlaveTwin {
     void logAndRun(const char* message, std::function<void()> action);          // log message and run action
     void printSlaveReadyInfo();                                                 // trace output Read Structure
     void synchSlaveRegistry();                                                  // take over slave parameter to registry
-    bool waitUntilSlaveReady(uint32_t timeout_ms);                              // wait until slave is ready
     int  countStepsToMove(int from, int to);                                    // return steps to move fom "from" to "to"
 
     // ---------------------------
