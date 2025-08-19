@@ -348,6 +348,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         I2CSlaveDevice* device          = it->second;
         device->parameter               = parameter;                            // update all parameter
         device->position                = Twin[n]->_slaveReady.position;        // update Flap position
+        device->bootFlag                = Twin[n]->_slaveReady.bootFlag;        // update bootFlag
         device->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus;    // update Sensor status
         #ifdef SCANVERBOSE
             {
@@ -366,6 +367,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         slaveIsNew                         = true;                              // new slave detected
         I2CSlaveDevice* newDevice          = new I2CSlaveDevice();              // create new device
         newDevice->parameter               = parameter;                         // set all parameter
+        newDevice->bootFlag                = Twin[n]->_slaveReady.bootFlag;     // set bootFlag
         newDevice->position                = Twin[n]->_slaveReady.position;     // set flap position
         newDevice->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus; // set Sensor status
 
@@ -386,7 +388,6 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
     checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
     if (n >= 0 && slaveIsNew) {                                                 // only if slave is ready
         Twin[n]->_parameter = parameter;                                        // update all twin parameter
-        //        Twin[n]->getSlaveState();
 
         #ifdef REGISTRYVERBOSE
             {

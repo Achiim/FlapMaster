@@ -42,14 +42,22 @@ FlapReporting::FlapReporting() {}
 // -----------------------------------
 // trace print I2C usage statistic
 void FlapReporting::reportI2CStatistic() {
-    Serial.println("- FLAP I²C STATISTIC AND HISTRORY OF LAST MINUTES");
     if (DataEvaluation == nullptr) {
         #ifdef MASTERVERBOSE
             Serial.println("reportingTask(): DataEvaluation not available!");
         #endif
         return;
     }
+    // Frame beginning
+    //                                     1                   2                   3                   4
+    //              123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    Serial.println("┌─────────────────────────────────────────────────────────────────────────────┐");
+    Serial.println("│               FLAP I²C STATISTIC AND HISTRORY OF LAST MINUTES               │");
+
     printI2CHistory();                                                          // show history of I2C usage
+
+    // Frame finish
+    Serial.println("└─────────────────────────────────────────────────────────────────────────────┘");
 }
 
 // -----------------------------------
@@ -88,9 +96,7 @@ void FlapReporting::printI2CHistory() {
         uint32_t valRead   = DataEvaluation->_readHistory[index];
         uint32_t valTime   = DataEvaluation->_timeoutHistory[index];
 
-        // FRame beginning
-        Serial.println("┌─────────────────────────────────────────────────────────────────────────────┐");
-
+        Serial.println("├─────────────────────────────────────────────────────────────────────────────┤");
         // Access-row with ░
         Serial.printf("│ Minute [%3d]   Access  [%4u] ", minute, valAccess);
         printBar(valAccess, scale, BLOCK_LIGHT, barSpace);
@@ -113,9 +119,6 @@ void FlapReporting::printI2CHistory() {
         Serial.printf("%4u] ", valTime);
         printBar(valTime, scale, BLOCK_LIGHT, barSpace);
         Serial.println(" │");
-
-        // Frame finish
-        Serial.println("└─────────────────────────────────────────────────────────────────────────────┘");
     }
 }
 
@@ -133,21 +136,17 @@ void FlapReporting::printBar(uint32_t value, float scale, const char* symbol, ui
 }
 
 void FlapReporting::reportSlaveRegistry() {
-    Serial.println("╔════════════════════════════════════════════════════════════════════════════════════╗");
-    Serial.println("║                             FLAP I²C DEVICE REGISTRY                               ║");
-    Serial.println("╠══════╦══════════════════════╦════════╦═════╦═══════╦═══════╦══════╦══════╦═════════╣");
-    Serial.println("║ I²C  ║ Device               ║ Offset ║ rpm ║ ms/Rev║ St/Rev║ Flaps║ Pos  ║ Sensor  ║");
-    Serial.println("╟──────╫──────────────────────╫────────╫─────╫───────╫───────╫──────╫──────╫─────────╢");
+    //                                     1                   2                   3                   4
+    //              123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    Serial.println("┌────────────────────────────────────────────────────────────────────────────────────┐");
+    Serial.println("│                              FLAP I²C DEVICE REGISTRY                              │");
+    Serial.println("├──────┬──────────────────┬─────┬───┬──────┬──────┬────────┬──────┬─────────┬────────┤");
+    Serial.println("│ I²C  │ Device           │Flaps│rpm│ms/Rev│St/Rev│ Offset │ Pos  │ Sensor  │ State  │");
+    Serial.println("├──────┼──────────────────┼─────┼───┼──────┼──────┼────────┼──────┼─────────┼────────┤");
 
     for (const auto& [address, device] : g_slaveRegistry) {
-        if (!device) {
-            char buffer[64];
-            snprintf(buffer, sizeof(buffer), "║ 0x%02X ║       (nullptr)      ║   ---  ║ --- ║  ---  ║  ---  ║  --- ║ ---  ║ [unknown] ║", address);
-            Serial.println(buffer);
-            continue;
-        }
-
         const char* sensorStatus = device->parameter.sensorworking ? "WORKING" : "BROKEN";
+        const char* deviceStatus = device->bootFlag ? "boot" : "online";
         const char* name         = formatSerialNumber(device->parameter.serialnumber);
 
         uint16_t offset  = device->parameter.offset;
@@ -158,13 +157,15 @@ void FlapReporting::reportSlaveRegistry() {
         uint16_t pos     = device->position;
 
         char line[128];
-        snprintf(line, sizeof(line), "║ 0x%02X ║ %-20s ║ %6u ║ %3u ║ %5u ║ %5u ║ %4u ║ %4u ║ %-7s ║", address, name, offset, (speedMs > 0 ? rpm : 0),
-                 speedMs, steps, flaps, pos, sensorStatus);
+        snprintf(line, sizeof(line), "│ 0x%02X │ %-16s │ %3u │%3u│%5u │%5u │ %6u │ %4u │ %-7s │ %-6s │", address, name, flaps,
+                 (speedMs > 0 ? rpm : 0), speedMs, steps, offset, pos, sensorStatus, deviceStatus);
 
         Serial.println(line);
     }
 
-    Serial.println("╚══════╩══════════════════════╩════════╩═════╩═══════╩═══════╩══════╩══════╩═════════╝");
+    Serial.println("└──────┴──────────────────┴─────┴───┴──────┴──────┴────────┴──────┴─────────┴────────┘");
+    //              123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    //                                     1                   2                   3                   4
 }
 
 void FlapReporting::reportRtosTasks() {
