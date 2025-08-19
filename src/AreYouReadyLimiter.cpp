@@ -14,31 +14,6 @@
 
 #include "SlaveTwin.h"
 
-// ----------------------------
-/*
-bool SlaveTwin::maybePollReady(bool& outReady) {
-    // If an AYR wait is active, do not poll from outside.
-    if (_inAYRwait) {
-        outReady = false;
-        return false;
-    }
-
-    const uint32_t now = millis();
-    if (now < _readyPollGateUntilMs) {
-        outReady = false;
-        return false;                                                           // throttled: no bus access
-    }
-
-    // Perform the short "ARE YOU READY" transaction.
-    // (Assumes lower layer handles the I2C mutex.)
-    outReady = isSlaveReady();
-
-    // Gate next external poll.
-    _readyPollGateUntilMs = now + GLOBAL_READY_POLL_GAP_MS;
-    return true;                                                                // we touched the bus
-}
-*/
-
 // Für unterschiedliche Commands ggf. andere Safety-Kappen
 uint32_t SlaveTwin::withSafety(uint32_t ms, uint8_t longCmd) const {
     uint32_t inflated;
