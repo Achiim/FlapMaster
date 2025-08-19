@@ -203,6 +203,16 @@ class SlaveTwin {
     uint32_t withSafety(uint32_t ms, uint8_t longCmd) const;
     bool     waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_slave, uint32_t timeout_ms);
 
+    // AYR helper pipeline
+    uint32_t computeEtaWithGuards(uint8_t longCmd, uint16_t param) const;
+    uint32_t computeOvershoot(uint8_t longCmd) const;
+    uint32_t planFirstPollAt(uint32_t eta_ms, uint8_t longCmd) const;
+    void     stretchTimeoutForFirstWindow(uint32_t first_poll_at, uint32_t& timeout_ms) const;
+    bool     quietWait(uint32_t t0, uint32_t first_poll_at, uint32_t timeout_ms);
+    bool     tryFirstPoll(uint32_t t0, uint8_t longCmd, uint16_t param, uint32_t eta_ms, uint32_t& polls, bool& seenBusy, uint32_t& firstBusy_ms);
+    bool     followUpPolling(uint32_t t0, uint32_t timeout_ms, uint32_t eta_ms, uint8_t longCmd, uint16_t param, uint32_t& polls, bool& seenBusy,
+                             uint32_t& firstBusy_ms);
+
     // -------------------------------
     // Twin trace
     template <typename... Args>
