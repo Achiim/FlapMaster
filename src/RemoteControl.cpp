@@ -66,17 +66,19 @@ void RemoteControl::getRemote() {
 void RemoteControl::getIRcode() {
     if (irController.decode(&results)) {
         _lastGetKeyCode = results.value;
-        if (_lastGetKeyCode != 0xFF9867) {                                      // is it Key100_PLUS
+        //        if (_lastGetKeyCode != 0xFF9867) {                                      // is it Key100_PLUS
 
-            if (g_parserQueue != nullptr) {                                     // if queue exists
-                xQueueOverwrite(g_parserQueue,
-                                &_lastGetKeyCode);                              // send all other keys to all registered twin queues
-            }
-        } else {
-            if (g_reportQueue != nullptr) {                                     // if queue exists
-                xQueueOverwrite(g_reportQueue, &_lastGetKeyCode);               // send Key100_PLUS only to status task queue
-            }
+        if (g_parserQueue != nullptr) {                                         // if queue exists
+            xQueueOverwrite(g_parserQueue,
+                            &_lastGetKeyCode);                                  // send all other keys to all registered twin queues
         }
+        /*
+                } else {
+                    if (g_reportQueue != nullptr) {                             // if queue exists
+                        xQueueOverwrite(g_reportQueue, &_lastGetKeyCode);       // send Key100_PLUS only to status task queue
+                    }
+                }
+        */
         irController.resume();                                                  // prepare next ir receive
     }
 }
