@@ -119,6 +119,24 @@ uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const
             // NOTE: no 'break' here → this will FALL THROUGH to 'default' if left as-is.
             // If you do NOT intend fall-through, add 'break;' above.
         }
+        case STEP_MEASURE: {                                                    // 3 forward measurements
+            const uint16_t off_steps = (param != 0) ? param : offset;           // treat param as offset_steps if provided
+            const uint32_t rev_ms    = validMsPerRevolution();                  // ms per revolution
+
+            // per measurement ≈ 2.45 × rev + offset_steps + 1 s pause
+            // 2.45 ≈ 49/20 (integer math with rounding).
+            const uint32_t t_search_like = (rev_ms * 49u + 10u) / 20u;          // ≈ 2.45 × rev
+            const uint32_t t_offset      = stepsToMs((uint32_t)off_steps);      // offset segment
+            const uint32_t t_pause       = (uint32_t)STEP_MEASURE_DELAY_MS;     // 1000 ms
+            const uint32_t per_meas      = t_search_like + t_offset + t_pause;  // one measurement
+
+            uint32_t tail_ms = (((uint32_t)READY_POLL_MS + 50u) > 120u) ? ((uint32_t)READY_POLL_MS + 50u) : 120u; // modest tail
+            if (tail_ms > 300u)
+                tail_ms = 300u;                                                 // ≤ 300 ms
+
+            eta = 3u * per_meas + tail_ms;                                      // 3 measurements + final tail
+            break;
+        }
         default: {                                                              // Fallback for unknown/other commands
             const uint32_t rev_ms = validMsPerRevolution();                     // use one revolution as a conservative baseline
 
@@ -165,8 +183,10 @@ uint32_t SlaveTwin::computeEtaWithGuards(uint8_t longCmd, uint16_t param) const 
 // Command-specific overshoot (how far after ETA we issue the first poll)
 // Returns the overshoot in ms we add to the ETA before the first AYR poll.
 uint32_t SlaveTwin::computeOvershoot(uint8_t longCmd) const {
-    return (longCmd == MOVE) ? 280u                                             // longer tail for MOVE
-                             : (longCmd == SENSOR_CHECK ? 200u : 20u);          // medium tail for SENSOR_CHECK, small for others
+    return (longCmd == MOVE)           ? 280u                                   // longer tail for MOVE
+           : (longCmd == SENSOR_CHECK) ? 200u                                   // medium tail for SENSOR_CHECK, small for others
+           : (longCmd == STEP_MEASURE) ? 120u                                   // tuned for ~28 s runtime
+                                       : 20u;
 }
 
 // --------------------------------------
@@ -279,9 +299,11 @@ bool SlaveTwin::followUpPolling(uint32_t t0, uint32_t timeout_ms, uint32_t eta_m
         const uint16_t sleep_ms  = (remaining <= fine_window_ms) ? 20u          // use fine cadence near deadline
                                                                  : coarse_interval_ms; // coarse otherwise
 
-        // Coarse cadence is low; blocking delay here is fine. If you prefer RTOS:
-        // TickType_t t = pdMS_TO_TICKS(sleep_ms); if (t == 0) t = 1; vTaskDelay(t);
-        delay(sleep_ms);                                                        // sleep between polls
+        // Coarse cadence is low;
+        TickType_t t = pdMS_TO_TICKS(sleep_ms);
+        if (t == 0)
+            t = 1;
+        vTaskDelay(t);                                                          // sleep between polls
 
         const bool ready = isSlaveReady();                                      // next AYR probe
         polls++;                                                                // count this probe
@@ -375,6 +397,10 @@ uint32_t SlaveTwin::withSafety(uint32_t ms, uint8_t longCmd) const {
         inflated = (ms * 125u) / 100u;                                          // +25%
         min_ms   = 500u;
         max_ms   = 30000u;
+    } else if (longCmd == STEP_MEASURE) {
+        inflated = (ms * 120u) / 100u;                                          // +20% across 3 cycles
+        min_ms   = 10000u;                                                      // at least 10 s
+        max_ms   = 60000u;                                                      // up to 60 s
     } else {
         // Default for other LONG commands:
         // Mild inflation and a compact clamp range.

@@ -230,7 +230,7 @@ esp_err_t i2c_probe_device(I2Caddress address) {
 bool takeI2CSemaphore() {
     int retry = 5;
     while (retry > 0) {
-        if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(200))) {
+        if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(20))) {
             #ifdef SEMAPHOREVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block

@@ -619,15 +619,14 @@ LongMessage SlaveTwin::i2cCommandParameter(uint8_t command, u_int16_t parameter)
 // purpose: send I2C short command, only one byte
 esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
     esp_err_t ret = ESP_FAIL;
-    takeI2CSemaphore();
 
     logShortRequest(shortCmd);
-
     i2c_cmd_handle_t cmd = buildShortCommand(shortCmd, answer, size);
-    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(500));
+    takeI2CSemaphore();
+    ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(30));
+    giveI2CSemaphore();
     i2c_cmd_link_delete(cmd);
 
-    giveI2CSemaphore();
     if (DataEvaluation)
         DataEvaluation->increment(2, 1, 0);                                     // 2 accesses, 1 byte sent
 
@@ -1071,6 +1070,7 @@ bool SlaveTwin::isSlaveReady() {
         }
         return false;                                                           // twin not connected
     }
+
     _slaveReady.ready = data[0];                                                // update slaveReady structure
     #ifdef READYBUSYVERBOSE
         {
