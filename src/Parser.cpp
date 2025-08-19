@@ -30,6 +30,30 @@ ParserClass::ParserClass() {
 };
 
 // ---------------------
+// dispatch keystroke by reporting device
+void ParserClass::dispatchToReporting() {
+    #ifdef PARSERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        parserPrintln("final decision ClickEvent.type: %s", Control->clickTypeToString(_receivedEvent.type));
+        parserPrintln("final decision Received Key21: %s", Control->key21ToString(_receivedEvent.key));
+        }
+    #endif
+    #ifdef PARSERVERBOSE
+        {
+        TraceScope trace;
+        parserPrint("send mapping key21 to reporting: ");
+        Serial.println(Control->key21ToString(_receivedEvent.key));
+        }
+    #endif
+    _mappedReport = mapEvent2Report(_receivedEvent);                            // map ClickEvent to ReportCommand
+
+    if (g_reportQueue != nullptr) {                                             // if queue exists
+        xQueueOverwrite(g_reportQueue, &_mappedReport);                         // send Reporting Command to reporting task
+    }
+}
+
+// ---------------------
 // dispatch keystroke to all registered devices
 void ParserClass::dispatchToTwins() {
     #ifdef PARSERVERBOSE
@@ -222,6 +246,10 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
             cmd.twinCommand = TWIN_SENSOR_CHECK;
             return cmd;
             break;
+        case Key21::KEY_100_PLUS:
+            cmd.twinCommand = TWIN_NO_COMMAND;
+            return cmd;
+            break;
         case Key21::KEY_200_PLUS:
             cmd.twinCommand = TWIN_RESET;
             return cmd;
@@ -295,6 +323,124 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
                 }
             #endif
             cmd.twinCommand = TWIN_NO_COMMAND;
+            return cmd;
+            break;
+        }
+    }
+}
+
+// -------------------------
+// map event to command
+ReportCommand ParserClass::mapEvent2Report(ClickEvent event) {
+    ReportCommand cmd;
+    cmd.repCommand = REPORT_NO_COMMAND;
+
+    cmd.responsQueue = nullptr;
+
+    switch (event.key) {
+        case Key21::KEY_CH_MINUS:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_CH:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_CH_PLUS:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_PREV:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_NEXT:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_PLAY_PAUSE:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_VOL_MINUS:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_VOL_PLUS:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_EQ:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_100_PLUS:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_200_PLUS:
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        case Key21::KEY_0: {
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_1: {
+            cmd.repCommand = REPORT_TASKS_STATUS;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_2: {
+            cmd.repCommand = REPORT_MEMORY;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_3: {
+            cmd.repCommand = REPORT_STEPS_BY_FLAP;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_4: {
+            cmd.repCommand = REPORT_RTOS_TASKS;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_5: {
+            cmd.repCommand = REPORT_I2C_STATISTIC;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_6: {
+            cmd.repCommand = REPORT_REGISTRY;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_7: {
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_8: {
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        }
+        case Key21::KEY_9: {
+            cmd.repCommand = REPORT_NO_COMMAND;
+            return cmd;
+            break;
+        }
+        default: {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                parserPrint("Unknown key21: ");
+                Serial.println(static_cast<int>(event.key));
+                }
+            #endif
+            cmd.repCommand = REPORT_NO_COMMAND;
             return cmd;
             break;
         }

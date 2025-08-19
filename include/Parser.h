@@ -23,6 +23,7 @@ class ParserClass {                                                             
     ClickEvent    _receivedEvent;                                               // click-Type + key
     ClickEvent    _evt;                                                         // update after poll
     TwinCommand   _mappedCommand;                                               // ClickEvent Mapped to TwinCommand
+    ReportCommand _mappedReport;                                                // ClickEvent Mapped to ReportCommand
     Key21         _receivedKey;                                                 // only pressed key
     Key21         _pendingKey             = Key21::NONE;                        // waiting for same click as pending key
     Key21         _lastKey                = Key21::UNKNOWN;                     // previous pressed Key21::key
@@ -41,6 +42,7 @@ class ParserClass {                                                             
     void       handleQueueMessage();                                            // read from ParserQueue and filter
     void       analyseClickEvent();                                             // analyse if there is more than a single click
     void       dispatchToTwins();                                               // dispatch key stroke to twins for execution
+    void       dispatchToReporting();
 
     // Parser trace
     template <typename... Args>
@@ -55,7 +57,8 @@ class ParserClass {                                                             
     const char* twinCommandToString(TwinCommands cmd);                          // conver command to text
 
    private:
-    TwinCommand mapEvent2Command(ClickEvent e);                                 // map ClickEvent to TwinCommand
+    TwinCommand   mapEvent2Command(ClickEvent e);                               // map ClickEvent to TwinCommand
+    ReportCommand mapEvent2Report(ClickEvent event);                            // map ClickEvent ReportCommand
 };
 
 #endif                                                                          // Parser_h

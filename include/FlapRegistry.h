@@ -37,8 +37,9 @@
 
 // Content of Registry
 struct I2CSlaveDevice {
-    slaveParameter parameter;
-    uint16_t       position;
+    slaveParameter parameter;                                                   // parameter of device
+    uint16_t       position;                                                    // position of device
+    bool           bootFlag;                                                    // bootFlag of device
 };
 
 // ----------------------------

@@ -58,11 +58,28 @@ enum TwinCommands {
     TWIN_NEW_ADDRESS       = 140                                                // this command is used to set the base address for the twin
 };                                                                              // list of possible twin commands
 
+enum ReportCommands {
+    REPORT_NO_COMMAND    = 0,                                                   // no command
+    REPORT_TASKS_STATUS  = 150,
+    REPORT_MEMORY        = 160,
+    REPORT_ALL           = 170,
+    REPORT_RTOS_TASKS    = 180,
+    REPORT_STEPS_BY_FLAP = 190,
+    REPORT_REGISTRY      = 200,
+    REPORT_I2C_STATISTIC = 210
+};                                                                              // list of possible twin commands
+
 // Command that will be accepted byTwin
 struct TwinCommand {
     TwinCommands  twinCommand;                                                  // command to be performed by twin
     int           twinParameter;                                                // parameter for command
     QueueHandle_t responsQueue;                                                 // queue, where result shall be responded
+};
+
+// Command that will be accepted byRepoting
+struct ReportCommand {
+    ReportCommands repCommand;                                                  // command to be performed by reporting
+    QueueHandle_t  responsQueue;                                                // queue, where result shall be responded
 };
 
 class SlaveTwin {
