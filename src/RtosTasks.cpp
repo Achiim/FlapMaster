@@ -41,9 +41,9 @@ void parserTask(void* pvParameters) {
                     if (Parser->_receivedEvent.type == CLICK_SINGLE) {
                         Parser->dispatchToTwins();                              // execute key by twins
                     }
-                    Parser->_receivedEvent.key  = Key21::NONE;                  // reset received key
-                    Parser->_receivedEvent.type = CLICK_NONE;                   // reset received type
                 }
+                Parser->_receivedEvent.key  = Key21::NONE;                      // reset received key
+                Parser->_receivedEvent.type = CLICK_NONE;                       // reset received type
             }
         }
     }
