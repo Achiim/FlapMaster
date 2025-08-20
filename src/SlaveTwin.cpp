@@ -473,7 +473,9 @@ void SlaveTwin::prevFlap() {
     }
 }
 
-// ----------------------------
+// --------------------------------------------
+// ------- NEXT STEPS / ADJUSTMENT-------------
+// --------------------------------------------
 void SlaveTwin::nextSteps() {
     if (_parameter.offset + _adjustOffset + ADJUSTMENT_STEPS <= _parameter.steps) { // only as positiv, as to be stepped to one revolutoin
         i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS));
@@ -503,15 +505,20 @@ void SlaveTwin::nextSteps() {
     }
 }
 
-// ----------------------------
+// --------------------------------------------
+// ------- PREV STEPS / ADJUSTMENT-------------
+// --------------------------------------------
 void SlaveTwin::prevSteps() {
     if (_parameter.offset + _adjustOffset - ADJUSTMENT_STEPS >= 0) {            // only as negativ, as to be stepped back to zero
         _adjustOffset -= ADJUSTMENT_STEPS;
         twinPrintln("to be stored offset: %d (not yet stored)", _parameter.offset + _adjustOffset);
+        synchSlaveRegistry();                                                   // update registry with confirmed state
     }
 }
 
-// ----------------------------
+// --------------------------------------------
+// -------------- SAVE OFFSET -----------------
+// --------------------------------------------
 void SlaveTwin::setOffset() {
     if (_parameter.offset + _adjustOffset >= 0 && _parameter.offset + _adjustOffset <= _parameter.steps) {
         _parameter.offset += _adjustOffset;                                     // add adjustment to stored offset
@@ -522,11 +529,29 @@ void SlaveTwin::setOffset() {
     twinPrintln("reset adjustment offset to 0");
     twinPrintln("save: offset = %d | ms/Rev = %d | St/Rev = %d", _parameter.offset, _parameter.speed, _parameter.steps);
 
-    synchSlaveRegistry();                                                       // take over new offset to registry
     i2cLongCommand(i2cCommandParameter(SET_OFFSET, _parameter.offset));
+    const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, ADJUSTMENT_STEPS);  // estimate duration for MOVE based on speed/steps
+    const uint32_t timeout_ms = withSafety(ayr_ms, MOVE);                       // add safety margin (e.g. +25%, min/max caps)
+    if (!waitUntilYouAreReady(SET_OFFSET, ADJUSTMENT_STEPS, timeout_ms)) {      // quiet-until-AYR, then fast-poll ARE_YOU_READY
+        {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                twinPrintln("save parameter failed or timed out on slave 0x%02X", _slaveAddress);
+                }
+            #endif
+            return;                                                             // no registry sync on failure
+        }
+    }
+    #ifdef TWINVERBOSE
+        twinPrintln("request result of adjustment");
+    #endif
+    synchSlaveRegistry();                                                       // take over new offset to registry
 }
 
-// ----------------------------
+// --------------------------------------------
+// ----------------- RESET --------------------
+// --------------------------------------------
 void SlaveTwin::reset() {
     twinPrint("send reset to 0x:  ");
     Serial.println(_slaveAddress, HEX);
