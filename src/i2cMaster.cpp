@@ -228,28 +228,23 @@ esp_err_t i2c_probe_device(I2Caddress address) {
 // --------------------------
 // take Semaphore
 bool takeI2CSemaphore() {
-    int retry = 5;
-    while (retry > 0) {
-        if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(20))) {
-            #ifdef SEMAPHOREVERBOSE
-                {
-                TraceScope trace;                                               // use semaphore to protect this block
-                masterPrintln("Semaphore erfolgreich genommen (takeI2CSemaphore)");
-                }
-            #endif
-            return true;
-        } else {
-            #ifdef SEMAPHOREVERBOSE
-                {
-                TraceScope trace;                                               // use semaphore to protect this block
-                masterPrintln("Semaphore nicht bekommen (takeI2CSemaphore)");
-                }
-            #endif
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            retry--;
-        }
+    if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(20))) {
+        #ifdef SEMAPHOREVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            masterPrintln("Semaphore erfolgreich genommen (takeI2CSemaphore)");
+            }
+        #endif
+        return true;                                                            // success taken semaphore
+    } else {
+        #ifdef SEMAPHOREVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            masterPrintln("Semaphore nicht bekommen (takeI2CSemaphore)");
+            }
+        #endif
+        return false;                                                           // no semaphore
     }
-    return false;
 }
 
 // --------------------------
