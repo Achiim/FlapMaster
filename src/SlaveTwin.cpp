@@ -477,8 +477,29 @@ void SlaveTwin::prevFlap() {
 void SlaveTwin::nextSteps() {
     if (_parameter.offset + _adjustOffset + ADJUSTMENT_STEPS <= _parameter.steps) { // only as positiv, as to be stepped to one revolutoin
         i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS));
+
+        const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, ADJUSTMENT_STEPS); // estimate duration for MOVE based on speed/steps
+        const uint32_t timeout_ms = withSafety(ayr_ms, MOVE);                   // add safety margin (e.g. +25%, min/max caps)
+        if (!waitUntilYouAreReady(MOVE, ADJUSTMENT_STEPS, timeout_ms)) {        // quiet-until-AYR, then fast-poll ARE_YOU_READY
+            {
+                #ifdef ERRORVERBOSE
+                    {
+                    TraceScope trace;
+                    twinPrintln("adjustment failed or timed out on slave 0x%02X", _slaveAddress);
+                    }
+                #endif
+                return;                                                         // no registry sync on failure
+            }
+        }
+        #ifdef TWINVERBOSE
+            twinPrintln("request result of adjustment");
+        #endif
+
         _adjustOffset += ADJUSTMENT_STEPS;
         twinPrintln("to be stored offset: %d (not yet stored)", _parameter.offset + _adjustOffset);
+
+        getFullStateOfSlave();                                                  // get result of move
+        synchSlaveRegistry();                                                   // update registry with confirmed state
     }
 }
 
@@ -544,8 +565,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
     prepareI2Cdata(mess, _slaveAddress, data);
     esp_err_t error = ESP_FAIL;
 
-    // take semaphore
-    takeI2CSemaphore();
+    takeI2CSemaphore();                                                         // take semaphore
 
     #ifdef I2CMASTERVERBOSE
         {
@@ -566,8 +586,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
     error = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1));             // send command chain
     i2c_cmd_link_delete(cmd);                                                   // delete command chain
 
-    // give semaphore
-    giveI2CSemaphore();
+    giveI2CSemaphore();                                                         // give semaphore
 
     if (DataEvaluation)
         DataEvaluation->increment(1, sizeof(LongMessage));                      // count I2C usage, 1 Access, 3 byte data
