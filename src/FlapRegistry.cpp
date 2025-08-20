@@ -29,7 +29,19 @@
 std::map<I2Caddress, I2CSlaveDevice*> g_slaveRegistry;
 
 // -----------------------------------
-// check if all registerd slaves are still available, if not deregister
+// check if all registered slaves are still available, if not -> deregister
+// will be called cyclic by Registry Task with the help of a countdown timer
+// function:
+// - will ping registered all devices
+//
+// if device answers:
+//   - ask device about bootFlag
+//   - reset bootFlag
+//   - calibrate device
+//
+// if device does not answer:
+//   - deregister this device
+//
 void FlapRegistry::check_slave_availability() {
     for (auto it = g_slaveRegistry.begin(); it != g_slaveRegistry.end();) {
         const I2Caddress addr = it->first;
@@ -41,30 +53,23 @@ void FlapRegistry::check_slave_availability() {
             Serial.println(addr, HEX);
             }
         #endif
-        esp_err_t ret = i2c_probe_device(addr);                                 // send ping to device/slave
-        if (ret != ESP_OK) {
-            #ifdef AVAILABILITYVERBOSE
-                {
-                TraceScope trace;
-                registerPrint("registered I²C-Slave not available -> will deregister it 0x");
-                Serial.println(addr, HEX);
-                }
-            #endif
-            delete it->second;
-            it = g_slaveRegistry.erase(it);                                     // maybee don't delete at first unavailability
-        } else {
-            #ifdef AVAILABILITYVERBOSE
-                {
-                TraceScope trace;
-                registerPrint("registered I2C-Slave is available: 0x");
-                Serial.println(addr, HEX);
-                }
-            #endif
-            int n = findTwinIndexByAddress(addr);                               // corresponding twin for new slave
-            if (n >= 0)
-                checkSlaveHasBooted(n, addr);
-            ++it;                                                               // next registry entry
-        }
+        // esp_err_t ret = i2c_probe_device(addr);                                 // send ping to device/slave
+
+        #ifdef AVAILABILITYVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("send TWIN_PROBE to twin 0x");
+            Serial.println(addr, HEX);
+            }
+        #endif
+
+        TwinCommand twinCmd;
+        twinCmd.twinCommand   = TWIN_AVAILABILITY;                              // set command to check availablility
+        twinCmd.twinParameter = 0;                                              // no parameter
+        twinCmd.responsQueue  = nullptr;                                        // no response requested
+        int n                 = findTwinIndexByAddress(addr);                   // get twin index from address
+        Twin[n]->sendQueue(twinCmd);                                            // send command to Twin[n] to calibrate
+        ++it;                                                                   // next registry entry
     }
 }
 

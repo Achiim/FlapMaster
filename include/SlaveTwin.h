@@ -56,18 +56,21 @@ enum TwinCommands {
     TWIN_RESET             = 110,                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
     TWIN_AVAILABLE         = 120,                                               // this command is used to check if twin is available
     TWIN_SCAN              = 130,                                               // this command is used to scan for twin devices
-    TWIN_NEW_ADDRESS       = 140                                                // this command is used to set the base address for the twin
+    TWIN_NEW_ADDRESS       = 140,                                               // this command is used to set the base address for the twin
+    TWIN_PROBE             = 150,                                               // this command is used to reset boot flag from slave
+    TWIN_RESET_BOOT_FLAG   = 160,                                               // this command is used perform a slave availablability check
+    TWIN_AVAILABILITY      = 170
 };                                                                              // list of possible twin commands
 
 enum ReportCommands {
     REPORT_NO_COMMAND    = 0,                                                   // no command
-    REPORT_TASKS_STATUS  = 150,
-    REPORT_MEMORY        = 160,
-    REPORT_ALL           = 170,
-    REPORT_RTOS_TASKS    = 180,
-    REPORT_STEPS_BY_FLAP = 190,
-    REPORT_REGISTRY      = 200,
-    REPORT_I2C_STATISTIC = 210
+    REPORT_TASKS_STATUS  = 300,
+    REPORT_MEMORY        = 310,
+    REPORT_ALL           = 320,
+    REPORT_RTOS_TASKS    = 330,
+    REPORT_STEPS_BY_FLAP = 340,
+    REPORT_REGISTRY      = 350,
+    REPORT_I2C_STATISTIC = 360
 };                                                                              // list of possible twin commands
 
 // Command that will be accepted byTwin
@@ -113,6 +116,7 @@ class SlaveTwin {
     void setOffset();                                                           // save calibration ofset in slave EEPROM
     void reset();                                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
     void setNewAddress(int address);                                            // set new address for the twin
+    void performAvailability();                                                 // availability check
 
     // Helper
     bool  readAllParameters(slaveParameter& p);                                 // Reads all parameters from the slave device.

@@ -156,7 +156,9 @@ void SlaveTwin::twinControl(TwinCommand twinCmd) {
         case TWIN_NEW_ADDRESS:
             logAndRun("Translate to I2C command NEW ADDRESS to Slave...", [=] { setNewAddress(param); });
             break;
-
+        case TWIN_AVAILABILITY:
+            logAndRun("Translate to performAvailability ...", [=] { performAvailability(); });
+            break;
         case TWIN_SHOW_FLAP: {
             std::string msg = "Translate to I2C command Show Flap / MOVE ";
             msg += param;
@@ -867,6 +869,58 @@ void SlaveTwin::setNewAddress(int address) {
         twinPrint("was received by device with serial number: ");
         Serial.println(formatSerialNumber(sn));
     #endif
+}
+
+void SlaveTwin::performAvailability() {
+    uint8_t   ans = 0;
+    esp_err_t ret = i2c_probe_device(_slaveAddress);                            // send ping to device/slave
+    if (ret != ESP_OK) {
+        #ifdef AVAILABILITYVERBOSE
+            {
+            TraceScope trace;
+            twinPrint("I²C-Slave is not available -> will deregister it 0x");
+            Serial.println(_slaveAddress, HEX);
+            }
+        #endif
+        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
+        return;
+    }
+
+    #ifdef AVAILABILITYVERBOSE
+        {
+        TraceScope trace;
+        twinPrint("I2C-Slave is available: 0x");
+        Serial.println(_slaveAddress, HEX);
+        }
+    #endif
+
+    if (i2cShortCommand(CMD_GET_BOOT_FLAG, &ans, sizeof(ans)) == ESP_OK) {      // request bootFlag
+        _slaveReady.bootFlag = ans;
+
+        if (_slaveReady.bootFlag) {                                             // check if bootFlag of slave is set
+            {
+                #ifdef AVAILABILITYVERBOSE
+                    {
+                    TraceScope trace;
+                    twinPrint("reset bootFlag on rebooted Slave 0x");
+                    Serial.println(_slaveAddress, HEX);
+                    }
+                #endif
+            }
+            if (i2cShortCommand(CMD_RESET_BOOT, &ans, sizeof(ans)) == ESP_OK) { // send reset bootFlag to slave
+                {
+                    #ifdef AVAILABILITYVERBOSE
+                        {
+                        TraceScope trace;
+                        twinPrint("slave has rebooted; calibrating now Slave 0x");
+                        Serial.println(_slaveAddress, HEX);
+                        }
+                    #endif
+                }
+                calibration();
+            }
+        }
+    }
 }
 
 // -----------------------------------------
