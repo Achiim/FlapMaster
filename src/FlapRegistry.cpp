@@ -58,7 +58,7 @@ void FlapRegistry::check_slave_availability() {
         #ifdef AVAILABILITYVERBOSE
             {
             TraceScope trace;
-            registerPrint("send TWIN_PROBE to twin 0x");
+            registerPrint("send TWIN_AVAILABILITY to twin 0x");
             Serial.println(addr, HEX);
             }
         #endif
