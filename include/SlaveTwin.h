@@ -54,23 +54,20 @@ enum TwinCommands {
     TWIN_PREV_STEP         = 90,                                                // move to previous step (-25 steps) to adjust calibration
     TWIN_SET_OFFSET        = 100,                                               // save calibration offset in EEPROM
     TWIN_RESET             = 110,                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
-    TWIN_AVAILABLE         = 120,                                               // this command is used to check if twin is available
-    TWIN_SCAN              = 130,                                               // this command is used to scan for twin devices
-    TWIN_NEW_ADDRESS       = 140,                                               // this command is used to set the base address for the twin
-    TWIN_PROBE             = 150,                                               // this command is used to reset boot flag from slave
-    TWIN_RESET_BOOT_FLAG   = 160,                                               // this command is used perform a slave availablability check
-    TWIN_AVAILABILITY      = 170
+    TWIN_AVAILABILITY      = 120,                                               // this command is used to check if twin device is available
+    TWIN_REGISTER          = 130,                                               // this command is used to register a twin device
+    TWIN_NEW_ADDRESS       = 140                                                // this command is used to set the base address for the twin
 };                                                                              // list of possible twin commands
 
 enum ReportCommands {
     REPORT_NO_COMMAND    = 0,                                                   // no command
-    REPORT_TASKS_STATUS  = 300,
-    REPORT_MEMORY        = 310,
-    REPORT_ALL           = 320,
-    REPORT_RTOS_TASKS    = 330,
-    REPORT_STEPS_BY_FLAP = 340,
-    REPORT_REGISTRY      = 350,
-    REPORT_I2C_STATISTIC = 360
+    REPORT_ALL           = 300,                                                 // all reports
+    REPORT_TASKS_STATUS  = 310,                                                 // trace uptime and next countdown timer
+    REPORT_MEMORY        = 320,                                                 // trace memory usage od ESP32
+    REPORT_RTOS_TASKS    = 330,                                                 // trace RTOS Task List
+    REPORT_STEPS_BY_FLAP = 340,                                                 // trace actual relative steps by flap
+    REPORT_REGISTRY      = 350,                                                 // trace content of registry list
+    REPORT_I2C_STATISTIC = 360                                                  // trace i2c usage history
 };                                                                              // list of possible twin commands
 
 // Command that will be accepted byTwin
@@ -116,7 +113,8 @@ class SlaveTwin {
     void setOffset();                                                           // save calibration ofset in slave EEPROM
     void reset();                                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM 0
     void setNewAddress(int address);                                            // set new address for the twin
-    void performAvailability();                                                 // availability check
+    void performAvailability();                                                 // check availability of twin device
+    void performRegister();                                                     // register twin device
 
     // Helper
     bool  readAllParameters(slaveParameter& p);                                 // Reads all parameters from the slave device.
@@ -147,15 +145,15 @@ class SlaveTwin {
     void sendQueue(TwinCommand twinCmd);                                        // send command to Twin queue
     int  stepsByFlap[MAXIMUM_FLAPS];                                            // steps needed to move flap by flap (Bresenham-artige Verteilung)
 
-    // Use this from any other task instead of calling isSlaveReady() directly.
-    // Returns true if we actually touched the bus; outReady tells the result.
-    bool maybePollReady(bool& outReady);
-
    private:
     // -------------------------------
     // private Variables
-    int           targetFlapNumber = -1;                                        // flap to be shown
-    QueueHandle_t twinQueue;                                                    // command entry queue
+    int           _targetFlapNumber = -1;                                       // flap to be shown
+    QueueHandle_t _twinQueue;                                                   // command entry queue
+
+    // --- Per-instance state for AYR/ready polling ---
+    bool     _inAYRwait            = false;                                     // true while AYR-based wait is running
+    uint32_t _readyPollGateUntilMs = 0;                                         // next allowed millis() for external ready polls
 
     // -------------------------------
     // internal Helpers
@@ -189,22 +187,16 @@ class SlaveTwin {
     void logInfoU8(const char* prefix, uint8_t v);
     void logErr(const char* msg);
 
-    // --- helpers ---------------------------------------------------------------
+    // AYR-Limiter helpers
+    uint32_t               validMsPerRevolution() const;
+    uint16_t               validStepsPerRevolution() const;
+    uint32_t               stepsToMs(uint32_t steps) const;
+    uint32_t               estimateAYRdurationMs(uint8_t cmd, uint16_t par) const;
+    uint32_t               withSafety(uint32_t ms, uint8_t longCmd) const;
+    bool                   waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_slave, uint32_t timeout_ms);
     static inline uint16_t normalizeOffset(uint16_t off, uint16_t spr) {
         return (spr == 0) ? 0 : (off % spr);                                    // 0..spr-1
     }
-
-    // --- Per-instance state for AYR/ready polling ---
-    bool     _inAYRwait            = false;                                     // true while AYR-based wait is running
-    uint32_t _readyPollGateUntilMs = 0;                                         // next allowed millis() for external ready polls
-
-    // AYR-Limiter helpers
-    uint32_t validMsPerRevolution() const;
-    uint16_t validStepsPerRevolution() const;
-    uint32_t stepsToMs(uint32_t steps) const;
-    uint32_t estimateAYRdurationMs(uint8_t cmd, uint16_t par) const;
-    uint32_t withSafety(uint32_t ms, uint8_t longCmd) const;
-    bool     waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_slave, uint32_t timeout_ms);
 
     // AYR helper pipeline
     uint32_t computeEtaWithGuards(uint8_t longCmd, uint16_t param) const;

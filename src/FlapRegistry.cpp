@@ -42,7 +42,7 @@ std::map<I2Caddress, I2CSlaveDevice*> g_slaveRegistry;
 // if device does not answer:
 //   - deregister this device
 //
-void FlapRegistry::check_slave_availability() {
+void FlapRegistry::availabilityCheck() {
     for (auto it = g_slaveRegistry.begin(); it != g_slaveRegistry.end();) {
         const I2Caddress addr = it->first;
 
@@ -78,27 +78,6 @@ void FlapRegistry::check_slave_availability() {
 void FlapRegistry::deregisterSlave(I2Caddress slaveAddress) {
     if (!g_slaveRegistry.empty()) {
         g_slaveRegistry.erase(slaveAddress);
-    }
-}
-
-// ----------------------------
-// messages to introduce scan_i2c_bus
-void FlapRegistry::intro_scan_i2c() {
-    #ifdef SCANVERBOSE
-        {
-        TraceScope trace;
-        registerPrintln("Start I²C-Scan to register new slaves...");
-        }
-    #endif
-
-    if (g_masterBooted) {
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;
-            registerPrintln("System-Reset detected → Master has restarted");
-            registerPrintln("all slaves detected druring I²C-bus-scan will be calibrated...");
-            }
-        #endif
     }
 }
 
@@ -182,102 +161,64 @@ bool FlapRegistry::registered(I2Caddress addr) {
 }
 
 // ----------------------------
-// messages to leave scan_i2c_bus
-void FlapRegistry::outro_scan_i2c(int foundToCalibrate, int foundToRegister) {
+// messages to introduce scan_i2c_bus
+void FlapRegistry::deviceRegistryIntro() {
+    #ifdef SCANVERBOSE
+        {
+        TraceScope trace;
+        registerPrintln("Start I²C-Scan to register new slaves...");
+        }
+    #endif
+
     if (g_masterBooted) {
-        g_masterBooted = false;                                                 // master boot is over, reset master has booted
         #ifdef SCANVERBOSE
             {
             TraceScope trace;
-            registerPrintln("Master-Setup complete -> number of calibrated devices: %d", foundToCalibrate);
+            registerPrintln("System-Reset detected → Master has restarted");
+            registerPrintln("all slaves detected during I²C-bus-scan will be calibrated...");
             }
         #endif
+    }
+}
+
+// ----------------------------
+// messages to leave scan_i2c_bus
+void FlapRegistry::deviceRegistryOutro() {
+    if (g_masterBooted) {
+        g_masterBooted = false;                                                 // master boot is over, reset master has booted
     }
 
     #ifdef SCANVERBOSE
         {
         TraceScope trace;
-        registerPrintln("number of registered devices: %d", foundToRegister);
         registerPrintln("I²C-Scan complete.");
-        }
-    #endif
-}
-// ----------------------------
-// error tracing for one slave on i2c bus
-void FlapRegistry::error_scan_i2c(int n, I2Caddress addr) {
-    #ifdef SCANVERBOSE
-        {
-        TraceScope trace;
-        if (n == -1) {
-        registerPrint("no slave twin task with addr 0x");
-        Serial.println(addr, HEX);                                              // no twin
-        for (int a = 0; a < numberOfTwins; a++) {
-        registerPrint("Master I2C-Address Pool# %d: 0x", a);
-        Serial.println(g_slaveAddressPool[a], HEX);                             // address pool
-        }
-        } else {
-        if (n == -2) {
-        registerPrint("slave not reachable with addr 0x");
-        Serial.println(addr, HEX);                                              // no slave reachable
-        }
-        }
         }
     #endif
 }
 
 // ----------------------------
 // Ask I2C Bus who is there, and register unknown slaves
-void FlapRegistry::scan_i2c_bus() {
-    int        foundToRegister  = 0;                                            // counter for registered slaves
-    int        foundToCalibrate = 0;                                            // counter for calibrated slaves
-    int        n                = -1;                                           // Twin[n]
-    int        c                = 0;                                            // calibrations counted
+void FlapRegistry::deviceRegistry() {
     I2Caddress addr;                                                            // slave addres
-
-    slaveParameter parameter;                                                   // to ask slave about his parameters
-    intro_scan_i2c();                                                           // inform about what is happening
-
+    deviceRegistryIntro();                                                      // inform about what is happening
     for (int i = 0; i < numberOfTwins; i++) {
         addr = g_slaveAddressPool[i];                                           // get address from address pool
-        n    = scanForSlave(i, addr);                                           // scan for slave i on i2c bus and get Twin[n]
-        if (n < 0) {
-            error_scan_i2c(n, addr);                                            // trace scan error messages
-        } else {
-            if (!registered(addr)) {                                            // is slave is not registered -> register
-                foundToRegister++;
-                if (Twin[n]->askSlaveAboutParameter(parameter)) {               // get actual parameter from
-                    c = updateSlaveRegistry(n, addr, parameter);                // register slave
-                    foundToCalibrate += c;                                      // count calibrations
-                } else {
-                    #ifdef SCANVERBOSE
-                        {
-                        TraceScope trace;
-                        registerPrint("connot register, not answering Slave 0x");
-                        Serial.println(addr, HEX);
-                        }
-                    #endif
-                }
-            } else {
-                #ifdef SCANVERBOSE
-                    {
-                    TraceScope trace;
-                    registerPrint("allready registered Slave 0x");
-                    Serial.println(addr, HEX);
-                    }
-                #endif
-            }
+        if (!registered(addr)) {
+            TwinCommand twinCmd;
+            twinCmd.twinCommand   = TWIN_REGISTER;                              // set command register twin device
+            twinCmd.twinParameter = 0;                                          // no parameter
+            twinCmd.responsQueue  = nullptr;                                    // no response requested
+            int n                 = findTwinIndexByAddress(addr);               // get twin index from address
+            Twin[n]->sendQueue(twinCmd);                                        // send command to Twin[n] to calibrate
         }
     }
-
-    outro_scan_i2c(foundToCalibrate, foundToRegister);                          // goodbye messages
+    deviceRegistryOutro();                                                      // goodbye messages
 }
 
 // ------------------------------------------
 // check if slave has booted and waits for calibration
 //
 bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
-    uint8_t ans = 0;
-
     #ifdef SCANVERBOSE
         {
         TraceScope trace;
@@ -285,6 +226,7 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
         Serial.println(address, HEX);
         }
     #endif
+    uint8_t ans = 0;
     Twin[n]->i2cShortCommand(CMD_GET_BOOT_FLAG, &ans, sizeof(ans));             // check if bootFlag of slave is set
     Twin[n]->_slaveReady.bootFlag = ans;                                        // transfer to Twin[n]
 
@@ -311,7 +253,7 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
         TwinCommand twinCmd;
         twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
 
-        #ifdef REGISTRYVERBOSE
+        #ifdef SCANVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block
             registerPrintln("send TwinCommand: %s to TWIN", Parser->twinCommandToString(twinCmd.twinCommand));
@@ -355,6 +297,8 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         device->position                = Twin[n]->_slaveReady.position;        // update Flap position
         device->bootFlag                = Twin[n]->_slaveReady.bootFlag;        // update bootFlag
         device->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus;    // update Sensor status
+        const char* sensorStatus        = device->parameter.sensorworking ? "WORKING" : "BROKEN";
+
         #ifdef SCANVERBOSE
             {
             TraceScope trace;
@@ -363,7 +307,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
             Serial.print(" in position = ");
             Serial.print(device->position);
             Serial.print(" and sensor status = ");
-            Serial.println(device->parameter.sensorworking);
+            Serial.println(sensorStatus);
             }
         #endif
 
@@ -375,6 +319,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         newDevice->bootFlag                = Twin[n]->_slaveReady.bootFlag;     // set bootFlag
         newDevice->position                = Twin[n]->_slaveReady.position;     // set flap position
         newDevice->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus; // set Sensor status
+        const char* sensorStatus           = newDevice->parameter.sensorworking ? "WORKING" : "BROKEN";
 
         #ifdef SCANVERBOSE
             {
@@ -384,7 +329,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
             Serial.print(" in position = ");
             Serial.print(newDevice->position);
             Serial.print(" and sensor status = ");
-            Serial.println(newDevice->parameter.sensorworking);
+            Serial.println(sensorStatus);
             }
         #endif
         g_slaveRegistry[address] = newDevice;                                   // register new device

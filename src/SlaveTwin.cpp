@@ -60,7 +60,7 @@ SlaveTwin::SlaveTwin(int add) {
     _slaveReady.ready        = false;
     _slaveReady.sensorStatus = false;
     _slaveReady.taskCode     = NO_COMMAND;
-    twinQueue                = nullptr;
+    _twinQueue               = nullptr;
 
     #ifdef TWINVERBOSE
         {
@@ -74,8 +74,8 @@ SlaveTwin::SlaveTwin(int add) {
 // read from entry queue
 void SlaveTwin::readQueue() {
     TwinCommand twinCmd;
-    if (twinQueue != nullptr) {                                                 // if queue exists
-        if (xQueueReceive(twinQueue, &twinCmd, portMAX_DELAY)) {
+    if (_twinQueue != nullptr) {                                                // if queue exists
+        if (xQueueReceive(_twinQueue, &twinCmd, portMAX_DELAY)) {
             #ifdef TWINVERBOSE
                 {
                 TraceScope trace;                                               // use semaphore to protect this block
@@ -92,8 +92,8 @@ void SlaveTwin::readQueue() {
 // ----------------------------
 // create entry queue
 void SlaveTwin::createQueue() {
-    twinQueue = xQueueCreate(1, sizeof(TwinCommand));                           // Create twin Queue
-    if (twinQueue == nullptr) {
+    _twinQueue = xQueueCreate(1, sizeof(TwinCommand));                          // Create twin Queue
+    if (_twinQueue == nullptr) {
         #ifdef TWINVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block
@@ -106,8 +106,8 @@ void SlaveTwin::createQueue() {
 // ----------------------------
 // send into entry queue
 void SlaveTwin::sendQueue(TwinCommand twinCmd) {
-    if (twinQueue != nullptr) {                                                 // if queue exists, send to all registered twin queues
-        xQueueOverwrite(twinQueue, &twinCmd);
+    if (_twinQueue != nullptr) {                                                // if queue exists, send to all registered twin queues
+        xQueueOverwrite(_twinQueue, &twinCmd);
     } else {
         {
             TraceScope trace;                                                   // use semaphore to protect this block
@@ -157,7 +157,10 @@ void SlaveTwin::twinControl(TwinCommand twinCmd) {
             logAndRun("Translate to I2C command NEW ADDRESS to Slave...", [=] { setNewAddress(param); });
             break;
         case TWIN_AVAILABILITY:
-            logAndRun("Translate to performAvailability ...", [=] { performAvailability(); });
+            logAndRun("Translate to perform Availability ...", [=] { performAvailability(); });
+            break;
+        case TWIN_REGISTER:
+            logAndRun("Translate to register device ...", [=] { performRegister(); });
             break;
         case TWIN_SHOW_FLAP: {
             std::string msg = "Translate to I2C command Show Flap / MOVE ";
@@ -196,8 +199,8 @@ void SlaveTwin::logAndRun(const char* message, std::function<void()> action) {
 // --------------------------------------------
 // show selected digit
 void SlaveTwin::showFlap(int digit) {
-    targetFlapNumber = digit;                                                   // remember requested target flap
-    if (targetFlapNumber < 0 || targetFlapNumber >= _parameter.flaps) {         // validate range (flaps are 0..flaps-1)
+    _targetFlapNumber = digit;                                                  // remember requested target flap
+    if (_targetFlapNumber < 0 || _targetFlapNumber >= _parameter.flaps) {       // validate range (flaps are 0..flaps-1)
     #ifdef ERRORVERBOSE
         {
         TraceScope trace;
@@ -218,14 +221,14 @@ void SlaveTwin::showFlap(int digit) {
         }
     #endif
 
-    const int steps_i = countStepsToMove(_flapNumber, targetFlapNumber);        // signed delta (can be <= 0)
+    const int steps_i = countStepsToMove(_flapNumber, _targetFlapNumber);       // signed delta (can be <= 0)
     if (steps_i <= 0)
         return;                                                                 // nothing to do
 
     const uint16_t steps = (steps_i > 0xFFFF) ? 0xFFFF                          // clamp to 16-bit, because we use uint16_t for I2C command
                                               : static_cast<uint16_t>(steps_i);
     i2cLongCommand(i2cCommandParameter(MOVE, steps));                           // send LONG command to slave
-    _flapNumber = targetFlapNumber;                                             // optimistic local update (no rollback by design)
+    _flapNumber = _targetFlapNumber;                                            // optimistic local update (no rollback by design)
 
     const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, steps);             // estimate duration for MOVE based on speed/steps
     const uint32_t timeout_ms = withSafety(ayr_ms, MOVE);                       // add safety margin (e.g. +25%, min/max caps)
@@ -399,13 +402,13 @@ void SlaveTwin::sensorCheck() {
 // --------------------------------------------
 void SlaveTwin::nextFlap() {
     if (_numberOfFlaps > 0) {
-        targetFlapNumber = _flapNumber + 1;
-        if (targetFlapNumber >= _numberOfFlaps)
-            targetFlapNumber = 0;
-        int steps = countStepsToMove(_flapNumber, targetFlapNumber);
+        _targetFlapNumber = _flapNumber + 1;
+        if (_targetFlapNumber >= _numberOfFlaps)
+            _targetFlapNumber = 0;
+        int steps = countStepsToMove(_flapNumber, _targetFlapNumber);
         if (steps > 0) {
             i2cLongCommand(i2cCommandParameter(MOVE, steps));
-            _flapNumber = targetFlapNumber;
+            _flapNumber = _targetFlapNumber;
 
             const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, steps);     // estimate duration for MOVE based on speed/steps
             const uint32_t timeout_ms = withSafety(ayr_ms, MOVE);               // add safety margin (e.g. +25%, min/max caps)
@@ -440,13 +443,13 @@ void SlaveTwin::nextFlap() {
 // --------------------------------------------
 void SlaveTwin::prevFlap() {
     if (_numberOfFlaps > 0) {
-        targetFlapNumber = _flapNumber - 1;
-        if (targetFlapNumber < 0)
-            targetFlapNumber = _numberOfFlaps - 1;
-        int steps = countStepsToMove(_flapNumber, targetFlapNumber);
+        _targetFlapNumber = _flapNumber - 1;
+        if (_targetFlapNumber < 0)
+            _targetFlapNumber = _numberOfFlaps - 1;
+        int steps = countStepsToMove(_flapNumber, _targetFlapNumber);
         if (steps > 0) {
             i2cLongCommand(i2cCommandParameter(MOVE, steps));
-            _flapNumber = targetFlapNumber;
+            _flapNumber = _targetFlapNumber;
 
             const uint32_t ayr_ms     = estimateAYRdurationMs(MOVE, steps);     // estimate duration for MOVE based on speed/steps
             const uint32_t timeout_ms = withSafety(ayr_ms, MOVE);               // add safety margin (e.g. +25%, min/max caps)
@@ -870,7 +873,8 @@ void SlaveTwin::setNewAddress(int address) {
         Serial.println(formatSerialNumber(sn));
     #endif
 }
-
+// -------------------------
+// check availability of twin device
 void SlaveTwin::performAvailability() {
     uint8_t   ans = 0;
     esp_err_t ret = i2c_probe_device(_slaveAddress);                            // send ping to device/slave
@@ -921,6 +925,52 @@ void SlaveTwin::performAvailability() {
             }
         }
     }
+}
+
+// -------------------------
+// register Twin device
+void SlaveTwin::performRegister() {
+    uint8_t   ans = 0;
+    esp_err_t ret = i2c_probe_device(_slaveAddress);                            // send ping to device/slave
+    if (ret != ESP_OK) {
+        #ifdef SCANVERBOSE
+            {
+            TraceScope trace;
+            twinPrint("I²C-Slave is not available -> will deregister it 0x");
+            Serial.println(_slaveAddress, HEX);
+            }
+        #endif
+        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
+        return;
+    }
+    if (!getFullStateOfSlave()) {                                               // get all status of device
+        {
+            #ifdef SCANVERBOSE
+                {
+                TraceScope trace;
+                twinPrint("I²C-Slave is not available -> will be deregistered");
+                Serial.println(_slaveAddress, HEX);
+                }
+            #endif
+        }
+        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
+        return;
+    }
+    if (!askSlaveAboutParameter(_parameter)) {                                  // get all parameter of device
+        {
+            #ifdef SCANVERBOSE
+                {
+                TraceScope trace;
+                twinPrint("I²C-Slave is not available -> will be deregistered");
+                Serial.println(_slaveAddress, HEX);
+                }
+            #endif
+        }
+        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
+        return;
+    }
+    int n = Register->findTwinIndexByAddress(_slaveAddress);                    // get twin index
+    int c = Register->updateSlaveRegistry(n, _slaveAddress, _parameter);        // register slave
 }
 
 // -----------------------------------------

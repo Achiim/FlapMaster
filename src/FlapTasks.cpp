@@ -94,7 +94,7 @@ void shortScanCallback(TimerHandle_t xTimer) {
         Register->registerPrintln("========== I²C Short Scan Check ================");
         }
     #endif
-    Register->scan_i2c_bus();
+    Register->deviceRegistry();
     Register->registerUnregistered();
 
     if (Register->numberOfRegisterdDevices() >= numberOfTwins) {
@@ -112,7 +112,7 @@ void longScanCallback(TimerHandle_t xTimer) {
         Register->registerPrintln("========== I²C Long Scan Check ================");
         }
     #endif
-    Register->scan_i2c_bus();
+    Register->deviceRegistry();
     Register->registerUnregistered();
 }
 
@@ -125,7 +125,7 @@ void availCheckCallback(TimerHandle_t xTimer) {
         Register->registerPrintln("======= Device-Availability Check =============");
         }
     #endif
-    Register->check_slave_availability();
+    Register->availabilityCheck();
 
     if (Register->numberOfRegisterdDevices() < numberOfTwins) {
         // missing one device → Short-Scan
