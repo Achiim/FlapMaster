@@ -49,14 +49,15 @@ class FlapRegistry {
    public:
     // ----------------------------
     // public functions
-    void       registerUnregistered();                                          // collect all unregistered slaves
-    void       repairOutOfPoolDevices();                                        // repair devices that are out of the address pool
-    int        updateSlaveRegistry(int n, I2Caddress address, slaveParameter parameter); // register slaves in registry
-    void       deregisterSlave(I2Caddress slaveAddress);                        // deregister from registry
-    void       availabilityCheck();                                             // check if slave is still available
-    void       deviceRegistry();                                                // search for slave in I2C bus
-    int        numberOfRegisterdDevices();                                      // scan registry to evaluate number of registered devices
-    int        findTwinIndexByAddress(I2Caddress addr);                         // find Twin by slaveAddress
+    void registerUnregistered();                                                // collect all unregistered slaves
+    void repairOutOfPoolDevices();                                              // repair devices that are out of the address pool
+    void updateSlaveRegistry(I2Caddress address, slaveParameter parameter);     // register slaves in registry
+    void deregisterSlave(I2Caddress slaveAddress);                              // deregister from registry
+    void availabilityCheck();                                                   // check if slave is still available
+    void deviceRegistry();                                                      // search for slave in I2C bus
+    int  numberOfRegisterdDevices();                                            // scan registry to evaluate number of registered devices
+    int  findTwinIndexByAddress(I2Caddress addr);                               // find Twin by slaveAddress
+
     I2Caddress getNextAddress();                                                // next free i2c address form slave registry
 
     // public trace functions
@@ -72,11 +73,11 @@ class FlapRegistry {
    private:
     // ----------------------------
     // privat functions
-    bool       checkSlaveHasBooted(int n, I2Caddress addr);                     // handle slave has booted
-    void       deviceRegistryIntro();                                           // intro for scan_i2c_bus
-    void       deviceRegistryOutro();                                           // outro scan_i2c_bus
-    int        scanForSlave(int i, I2Caddress addrs);                           // scan one slave
+    bool checkSlaveHasBooted(int n, I2Caddress addr);                           // handle slave has booted
+    void deviceRegistryIntro();                                                 // intro for scan_i2c_bus
+    void deviceRegistryOutro();                                                 // outro scan_i2c_bus
+    bool registered(I2Caddress addr);
+
     I2Caddress findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr);         // free address from register
-    bool       registered(I2Caddress addr);
 };
 #endif                                                                          // FlapRegistry_h

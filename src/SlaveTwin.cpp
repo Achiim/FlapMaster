@@ -898,12 +898,18 @@ void SlaveTwin::performAvailability() {
         }
     #endif
 
+    bootRelease();                                                              // release bootFlag and calibrate
+}
+
+// -------------------------
+void SlaveTwin::bootRelease() {
+    uint8_t ans = 0;
     if (i2cShortCommand(CMD_GET_BOOT_FLAG, &ans, sizeof(ans)) == ESP_OK) {      // request bootFlag
         _slaveReady.bootFlag = ans;
 
         if (_slaveReady.bootFlag) {                                             // check if bootFlag of slave is set
             {
-                #ifdef AVAILABILITYVERBOSE
+                #if defined(AVAILABILITYVERBOSE) || defined(SCANVERBOSE)
                     {
                     TraceScope trace;
                     twinPrint("reset bootFlag on rebooted Slave 0x");
@@ -913,7 +919,7 @@ void SlaveTwin::performAvailability() {
             }
             if (i2cShortCommand(CMD_RESET_BOOT, &ans, sizeof(ans)) == ESP_OK) { // send reset bootFlag to slave
                 {
-                    #ifdef AVAILABILITYVERBOSE
+                    #if defined(AVAILABILITYVERBOSE) || defined(SCANVERBOSE)
                         {
                         TraceScope trace;
                         twinPrint("slave has rebooted; calibrating now Slave 0x");
@@ -921,7 +927,7 @@ void SlaveTwin::performAvailability() {
                         }
                     #endif
                 }
-                calibration();
+                calibration();                                                  // calibrate device
             }
         }
     }
@@ -969,8 +975,11 @@ void SlaveTwin::performRegister() {
         Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
         return;
     }
-    int n = Register->findTwinIndexByAddress(_slaveAddress);                    // get twin index
-    int c = Register->updateSlaveRegistry(n, _slaveAddress, _parameter);        // register slave
+    Register->updateSlaveRegistry(_slaveAddress, _parameter);                   // register slave
+    if (_slaveReady.bootFlag)
+        bootRelease();                                                          // release bootFlag and calibrate
+    else
+        calibration();                                                          // calibrate device
 }
 
 // -----------------------------------------

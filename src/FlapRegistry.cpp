@@ -92,57 +92,6 @@ int FlapRegistry::findTwinIndexByAddress(I2Caddress addr) {
     return -1;
 }
 
-// ----------------------------
-// Scan one slave on I2C bus.
-// Returns:
-//   >=0 : index of corresponding twin
-//   -1  : slave not found / not ready / twin missing
-int FlapRegistry::scanForSlave(int poolIndex, I2Caddress addr) {
-    #ifdef SCANVERBOSE
-        {
-        TraceScope trace;
-        registerPrint("Scanning address pool entry #");
-        Serial.print(poolIndex);
-        Serial.print(": slave 0x");
-        Serial.println(addr, HEX);
-        }
-    #endif
-
-    esp_err_t pingResult = i2c_probe_device(addr);                              // Ping slave and wait for ACK
-    if (pingResult == ESP_OK) {
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;
-            registerPrint("Slave is present on I2C bus: 0x");
-            Serial.println(addr, HEX);
-            }
-        #endif
-    } else {
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;
-            registerPrint("No slave responded on I2C bus at address: 0x");
-            Serial.println(addr, HEX);
-            }
-            return -1;
-        #endif
-    }
-
-    int twinIndex = findTwinIndexByAddress(addr);
-    #ifdef SCANVERBOSE
-        {
-        TraceScope trace;
-        registerPrint("Twin number resolved to: ");
-        Serial.println(twinIndex);
-        }
-    #endif
-
-    if (twinIndex < 0) {
-        return -1;                                                              // no matching twin
-    }
-    return twinIndex;
-}
-
 // ------------------------------------
 // Registry lookup (for diagnostics)
 bool FlapRegistry::registered(I2Caddress addr) {
@@ -284,12 +233,12 @@ bool FlapRegistry::checkSlaveHasBooted(int n, I2Caddress address) {
 // address = address of slave to be registerd/updated
 // parameter = parameter to be stored in registry for slave
 //
-// return = number of calibrated devices
-//
-int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter parameter) {
-    bool slaveIsNew         = false;                                            // flag, if slave is new
-    int  calibrationCounter = 0;                                                // number of calibrated devices
-    auto it                 = g_slaveRegistry.find(address);                    // search in registry
+void FlapRegistry::updateSlaveRegistry(I2Caddress address, slaveParameter parameter) {
+    bool slaveIsNew = false;                                                    // flag, if slave is new
+    int  n          = findTwinIndexByAddress(address);                          // get twin index
+
+    auto it = g_slaveRegistry.find(address);                                    // search in registry
+
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
         slaveIsNew                      = false;                                // twin is allready regisered
         I2CSlaveDevice* device          = it->second;
@@ -335,11 +284,10 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         g_slaveRegistry[address] = newDevice;                                   // register new device
     }
 
-    checkSlaveHasBooted(n, address);                                            // slave comes again with reboot
     if (n >= 0 && slaveIsNew) {                                                 // only if slave is ready
         Twin[n]->_parameter = parameter;                                        // update all twin parameter
 
-        #ifdef REGISTRYVERBOSE
+        #ifdef SCANVERBOSE
             {
             TraceScope trace;
             registerPrint("take over parameter values from slave to his twin on master side 0x");
@@ -352,7 +300,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
         if (Twin[n]->_numberOfFlaps != parameter.flaps ||
             Twin[n]->_parameter.steps != parameter.steps) {                     // recompute steps by flaps based non new step measurement from slave
 
-            #ifdef REGISTRYVERBOSE
+            #ifdef SCANVERBOSE
                 {
                 TraceScope trace;
                 registerPrint("number of Flaps = %d for Slave 0x", parameter.flaps);
@@ -364,7 +312,7 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
             Twin[n]->_numberOfFlaps = parameter.flaps;
             Twin[n]->calculateStepsPerFlap();                                   // number of flaps or steps per rev. has changed recalculate
 
-            #ifdef REGISTRYVERBOSE
+            #ifdef SCANVERBOSE
                 {
                 TraceScope trace;
                 registerPrint("Steps by Flap are: ");
@@ -378,37 +326,6 @@ int FlapRegistry::updateSlaveRegistry(int n, I2Caddress address, slaveParameter 
             #endif
         }
     }
-
-    if (g_masterBooted) {                                                       // if Master booted
-        {
-            #ifdef REGISTRYVERBOSE
-                {
-                TraceScope trace;
-                registerPrint("master has rebooted: calibrating now Slave 0x");
-                Serial.println(address, HEX);
-                }
-            #endif
-        }
-        calibrationCounter++;                                                   // counting calibrations
-        TwinCommand twinCmd;
-        twinCmd.twinCommand = TWIN_CALIBRATION;                                 // set command to calibrate
-        Twin[n]->sendQueue(twinCmd);
-        #ifdef REGISTRYVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            registerPrintln("send TwinCommand: %s to TWIN", Parser->twinCommandToString(twinCmd.twinCommand));
-            }
-        #endif
-
-        #ifdef REGISTRYVERBOSE
-            {
-            TraceScope trace;
-            registerPrint("set internal adjustment step counter to %d for rebooted Slave 0x", Twin[n]->_adjustOffset);
-            Serial.println(address, HEX);
-            }
-        #endif
-    }
-    return calibrationCounter;                                                  // number of calibrated devices
 }
 
 // -----------------------------------------

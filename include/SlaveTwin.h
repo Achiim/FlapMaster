@@ -115,6 +115,7 @@ class SlaveTwin {
     void setNewAddress(int address);                                            // set new address for the twin
     void performAvailability();                                                 // check availability of twin device
     void performRegister();                                                     // register twin device
+    void bootRelease();                                                         // release bootFlag an calibrate
 
     // Helper
     bool  readAllParameters(slaveParameter& p);                                 // Reads all parameters from the slave device.
