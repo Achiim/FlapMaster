@@ -73,7 +73,6 @@ class FlapRegistry {
    private:
     // ----------------------------
     // privat functions
-    bool checkSlaveHasBooted(int n, I2Caddress addr);                           // handle slave has booted
     void deviceRegistryIntro();                                                 // intro for scan_i2c_bus
     void deviceRegistryOutro();                                                 // outro scan_i2c_bus
     bool registered(I2Caddress addr);
