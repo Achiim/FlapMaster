@@ -74,8 +74,10 @@ void FlapRegistry::availabilityCheck() {
 // ----------------------------
 // erase slave from registry
 void FlapRegistry::deregisterSlave(I2Caddress slaveAddress) {
-    if (!g_slaveRegistry.empty()) {                                             // only attempt erase if registry is not empty
-        g_slaveRegistry.erase(slaveAddress);                                    // remove entry for the given slave address (no-op if not present)
+    auto it = g_slaveRegistry.find(slaveAddress);
+    if (it != g_slaveRegistry.end()) {                                          // only attempt erase if registry is not empty
+        delete it->second;                                                      // release memory
+        g_slaveRegistry.erase(it);                                              // remove entry for the given slave address (no-op if not present)
     }
 }
 
@@ -164,6 +166,7 @@ void FlapRegistry::deviceRegistry() {
 
 // ----------------------------
 // purpose:
+// will be called by Twin as service function
 // - register device as new if not already present in registry
 // - update registry entry if device is known
 // - update registry with parameter handed over
@@ -172,57 +175,59 @@ void FlapRegistry::deviceRegistry() {
 // parameter = parameter to be stored in registry for this slave
 //
 void FlapRegistry::updateSlaveRegistry(I2Caddress address, slaveParameter parameter) {
-    bool slaveIsNew = false;                                                    // flag to mark if slave is newly detected
-    int  n          = findTwinIndexByAddress(address);                          // resolve twin index for this address
+    int n = findTwinIndexByAddress(address);                                    // resolve twin index for this address
+    if (n < 0 || Twin[n] == nullptr) {                                          // guard against invalid twin index/pointer
+        {
+            #ifdef SCANVERBOSE
+                {
+                TraceScope trace;                                               // debug: scoped trace
+                registerPrint("No Twin found for Slave 0x");                    // cannot safely update without Twin
+                Serial.println(address, HEX);
+                }
+            #endif
+        }
+        return;                                                                 // nothing to do without a valid Twin
+    }
+
+    I2CSlaveDevice* device      = nullptr;                                      // Prepare a pointer to the device object (either existing or newly created).
+    bool            deviceIsNew = false;
 
     auto it = g_slaveRegistry.find(address);                                    // search registry for this address
-
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // if device already exists in registry
-        slaveIsNew                      = false;                                // known slave
-        I2CSlaveDevice* device          = it->second;                           // retrieve existing device object
-        device->parameter               = parameter;                            // update parameter
-        device->position                = Twin[n]->_slaveReady.position;        // update flap position
-        device->bootFlag                = Twin[n]->_slaveReady.bootFlag;        // update boot flag
-        device->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus;    // update sensor status
-        const char* sensorStatus        = device->parameter.sensorworking ? "WORKING" : "BROKEN"; // derive status string
-
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;                                                   // debug: trace scope
-            registerPrint("Registry updated for known Slave 0x");               // log update
-            Serial.print(address, HEX);                                         // print address
-            Serial.print(" in position = ");
-            Serial.print(device->position);
-            Serial.print(" and sensor status = ");
-            Serial.println(sensorStatus);
-            }
-        #endif
+        deviceIsNew = false;                                                    // known slave
+        device      = it->second;                                               // retrieve existing device object
 
     } else {
         // Device is new → register
-        slaveIsNew                         = true;                              // mark as new
-        I2CSlaveDevice* newDevice          = new I2CSlaveDevice();              // create new slave object
-        newDevice->parameter               = parameter;                         // set parameter
-        newDevice->bootFlag                = Twin[n]->_slaveReady.bootFlag;     // set boot flag
-        newDevice->position                = Twin[n]->_slaveReady.position;     // set flap position
-        newDevice->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus; // set sensor status
-        const char* sensorStatus           = newDevice->parameter.sensorworking ? "WORKING" : "BROKEN"; // derive status string
-
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;                                                   // debug: trace scope
-            registerPrint("Registered new Slave 0x");                           // log new registration
-            Serial.print(address, HEX);
-            Serial.print(" in position = ");
-            Serial.print(newDevice->position);
-            Serial.print(" and sensor status = ");
-            Serial.println(sensorStatus);
-            }
-        #endif
-        g_slaveRegistry[address] = newDevice;                                   // add new device to registry
+        deviceIsNew              = true;                                        // mark as new
+        device                   = new I2CSlaveDevice();                        // create new slave object
+        g_slaveRegistry[address] = device;                                      // add new device to registry
     }
 
-    if (n >= 0 && slaveIsNew) {                                                 // only if twin index is valid and device was new
+    // Common assignments for both new and existing devices
+    device->parameter               = parameter;                                // update parameter
+    device->position                = Twin[n]->_slaveReady.position;            // update flap position
+    device->bootFlag                = Twin[n]->_slaveReady.bootFlag;            // update boot flag
+    device->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus;        // update sensor status
+    const char* sensorStatus        = device->parameter.sensorworking ? "WORKING" : "BROKEN"; // derive status string
+
+    #ifdef SCANVERBOSE
+        {
+        TraceScope trace;                                                       // debug: trace scope
+        if (deviceIsNew) {
+        registerPrint("Registered new Slave 0x");                               // unified logging
+        } else {
+        registerPrint("Registry updated for known Slave 0x");
+        }
+        Serial.print(address, HEX);                                             // print address
+        Serial.print(" in position = ");
+        Serial.print(device->position);
+        Serial.print(" and sensor status = ");
+        Serial.println(sensorStatus);
+        }
+    #endif
+
+    if (deviceIsNew) {                                                          // only if twin index is valid and device was new
         Twin[n]->_parameter = parameter;                                        // copy parameter from slave to twin
 
         #ifdef SCANVERBOSE
@@ -235,6 +240,10 @@ void FlapRegistry::updateSlaveRegistry(I2Caddress address, slaveParameter parame
             }
         #endif
 
+        // Decide if a recomputation of steps-per-flap is necessary.
+        // Compare requested values (from 'parameter') with the Twin’s *current* values.
+        // Note: For new slaves, _parameter may just have been set above; for known slaves,
+        //       we intentionally compare against the Twin’s existing values (unchanged here).
         if (Twin[n]->_numberOfFlaps != parameter.flaps ||
             Twin[n]->_parameter.steps != parameter.steps) {                     // check if flaps or steps differ → recalc needed
 
