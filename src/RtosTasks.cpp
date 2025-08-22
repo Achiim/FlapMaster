@@ -52,9 +52,13 @@ void parserTask(void* pvParameters) {
 // freeRTOS Task Registry
 void twinRegister(void* pvParameters) {
     Register = new FlapRegistry();
-    Register->repairOutOfPoolDevices();                                         // repair devices that are out of the address pool
+    Register->deviceRegistry();                                                 // scan i2c bus for twins with regular address
+
+    vTaskDelay(pdMS_TO_TICKS(800));                                             // Delay for 800ms to give time for regular registry
     Register->registerUnregistered();                                           // register all twins which are not registered yet
-    Register->deviceRegistry();                                                 // scan i2c bus for new twins
+
+    vTaskDelay(pdMS_TO_TICKS(800));                                             // Delay for 800ms to give time for regular registry
+    Register->repairOutOfPoolDevices();                                         // repair devices that are out of the address pool
 
     #ifdef DISABLEREGISTRY
         {

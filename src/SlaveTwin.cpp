@@ -859,6 +859,22 @@ void SlaveTwin::logMidError(MidMessage cmd, esp_err_t err) {
 
 void SlaveTwin::setNewAddress(int address) {
     MidMessage midCmd;
+
+    esp_err_t ret = i2c_probe_device(I2C_BASE_ADDRESS);                         // send ping to unregistered device/slave
+    if (ret != ESP_OK) {
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;
+            twinPrint("no slave available with base address 0x");
+            Serial.println(I2C_BASE_ADDRESS, HEX);
+            }
+        #endif
+
+        return;
+    }
+
+    bootRelease();                                                              // release bootFlag and calibrate
+
     midCmd.command   = CMD_NEW_ADDRESS;
     midCmd.paramByte = address;                                                 // take over new address from command
     uint8_t answer[4];

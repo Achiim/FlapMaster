@@ -286,7 +286,7 @@ I2Caddress FlapRegistry::getNextAddress() {
         #ifdef ERRORVERBOSE
             {
             TraceScope trace;
-            registerPrintln("no more I2C addresses available");
+            registerPrintln("no more I2C addresses in address pool available");
             }
         #endif
         return -1;                                                              // indicate no more free address
@@ -318,6 +318,9 @@ int FlapRegistry::numberOfRegisterdDevices() {
 // because no Twin is connected to out of pool addresses -> Twin[0] is used
 void FlapRegistry::repairOutOfPoolDevices() {
     I2Caddress nextFreeAddress = 0;
+    if (getNextAddress() == -1) {
+        return;                                                                 // if no address is free, repair not possible
+    }
     #ifdef SCANVERBOSE
         {
         TraceScope trace;
