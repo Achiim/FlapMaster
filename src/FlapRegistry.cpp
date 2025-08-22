@@ -227,7 +227,7 @@ void FlapRegistry::updateSlaveRegistry(I2Caddress address, slaveParameter parame
         }
     #endif
 
-    if (deviceIsNew) {                                                          // only if twin index is valid and device was new
+    if (deviceIsNew) {                                                          // only if device is new
         Twin[n]->_parameter = parameter;                                        // copy parameter from slave to twin
 
         #ifdef SCANVERBOSE
@@ -256,6 +256,7 @@ void FlapRegistry::updateSlaveRegistry(I2Caddress address, slaveParameter parame
                 Serial.println(address, HEX);
                 }
             #endif
+
             Twin[n]->_numberOfFlaps = parameter.flaps;                          // update flap count
             Twin[n]->calculateStepsPerFlap();                                   // recalc steps per flap
 
