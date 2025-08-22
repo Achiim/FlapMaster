@@ -52,35 +52,58 @@ void parserTask(void* pvParameters) {
 // freeRTOS Task Registry
 void twinRegister(void* pvParameters) {
     Register = new FlapRegistry();
-    Register->deviceRegistry();                                                 // scan i2c bus for twins with regular address
 
-    vTaskDelay(pdMS_TO_TICKS(800));                                             // Delay for 800ms to give time for regular registry
-    Register->registerUnregistered();                                           // register all twins which are not registered yet
-
-    vTaskDelay(pdMS_TO_TICKS(800));                                             // Delay for 800ms to give time for regular registry
-    Register->repairOutOfPoolDevices();                                         // repair devices that are out of the address pool
+    Register->deviceRegistry();                                                 // initial full scan for known devices
+    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
+    Register->registerUnregistered();                                           // register devices that are known but not yet registered
+    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
+    Register->repairOutOfPoolDevices();                                         // reassign devices that are outside the address pool
 
     #ifdef DISABLEREGISTRY
         {
-        TraceScope trace;                                                       // use semaphore to protect this block
+        TraceScope trace;
         masterPrintln("Registry is disabled, no scan and no registry");
-        vTaskSuspend(nullptr);                                                  // suspend task,  do not use registry
+        vTaskSuspend(nullptr);                                                  // suspend task permanently if registry is disabled
         return;
         }
     #endif
 
-    shortScanTimer =
-        xTimerCreate("ScanShort", pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), pdTRUE, nullptr, shortScanCallback); // 1) Short-Scan-Timer (Auto-Reload)
-    longScanTimer =
-        xTimerCreate("ScanLong", pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), pdTRUE, nullptr, longScanCallback); // 2) Long-Scan-Timer (Auto-Reload)
-    availCheckTimer = xTimerCreate("AvailChk", pdMS_TO_TICKS(AVAILABILITY_CHECK_COUNTDOWN), pdTRUE, nullptr,
-                                   availCheckCallback);                         // 3) Availability-Check-Timer (Auto-Reload)
+    // --- create timers for cyclic tasks ---
+    shortScanTimer  = xTimerCreate("ScanShort", pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), pdTRUE, nullptr, shortScanCallback);
+    longScanTimer   = xTimerCreate("ScanLong", pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), pdTRUE, nullptr, longScanCallback);
+    availCheckTimer = xTimerCreate("AvailChk", pdMS_TO_TICKS(AVAILABILITY_CHECK_COUNTDOWN), pdTRUE, nullptr, availCheckCallback);
 
-    vTaskDelay(pdMS_TO_TICKS(1 * 60 * 1000));                                   // start Availability-Check with 1 Min-Offset
+    // --- FAST MODE immediately after boot ---
+    const TickType_t bootWindowMs = pdMS_TO_TICKS(30000);                       // maximum 30s fast mode (boot window)
+    const TickType_t fastShort    = pdMS_TO_TICKS(2000);                        // fast short-scan every 2s
+    const TickType_t fastAvail    = pdMS_TO_TICKS(1000);                        // fast availability check every 1s
+
+    // configure timers for fast mode
+    xTimerChangePeriod(shortScanTimer, fastShort, 0);
+    xTimerChangePeriod(availCheckTimer, fastAvail, 0);
+
+    // start timers now
+    xTimerStart(shortScanTimer, 0);
+    xTimerStart(longScanTimer, 0);
     xTimerStart(availCheckTimer, 0);
 
-    xTimerStart(shortScanTimer, 0);                                             // starte Short-Scan now
-    vTaskSuspend(nullptr);                                                      // suspend task,  Callbacks are doing the job
+    TickType_t startTick = xTaskGetTickCount();                                 // remember start time of fast mode
+
+    // --- loop until either boot window expires or all expected devices are registered ---
+    while ((xTaskGetTickCount() - startTick) < bootWindowMs) {
+        if (Register->numberOfRegisterdDevices() >= numberOfTwins) {
+            // all expected devices found -> break out of fast mode earlier
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));                                         // wait a bit before checking again
+    }
+
+    // --- switch back to normal scan intervals ---
+    xTimerChangePeriod(shortScanTimer, pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), 0);
+    xTimerChangePeriod(availCheckTimer, pdMS_TO_TICKS(AVAILABILITY_CHECK_COUNTDOWN), 0);
+
+    // --- hand over to timers, suspend this task ---
+    vTaskSuspend(nullptr);
 }
 
 // ----------------------------
