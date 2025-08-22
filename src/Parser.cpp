@@ -474,6 +474,12 @@ const char* ParserClass::twinCommandToString(TwinCommands cmd) {
             return "TWIN_SET_OFFSET";
         case TWIN_RESET:
             return "TWIN_RESET";
+        case TWIN_AVAILABILITY:
+            return "TWIN_AVAILABILITY";
+        case TWIN_REGISTER:
+            return "TWIN_REGISTER";
+        case TWIN_NEW_ADDRESS:
+            return "TWIN_NEW_ADDRESS";
         default:
             return "UNKNOWN_TWIN_COMMAND";
     }
