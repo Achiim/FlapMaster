@@ -873,6 +873,7 @@ void SlaveTwin::setNewAddress(int address) {
         Serial.println(formatSerialNumber(sn));
     #endif
 }
+
 // -------------------------
 // check availability of twin device
 void SlaveTwin::performAvailability() {

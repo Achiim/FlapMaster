@@ -325,7 +325,7 @@ void FlapRegistry::repairOutOfPoolDevices() {
         }
     #endif
 
-    for (I2Caddress ii = I2C_MINADR + numberOfTwins; ii <= I2C_MINADR + numberOfTwins; ii++) { // iterate over all address out of pool
+    for (I2Caddress ii = I2C_MINADR + numberOfTwins; ii <= I2C_MAXADR; ii++) {  // iterate over all address out of pool
         if (i2c_probe_device(ii) == ESP_OK) {                                   // is there someone out of range?
             nextFreeAddress = getNextAddress();                                 // get next free address for out of range slaves
             if (nextFreeAddress >= I2C_MINADR && nextFreeAddress <= I2C_MAXADR) { // if address is valide
@@ -362,35 +362,39 @@ void FlapRegistry::repairOutOfPoolDevices() {
 // because no Twin is connected to address 0x55 (unregistered) -> Twin[0] is used
 void FlapRegistry::registerUnregistered() {
     I2Caddress nextFreeAddress = 0;
-    if (i2c_probe_device(I2C_BASE_ADDRESS) == ESP_OK) {                         // is there someone new?
-        nextFreeAddress = getNextAddress();                                     // get next free address for new slaves
+    nextFreeAddress            = getNextAddress();                              // get next free address for new slaves
 
-        if (nextFreeAddress >= I2C_MINADR && nextFreeAddress <= I2C_MAXADR) {   // if address is valide
-            {
-                TraceScope trace;                                               // use semaphore to protect this block
-                #ifdef SCANVERBOSE
-                    registerPrint("Send to unregistered slave (with I2C_BASE_ADDRESS) next free I2C Address: 0x");
-                    Serial.println(nextFreeAddress, HEX);
-                #endif
-            }
-
-            TwinCommand twinCmd;
-            twinCmd.twinCommand   = TWIN_NEW_ADDRESS;                           // set command to send base address
-            twinCmd.twinParameter = nextFreeAddress;                            // set new base address
-            Twin[0]->sendQueue(twinCmd);                                        // send command to Twin[0] to set base address
-            #ifdef REGISTRYVERBOSE
-                {
-                TraceScope trace;                                               // use semaphore to protect this block
-                registerPrintln("send TwinCommand: %s to TWIN[0]", Parser->twinCommandToString(twinCmd.twinCommand));
-                }
+    if (nextFreeAddress == -1) {                                                // address pool empty
+        {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            #ifdef SCANVERBOSE
+                registerPrint("no mor address found in address pool");
+                Serial.println(nextFreeAddress, HEX);
             #endif
+        }
+        return;
+    }
+
+    if (nextFreeAddress >= I2C_MINADR && nextFreeAddress <= I2C_MAXADR) {       // if address is valide
+        {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            #ifdef SCANVERBOSE
+                registerPrint("Send to unregistered slave (with I2C_BASE_ADDRESS) next free I2C Address: 0x");
+                Serial.println(nextFreeAddress, HEX);
+            #endif
+        }
+
+        TwinCommand twinCmd;
+        twinCmd.twinCommand   = TWIN_NEW_ADDRESS;                               // set command to send base address
+        twinCmd.twinParameter = nextFreeAddress;                                // set new base address
+        Twin[0]->sendQueue(twinCmd);                                            // send command to Twin[0] to set base address
+        #ifdef SCANVERBOSE
             {
-                TraceScope trace;                                               // use semaphore to protect this block
-                #ifdef SCANVERBOSE
-                    registerPrint("Unregistered slave will now be registered with I2C address: 0x");
-                    Serial.println(nextFreeAddress, HEX);
-                #endif
-            }
+            TraceScope trace;                                                   // use semaphore to protect this block
+            registerPrintln("send TwinCommand: %s to TWIN[0]", Parser->twinCommandToString(twinCmd.twinCommand));
+            registerPrint("Unregistered slave will now be registered with I2C address: 0x");
+            Serial.println(nextFreeAddress, HEX);
+        #endif
         }
     }
 }
