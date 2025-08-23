@@ -873,14 +873,12 @@ void SlaveTwin::setNewAddress(int address) {
         return;
     }
 
-    bootRelease();                                                              // release bootFlag and calibrate
-
     midCmd.command   = CMD_NEW_ADDRESS;
     midCmd.paramByte = address;                                                 // take over new address from command
     uint8_t answer[4];
     i2cMidCommand(midCmd, I2C_BASE_ADDRESS, answer, sizeof(answer));
 
-    #ifdef TWINVERBOSE
+    #ifdef SCANVERBOSE
         uint32_t sn;
         sn = ((uint32_t)answer[0]) | ((uint32_t)answer[1] << 8) | ((uint32_t)answer[2] << 16) | ((uint32_t)answer[3] << 24);
         twinPrint("new address 0x");
@@ -956,41 +954,11 @@ void SlaveTwin::performRegister() {
     uint8_t   ans = 0;
     esp_err_t ret = i2c_probe_device(_slaveAddress);                            // send ping to device/slave
     if (ret != ESP_OK) {
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;
-            twinPrint("I²C-Slave is not available -> will deregister it 0x");
-            Serial.println(_slaveAddress, HEX);
-            }
-        #endif
-        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
-        return;
-    }
-    if (!getFullStateOfSlave()) {                                               // get all status of device
-        {
-            #ifdef SCANVERBOSE
-                {
-                TraceScope trace;
-                twinPrint("I²C-Slave is not available -> will be deregistered");
-                Serial.println(_slaveAddress, HEX);
-                }
-            #endif
-        }
-        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
-        return;
-    }
-    if (!askSlaveAboutParameter(_parameter)) {                                  // get all parameter of device
-        {
-            #ifdef SCANVERBOSE
-                {
-                TraceScope trace;
-                twinPrint("I²C-Slave is not available -> will be deregistered");
-                Serial.println(_slaveAddress, HEX);
-                }
-            #endif
-        }
-        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
-        return;
+        return;                                                                 // Device not ready
+    } else if (!getFullStateOfSlave()) {                                        // get all status of device
+        return;                                                                 // Device not ready
+    } else if (!askSlaveAboutParameter(_parameter)) {                           // get all parameter of device
+        return;                                                                 // Device not ready
     }
     Register->updateSlaveRegistry(_slaveAddress, _parameter);                   // register slave
     if (_slaveReady.bootFlag)
@@ -998,17 +966,6 @@ void SlaveTwin::performRegister() {
     else
         calibration();                                                          // calibrate device
 }
-
-// -----------------------------------------
-// ask slave about his parameters stored in EEPROM
-// purpose:
-// - request all parameter stored in EEPROM from slave by shortCommand
-// - update structure parameter
-//
-// variable:
-// - in:  address = address of slave to be registerd/updated
-// - out: parameter = parameter that shall be updated by this function
-//
 
 // ----------------------------------------------------------
 // Central reusable logging helpers (only active with TWINVERBOSE/ERRORVERBOSE)
@@ -1155,8 +1112,16 @@ bool SlaveTwin::readAllParameters(slaveParameter& p) {
     return ok;
 }
 
-// ----------------------------------------------------------
-// askSlaveAboutParameter now without address; only calls the combined function.
+// -----------------------------------------
+// ask slave about his parameters stored in EEPROM
+// purpose:
+// - request all parameter stored in EEPROM from slave by shortCommand
+// - update structure parameter
+//
+// variable:
+// - in:  address = address of slave to be registerd/updated
+// - out: parameter = parameter that shall be updated by this function
+//
 bool SlaveTwin::askSlaveAboutParameter(slaveParameter& parameter) {
     return readAllParameters(parameter);
 }
@@ -1336,7 +1301,7 @@ void SlaveTwin::printSlaveReadyInfo() {
 
 // ----------------------------
 // purpose:
-// - updates Register, if device is allready registerd
+// - updates Register, if device is allready registered
 // - don't register new device
 // - updates Registry with Twin's _parameter
 //
