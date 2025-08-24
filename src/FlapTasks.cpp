@@ -106,7 +106,7 @@ void shortScanCallback(TimerHandle_t xTimer) {
         Register->registerPrintln("========== I²C Short Scan Check ================");
         }
     #endif
-    Register->deviceRegistry();
+    Register->registerDevice();
     Register->registerUnregistered();
 
     if (Register->numberOfRegisterdDevices() >= numberOfTwins) {
@@ -131,7 +131,7 @@ void longScanCallback(TimerHandle_t xTimer) {
         Register->registerPrintln("========== I²C Long Scan Check ================");
         }
     #endif
-    Register->deviceRegistry();
+    Register->registerDevice();
     Register->registerUnregistered();
 }
 

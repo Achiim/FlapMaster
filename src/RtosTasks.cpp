@@ -53,7 +53,7 @@ void parserTask(void* pvParameters) {
 void twinRegister(void* pvParameters) {
     Register = new FlapRegistry();
 
-    Register->deviceRegistry();                                                 // initial full scan for known devices
+    Register->registerDevice();                                                 // initial full scan for known devices
     vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
     Register->registerUnregistered();                                           // register devices that are known but not yet registered
     vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period

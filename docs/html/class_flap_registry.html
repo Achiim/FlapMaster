@@ -101,14 +101,14 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:ac52735f0087d50a349670dcf637c308e"><td class="mdescLeft">&#160;</td><td class="mdescRight">register unregistered devices because no Twin is connected to address 0x55 (unregistered) -&gt; Twin[0] is used  <br /></td></tr>
 <tr class="memitem:ab63af746e045f12c3b133fcdcc784daa" id="r_ab63af746e045f12c3b133fcdcc784daa"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab63af746e045f12c3b133fcdcc784daa">repairOutOfPoolDevices</a> ()</td></tr>
 <tr class="memdesc:ab63af746e045f12c3b133fcdcc784daa"><td class="mdescLeft">&#160;</td><td class="mdescRight">This function is used to repair devices that are out of the address pool. Because no Twin is connected to out of pool addresses -&gt; Twin[0] is used.  <br /></td></tr>
-<tr class="memitem:a180d58b7c67b7e0e4c9fad543cff5f68" id="r_a180d58b7c67b7e0e4c9fad543cff5f68"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a180d58b7c67b7e0e4c9fad543cff5f68">updateSlaveRegistry</a> (<a class="el" href="_flap_global_8h.html#a6d682a5a2f888c526d0e46be2a5dbd09">I2Caddress</a> address, <a class="el" href="structslave_parameter.html">slaveParameter</a> parameter)</td></tr>
-<tr class="memdesc:a180d58b7c67b7e0e4c9fad543cff5f68"><td class="mdescLeft">&#160;</td><td class="mdescRight">will be called by Twin as service function and  <br /></td></tr>
-<tr class="memitem:a49cc06a63b40f866dcc39bec7d22ac7a" id="r_a49cc06a63b40f866dcc39bec7d22ac7a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a49cc06a63b40f866dcc39bec7d22ac7a">deregisterSlave</a> (<a class="el" href="_flap_global_8h.html#a6d682a5a2f888c526d0e46be2a5dbd09">I2Caddress</a> slaveAddress)</td></tr>
-<tr class="memdesc:a49cc06a63b40f866dcc39bec7d22ac7a"><td class="mdescLeft">&#160;</td><td class="mdescRight">erase slave from registry  <br /></td></tr>
+<tr class="memitem:ace39c5f77eb9bdadadae8eb75422eddf" id="r_ace39c5f77eb9bdadadae8eb75422eddf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ace39c5f77eb9bdadadae8eb75422eddf">updateRegistry</a> (<a class="el" href="_flap_global_8h.html#a6d682a5a2f888c526d0e46be2a5dbd09">I2Caddress</a> address, <a class="el" href="structslave_parameter.html">slaveParameter</a> parameter)</td></tr>
+<tr class="memdesc:ace39c5f77eb9bdadadae8eb75422eddf"><td class="mdescLeft">&#160;</td><td class="mdescRight">will be called by Twin as service function and  <br /></td></tr>
+<tr class="memitem:a8d8d70b5bf2e0e05ab8292dca7e61f79" id="r_a8d8d70b5bf2e0e05ab8292dca7e61f79"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8d8d70b5bf2e0e05ab8292dca7e61f79">deRegisterDevice</a> (<a class="el" href="_flap_global_8h.html#a6d682a5a2f888c526d0e46be2a5dbd09">I2Caddress</a> slaveAddress)</td></tr>
+<tr class="memdesc:a8d8d70b5bf2e0e05ab8292dca7e61f79"><td class="mdescLeft">&#160;</td><td class="mdescRight">erase slave from registry  <br /></td></tr>
 <tr class="memitem:acb9cd16a89eb8c3774ff534ff800fe6f" id="r_acb9cd16a89eb8c3774ff534ff800fe6f"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acb9cd16a89eb8c3774ff534ff800fe6f">availabilityCheck</a> ()</td></tr>
 <tr class="memdesc:acb9cd16a89eb8c3774ff534ff800fe6f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Will be called cyclic by Registry Task with the help of a countdown timer and will trigger the twins of all registered devices to ping them and:  <br /></td></tr>
-<tr class="memitem:a5df7cf1b79904e3d81dff834394e3dc9" id="r_a5df7cf1b79904e3d81dff834394e3dc9"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5df7cf1b79904e3d81dff834394e3dc9">deviceRegistry</a> ()</td></tr>
-<tr class="memdesc:a5df7cf1b79904e3d81dff834394e3dc9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ask I2C Bus about all expected addresses, who is there, and register unknown slaves.  <br /></td></tr>
+<tr class="memitem:a77238f0bb0b88bc060d93791d94260ff" id="r_a77238f0bb0b88bc060d93791d94260ff"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a77238f0bb0b88bc060d93791d94260ff">registerDevice</a> ()</td></tr>
+<tr class="memdesc:a77238f0bb0b88bc060d93791d94260ff"><td class="mdescLeft">&#160;</td><td class="mdescRight">Ask I2C Bus about all expected addresses, who is there, and register unknown slaves.  <br /></td></tr>
 <tr class="memitem:a4b2ef020f23abb7abb2ba4a5488ef14c" id="r_a4b2ef020f23abb7abb2ba4a5488ef14c"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4b2ef020f23abb7abb2ba4a5488ef14c">numberOfRegisterdDevices</a> ()</td></tr>
 <tr class="memdesc:a4b2ef020f23abb7abb2ba4a5488ef14c"><td class="mdescLeft">&#160;</td><td class="mdescRight">find number of registered devices  <br /></td></tr>
 <tr class="memitem:aa5e6934aaa5f76b04ea2b34355fc597d" id="r_aa5e6934aaa5f76b04ea2b34355fc597d"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa5e6934aaa5f76b04ea2b34355fc597d">findTwinIndexByAddress</a> (<a class="el" href="_flap_global_8h.html#a6d682a5a2f888c526d0e46be2a5dbd09">I2Caddress</a> addr)</td></tr>
@@ -164,14 +164,14 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a49cc06a63b40f866dcc39bec7d22ac7a" name="a49cc06a63b40f866dcc39bec7d22ac7a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a49cc06a63b40f866dcc39bec7d22ac7a">&#9670;&#160;</a></span>deregisterSlave()</h2>
+<a id="a8d8d70b5bf2e0e05ab8292dca7e61f79" name="a8d8d70b5bf2e0e05ab8292dca7e61f79"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8d8d70b5bf2e0e05ab8292dca7e61f79">&#9670;&#160;</a></span>deRegisterDevice()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void FlapRegistry::deregisterSlave </td>
+          <td class="memname">void FlapRegistry::deRegisterDevice </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="_flap_global_8h.html#a6d682a5a2f888c526d0e46be2a5dbd09">I2Caddress</a></td>          <td class="paramname"><span class="paramname"><em>slaveAddress</em></span></td><td>)</td>
           <td></td>
@@ -186,37 +186,6 @@ Here is the call graph for this function:</div>
   </table>
   </dd>
 </dl>
-
-</div>
-</div>
-<a id="a5df7cf1b79904e3d81dff834394e3dc9" name="a5df7cf1b79904e3d81dff834394e3dc9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5df7cf1b79904e3d81dff834394e3dc9">&#9670;&#160;</a></span>deviceRegistry()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">void FlapRegistry::deviceRegistry </td>
-          <td>(</td>
-          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Ask I2C Bus about all expected addresses, who is there, and register unknown slaves. </p>
-<p>Expected address: in address-pool</p>
-<p>Address-pool: I2C_MINADR - I2C_MAXADR </p>
-<div class="dynheader">
-Here is the call graph for this function:</div>
-<div class="dyncontent">
-<div class="center"><img src="class_flap_registry_a5df7cf1b79904e3d81dff834394e3dc9_cgraph.png" border="0" usemap="#aclass_flap_registry_a5df7cf1b79904e3d81dff834394e3dc9_cgraph" loading="lazy" alt=""/></div>
-<map name="aclass_flap_registry_a5df7cf1b79904e3d81dff834394e3dc9_cgraph" id="aclass_flap_registry_a5df7cf1b79904e3d81dff834394e3dc9_cgraph">
-<area shape="rect" title="Ask I2C Bus about all expected addresses, who is there, and register unknown slaves." alt="" coords="5,13,196,40"/>
-<area shape="rect" href="class_flap_registry.html#aa5e6934aaa5f76b04ea2b34355fc597d" title="Helper: find Twin&#45;Index for I2C&#45;Address, or &#45;1 if not found." alt="" coords="244,5,427,48"/>
-<area shape="poly" title=" " alt="" coords="196,24,228,24,228,29,196,29"/>
-</map>
-</div>
 
 </div>
 </div>
@@ -248,13 +217,13 @@ Here is the caller graph for this function:</div>
 <div class="dyncontent">
 <div class="center"><img src="class_flap_registry_aa5e6934aaa5f76b04ea2b34355fc597d_icgraph.png" border="0" usemap="#aclass_flap_registry_aa5e6934aaa5f76b04ea2b34355fc597d_icgraph" loading="lazy" alt=""/></div>
 <map name="aclass_flap_registry_aa5e6934aaa5f76b04ea2b34355fc597d_icgraph" id="aclass_flap_registry_aa5e6934aaa5f76b04ea2b34355fc597d_icgraph">
-<area shape="rect" title="Helper: find Twin&#45;Index for I2C&#45;Address, or &#45;1 if not found." alt="" coords="244,64,427,107"/>
-<area shape="rect" href="class_flap_registry.html#acb9cd16a89eb8c3774ff534ff800fe6f" title="Will be called cyclic by Registry Task with the help of a countdown timer and will trigger the twins ..." alt="" coords="18,5,183,48"/>
-<area shape="poly" title=" " alt="" coords="232,62,182,50,184,45,234,57"/>
-<area shape="rect" href="class_flap_registry.html#a5df7cf1b79904e3d81dff834394e3dc9" title="Ask I2C Bus about all expected addresses, who is there, and register unknown slaves." alt="" coords="5,72,196,99"/>
-<area shape="poly" title=" " alt="" coords="228,88,196,88,196,83,228,83"/>
-<area shape="rect" href="class_flap_registry.html#a180d58b7c67b7e0e4c9fad543cff5f68" title="will be called by Twin as service function and" alt="" coords="13,123,188,165"/>
-<area shape="poly" title=" " alt="" coords="234,113,189,125,188,119,232,108"/>
+<area shape="rect" title="Helper: find Twin&#45;Index for I2C&#45;Address, or &#45;1 if not found." alt="" coords="245,64,428,107"/>
+<area shape="rect" href="class_flap_registry.html#acb9cd16a89eb8c3774ff534ff800fe6f" title="Will be called cyclic by Registry Task with the help of a countdown timer and will trigger the twins ..." alt="" coords="19,5,183,48"/>
+<area shape="poly" title=" " alt="" coords="233,62,183,50,184,45,234,57"/>
+<area shape="rect" href="class_flap_registry.html#a77238f0bb0b88bc060d93791d94260ff" title="Ask I2C Bus about all expected addresses, who is there, and register unknown slaves." alt="" coords="7,72,195,99"/>
+<area shape="poly" title=" " alt="" coords="229,88,195,88,195,83,229,83"/>
+<area shape="rect" href="class_flap_registry.html#ace39c5f77eb9bdadadae8eb75422eddf" title="will be called by Twin as service function and" alt="" coords="5,123,197,149"/>
+<area shape="poly" title=" " alt="" coords="230,111,167,125,166,119,229,106"/>
 </map>
 </div>
 
@@ -324,6 +293,37 @@ Here is the caller graph for this function:</div>
 
 </div>
 </div>
+<a id="a77238f0bb0b88bc060d93791d94260ff" name="a77238f0bb0b88bc060d93791d94260ff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77238f0bb0b88bc060d93791d94260ff">&#9670;&#160;</a></span>registerDevice()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void FlapRegistry::registerDevice </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"><em></em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Ask I2C Bus about all expected addresses, who is there, and register unknown slaves. </p>
+<p>Expected address: in address-pool</p>
+<p>Address-pool: I2C_MINADR - I2C_MAXADR </p>
+<div class="dynheader">
+Here is the call graph for this function:</div>
+<div class="dyncontent">
+<div class="center"><img src="class_flap_registry_a77238f0bb0b88bc060d93791d94260ff_cgraph.png" border="0" usemap="#aclass_flap_registry_a77238f0bb0b88bc060d93791d94260ff_cgraph" loading="lazy" alt=""/></div>
+<map name="aclass_flap_registry_a77238f0bb0b88bc060d93791d94260ff_cgraph" id="aclass_flap_registry_a77238f0bb0b88bc060d93791d94260ff_cgraph">
+<area shape="rect" title="Ask I2C Bus about all expected addresses, who is there, and register unknown slaves." alt="" coords="5,13,193,40"/>
+<area shape="rect" href="class_flap_registry.html#aa5e6934aaa5f76b04ea2b34355fc597d" title="Helper: find Twin&#45;Index for I2C&#45;Address, or &#45;1 if not found." alt="" coords="241,5,424,48"/>
+<area shape="poly" title=" " alt="" coords="193,24,225,24,225,29,193,29"/>
+</map>
+</div>
+
+</div>
+</div>
 <a id="ae88baebfdaa6f3566707da82a741e889" name="ae88baebfdaa6f3566707da82a741e889"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ae88baebfdaa6f3566707da82a741e889">&#9670;&#160;</a></span>registerPrint()</h2>
 
@@ -370,8 +370,8 @@ Here is the caller graph for this function:</div>
 <area shape="poly" title=" " alt="" coords="258,105,226,101,227,96,258,100"/>
 <area shape="rect" href="class_flap_registry.html#ab63af746e045f12c3b133fcdcc784daa" title="This function is used to repair devices that are out of the address pool. Because no Twin is connecte..." alt="" coords="30,123,201,165"/>
 <area shape="poly" title=" " alt="" coords="259,130,202,136,201,131,258,124"/>
-<area shape="rect" href="class_flap_registry.html#a180d58b7c67b7e0e4c9fad543cff5f68" title="will be called by Twin as service function and" alt="" coords="28,189,203,232"/>
-<area shape="poly" title=" " alt="" coords="320,138,227,180,194,191,193,186,225,175,318,133"/>
+<area shape="rect" href="class_flap_registry.html#ace39c5f77eb9bdadadae8eb75422eddf" title="will be called by Twin as service function and" alt="" coords="20,189,211,216"/>
+<area shape="poly" title=" " alt="" coords="321,138,277,160,227,180,187,191,186,186,225,175,274,155,319,133"/>
 </map>
 </div>
 
@@ -520,14 +520,14 @@ Here is the call graph for this function:</div>
 
 </div>
 </div>
-<a id="a180d58b7c67b7e0e4c9fad543cff5f68" name="a180d58b7c67b7e0e4c9fad543cff5f68"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a180d58b7c67b7e0e4c9fad543cff5f68">&#9670;&#160;</a></span>updateSlaveRegistry()</h2>
+<a id="ace39c5f77eb9bdadadae8eb75422eddf" name="ace39c5f77eb9bdadadae8eb75422eddf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ace39c5f77eb9bdadadae8eb75422eddf">&#9670;&#160;</a></span>updateRegistry()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void FlapRegistry::updateSlaveRegistry </td>
+          <td class="memname">void FlapRegistry::updateRegistry </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="_flap_global_8h.html#a6d682a5a2f888c526d0e46be2a5dbd09">I2Caddress</a></td>          <td class="paramname"><span class="paramname"><em>address</em></span>, </td>
         </tr>
@@ -553,15 +553,15 @@ Here is the call graph for this function:</div>
 <div class="dynheader">
 Here is the call graph for this function:</div>
 <div class="dyncontent">
-<div class="center"><img src="class_flap_registry_a180d58b7c67b7e0e4c9fad543cff5f68_cgraph.png" border="0" usemap="#aclass_flap_registry_a180d58b7c67b7e0e4c9fad543cff5f68_cgraph" loading="lazy" alt=""/></div>
-<map name="aclass_flap_registry_a180d58b7c67b7e0e4c9fad543cff5f68_cgraph" id="aclass_flap_registry_a180d58b7c67b7e0e4c9fad543cff5f68_cgraph">
-<area shape="rect" title="will be called by Twin as service function and" alt="" coords="5,35,181,77"/>
-<area shape="rect" href="class_flap_registry.html#aa5e6934aaa5f76b04ea2b34355fc597d" title="Helper: find Twin&#45;Index for I2C&#45;Address, or &#45;1 if not found." alt="" coords="229,5,412,48"/>
-<area shape="poly" title=" " alt="" coords="181,42,213,38,214,43,182,47"/>
-<area shape="rect" href="class_flap_registry.html#ae88baebfdaa6f3566707da82a741e889" title=" " alt="" coords="234,72,407,99"/>
-<area shape="poly" title=" " alt="" coords="182,65,219,70,218,75,181,70"/>
-<area shape="rect" href="_trace_print_8h.html#a109dc83360dbfb90d3bb38af49e5931b" title=" " alt="" coords="460,72,537,99"/>
-<area shape="poly" title=" " alt="" coords="407,83,444,83,444,88,407,88"/>
+<div class="center"><img src="class_flap_registry_ace39c5f77eb9bdadadae8eb75422eddf_cgraph.png" border="0" usemap="#aclass_flap_registry_ace39c5f77eb9bdadadae8eb75422eddf_cgraph" loading="lazy" alt=""/></div>
+<map name="aclass_flap_registry_ace39c5f77eb9bdadadae8eb75422eddf_cgraph" id="aclass_flap_registry_ace39c5f77eb9bdadadae8eb75422eddf_cgraph">
+<area shape="rect" title="will be called by Twin as service function and" alt="" coords="5,43,197,69"/>
+<area shape="rect" href="class_flap_registry.html#aa5e6934aaa5f76b04ea2b34355fc597d" title="Helper: find Twin&#45;Index for I2C&#45;Address, or &#45;1 if not found." alt="" coords="245,5,428,48"/>
+<area shape="poly" title=" " alt="" coords="197,41,229,37,230,43,198,47"/>
+<area shape="rect" href="class_flap_registry.html#ae88baebfdaa6f3566707da82a741e889" title=" " alt="" coords="250,72,423,99"/>
+<area shape="poly" title=" " alt="" coords="198,65,235,70,234,75,197,71"/>
+<area shape="rect" href="_trace_print_8h.html#a109dc83360dbfb90d3bb38af49e5931b" title=" " alt="" coords="476,72,553,99"/>
+<area shape="poly" title=" " alt="" coords="423,83,460,83,460,88,423,88"/>
 </map>
 </div>
 

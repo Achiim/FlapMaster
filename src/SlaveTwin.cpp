@@ -560,7 +560,7 @@ void SlaveTwin::setOffset() {
 void SlaveTwin::reset() {
     twinPrint("send reset to 0x:  ");
     Serial.println(_slaveAddress, HEX);
-    Register->deregisterSlave(_slaveAddress);                                   // delete slave from registry, this address is free now
+    Register->deRegisterDevice(_slaveAddress);                                  // delete slave from registry, this address is free now
     i2cLongCommand(i2cCommandParameter(RESET, 0));                              // send reset to slave
 }
 
@@ -900,7 +900,7 @@ void SlaveTwin::performAvailability() {
             Serial.println(_slaveAddress, HEX);
             }
         #endif
-        Register->deregisterSlave(_slaveAddress);                               // delete slave from registry
+        Register->deRegisterDevice(_slaveAddress);                              // delete slave from registry
         return;
     }
 
@@ -959,7 +959,7 @@ void SlaveTwin::performRegister() {
     } else if (!askSlaveAboutParameter(_parameter)) {                           // get all parameter of device
         return;                                                                 // Device not ready
     }
-    Register->updateSlaveRegistry(_slaveAddress, _parameter);                   // register slave
+    Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
     if (_slaveReady.bootFlag)
         bootRelease();                                                          // release bootFlag and calibrate
     else

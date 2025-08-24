@@ -94,7 +94,7 @@ void FlapRegistry::availabilityCheck() {
  *
  * @param slaveAddress = address to be erased from registry
  */
-void FlapRegistry::deregisterSlave(I2Caddress slaveAddress) {
+void FlapRegistry::deRegisterDevice(I2Caddress slaveAddress) {
     auto it = g_slaveRegistry.find(slaveAddress);
     if (it != g_slaveRegistry.end()) {                                          // only attempt erase if registry is not empty
         delete it->second;                                                      // release memory
@@ -196,7 +196,7 @@ void FlapRegistry::deviceRegistryOutro() {
  *
  * Address-pool: I2C_MINADR - I2C_MAXADR
  */
-void FlapRegistry::deviceRegistry() {
+void FlapRegistry::registerDevice() {
     I2Caddress addr;                                                            // slave addres
     deviceRegistryIntro();                                                      // inform about what is happening
     for (int i = 0; i < numberOfTwins; i++) {
@@ -227,7 +227,7 @@ void FlapRegistry::deviceRegistry() {
  * @param address = address to be registered or updated
  * @param parameter = parameter to be used fpr update or register
  */
-void FlapRegistry::updateSlaveRegistry(I2Caddress address, slaveParameter parameter) {
+void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) {
     int n = findTwinIndexByAddress(address);                                    // resolve twin index for this address
     if (n < 0 || Twin[n] == nullptr) {                                          // guard against invalid twin index/pointer
         {
