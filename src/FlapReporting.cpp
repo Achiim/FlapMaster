@@ -36,7 +36,11 @@ const char  FlapReporting::BLOCK_DENSE[]      = u8"▓";
 const char* FlapReporting::SPARKLINE_LEVELS[] = {u8"▁", u8"▂", u8"▃", u8"▄", u8"▅", u8"▆", u8"▇", u8"█"};
 
 // ----------------------------
-// Constructor
+
+/**
+ * @brief Construct a new Flap Reporting:: Flap Reporting object
+ *
+ */
 FlapReporting::FlapReporting() {}
 
 // -----------------------------------
@@ -61,7 +65,13 @@ void FlapReporting::reportI2CStatistic() {
 }
 
 // -----------------------------------
-// return maxiumum value in history cycle
+
+/**
+ * @brief return maxiumum value in history cycle
+ *
+ * @param history
+ * @return uint32_t
+ */
 uint32_t FlapReporting::maxValueFromHistory(uint32_t* history) {
     uint32_t maxValue = 0;
     for (int i = 0; i < HISTORY_SIZE; ++i)
@@ -70,7 +80,11 @@ uint32_t FlapReporting::maxValueFromHistory(uint32_t* history) {
     return maxValue;
 }
 // -----------------------------------
-// print I2C usage statistic with frames
+
+/**
+ * @brief print I2C usage statistic with frames
+ *
+ */
 void FlapReporting::printI2CHistory() {
     const uint32_t maxBarWidth = 45;
     const uint8_t  FRAME_WIDTH = 80;                                            // make frame
@@ -123,7 +137,15 @@ void FlapReporting::printI2CHistory() {
 }
 
 // -----------------------------------
-// print bar with "symbol"
+
+/**
+ * @brief print bar with "symbol"
+ *
+ * @param value
+ * @param scale
+ * @param symbol
+ * @param maxLength
+ */
 void FlapReporting::printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength) {
     uint32_t len = static_cast<uint32_t>(value * scale);
     len          = (len > maxLength) ? maxLength : len;                         // lenght of bar in charachter
@@ -168,6 +190,12 @@ void FlapReporting::reportSlaveRegistry() {
     //                                     1                   2                   3                   4
 }
 
+// -------------------------------
+
+/**
+ * @brief report RTOS tasks
+ *
+ */
 void FlapReporting::reportRtosTasks() {
     Serial.println("╔════════════════════════════════════════════════════════════════════════════╗");
     Serial.println("║                             RTOS Task Report                               ║");
@@ -205,6 +233,12 @@ void FlapReporting::reportRtosTasks() {
 
     Serial.println("╚════════════════════════════════════════════════════════════════════════════╝");
 }
+
+// -----------------------------
+/**
+ * @brief report memory usage of ESP32
+ *
+ */
 void FlapReporting::reportTaskStatus() {
     constexpr int CONTENT_WIDTH = 58;                                           // Breite zwischen den Rahmenlinien
     constexpr int VALUE_COL     = 22;                                           // Spalte (1-basiert) ab der der Wert beginnt
@@ -310,8 +344,12 @@ void FlapReporting::reportTaskStatus() {
 }
 
 // ----------------------------
-// Helper
-// get remaining time for next Scan (short or long)
+
+/**
+ * @brief get remaining time for next Scan (short or long)
+ *
+ * @return uint32_t
+ */
 uint32_t FlapReporting::getNextScanRemainingMs() {
     TickType_t now = xTaskGetTickCount();
     // wenn shortScan aktiv ist, nimmt dessen nächstes Ablaufdatum,
@@ -328,8 +366,12 @@ uint32_t FlapReporting::getNextScanRemainingMs() {
 }
 
 // ----------------------------
-// Helper
-// get remaining time for next Availability-Check
+
+/**
+ * @brief get remaining time for next Availability-Check
+ *
+ * @return uint32_t
+ */
 uint32_t FlapReporting::getNextAvailabilityRemainingMs() {
     TickType_t now = xTaskGetTickCount();
     if (availCheckTimer && xTimerIsTimerActive(availCheckTimer)) {
@@ -340,7 +382,11 @@ uint32_t FlapReporting::getNextAvailabilityRemainingMs() {
 }
 
 // ----------------------------
-// Helper
+
+/**
+ * @brief report uptime of ESP32
+ *
+ */
 void FlapReporting::printUptime() {
     TickType_t ticks        = xTaskGetTickCount();
     uint32_t   totalSeconds = ticks * portTICK_PERIOD_MS / 1000;
@@ -372,6 +418,11 @@ void FlapReporting::reportMemory() {
     Serial.println("╚════════════════════════════════════════════════════════════════╝");
 }
 
+/**
+ * @brief report steps by flaps
+ *
+ * @param wrapWidth
+ */
 void FlapReporting::reportAllTwinStepsByFlap(int wrapWidth) {
     for (int i = 0; i < numberOfTwins; ++i) {
         SlaveTwin* twin = Twin[i];
@@ -382,6 +433,12 @@ void FlapReporting::reportAllTwinStepsByFlap(int wrapWidth) {
     }
 }
 
+/**
+ * @brief
+ *
+ * @param twin
+ * @param wrapWidth
+ */
 void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
     int count = twin._parameter.flaps;
     if (count <= 0)
@@ -445,7 +502,13 @@ void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
     Serial.print(repeatChar("─", tableWidth - 2));
     Serial.println("┘");
 }
-
+/**
+ * @brief fill with blanks
+ *
+ * @param symbol
+ * @param count
+ * @return String
+ */
 String FlapReporting::repeatChar(const String& symbol, int count) {
     String result;
     for (int i = 0; i < count; ++i) {
