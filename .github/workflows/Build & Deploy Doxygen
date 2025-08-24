@@ -34,6 +34,14 @@ jobs:
       - name: Build Doxygen
         run: doxygen Doxyfile
 
+# Debug: prüfe, ob die HTMLs da sind
+      - name: Show Doxygen output
+        run: |
+          ls -la
+          ls -la build || true
+          ls -la build/doxygen || true
+          ls -la build/doxygen/html || true
+
       # Offizieller Weg: Site als Pages-Artifact packen
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
