@@ -530,7 +530,13 @@ String FlapReporting::padStart(String val, int length, char fill) {
     }
     return val;
 }
-
+/**
+ * @brief draw chunk
+ *
+ * @param twin
+ * @param offset
+ * @param wrapWidth
+ */
 void FlapReporting::drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWidth) {
     const int chunkWidth = wrapWidth * 4;
 
