@@ -1,0 +1,53 @@
+name: Build & Deploy Doxygen to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Empfohlen von GitHub: Pages vorab konfigurieren (setzt Umgebungswerte, bereitet Deploy vor)
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        # optional: mit inputs (z.B. static_site_generator) – meist nicht nötig
+        # siehe Doku
+
+      - name: Install doxygen & graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Build Doxygen
+        run: doxygen Doxyfile
+
+      # Offizieller Weg: Site als Pages-Artifact packen
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/doxygen/html  # <== an deine Doxyfile-Pfade anpassen
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Offizielle Deploy-Action für Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
