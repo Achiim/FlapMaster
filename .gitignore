@@ -8,5 +8,7 @@
 *.dSYM/
 *.DS_Store
 platformio.ini
+# Ingnoriere doxygen
+/build/
 # Ignoriere Symlink zur SharedLib
 lib/SharedLib/
