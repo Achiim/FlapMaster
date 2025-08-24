@@ -516,7 +516,14 @@ String FlapReporting::repeatChar(const String& symbol, int count) {
     }
     return result;
 }
-
+/**
+ * @brief fill with blanks
+ *
+ * @param val
+ * @param length
+ * @param fill
+ * @return String
+ */
 String FlapReporting::padStart(String val, int length, char fill) {
     while (val.length() < length) {
         val = String(fill) + val;
