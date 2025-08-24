@@ -16,27 +16,18 @@
 #include "freertos/task.h"
 #include "SlaveTwin.h"
 
-// --------------------------
-// Wait until the slave becomes READY using ETA-based "quiet-then-fast" polling.
-//
-// parameter:
-// - longCmd: the LONG command and
-// - param_sent_to_slave: parameter that were
-//   used for ETA estimation and command-specific tweaks.
-//
-// - timeout_ms: absolute time budget for this wait. The function never blocks
-//   beyond this (it may locally stretch the budget just enough to complete the
-//   first fast-poll window so we don't time out silently before polling).
-//
-// Returns:
-//   true -> READY observed within the (possibly locally stretched) budget
-//   false -> timeout (no READY seen in time)
-// Waits until the slave reports READY using an ETA-driven "quiet then fast" polling scheme.
-// - longCmd:              LONG command that has just been sent (affects ETA/overshoot).
-// - param_sent_to_slave:  parameter that was sent alongside the LONG (affects ETA).
-// - timeout_ms:           absolute time budget; we will not block beyond this (except we
-//                         locally stretch just enough to complete the first fast window).
-// Returns true if READY was observed in time; false on timeout.
+//--------------------------------
+
+/**
+ * @brief Waits until the slave is READY using an ETA-driven polling scheme.
+ *
+ * @param longCmd Command that was sent (affects ETA/overshoot).
+ * @param param_sent_to_slave Parameter sent alongside the command (affects ETA).
+ * @param timeout_ms Maximum wait time in ms (may be stretched slightly for first poll window).
+ *
+ * @return true if READY observed in time.
+ * @return false if timeout occurred.
+ */
 bool SlaveTwin::waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_slave, uint32_t timeout_ms) {
     const uint32_t t0           = millis();                                     // anchor start time for all elapsed/budget checks
     uint32_t       polls        = 0;                                            // AYR probe counter
@@ -63,14 +54,14 @@ bool SlaveTwin::waitUntilYouAreReady(uint8_t longCmd, uint16_t param_sent_to_sla
     return followUpPolling(t0, timeout_ms, eta_ms, longCmd, param_sent_to_slave, polls, seenBusy, firstBusy_ms); // coarse follow-up loop
 }
 
-// ------------------------------
-// Predicts the duration (ETA) in milliseconds for a LONG command, with per-command semantics.
-// This function returns a *pure* ETA used by the AYR limiter (no polling-window logic here).
-// Inputs:
-//   - longCmd : command identifier (e.g., CALIBRATE, MOVE, SENSOR_CHECK, ...)
-//   - param   : command parameter (semantics depend on the command; e.g., steps)
-// Output:
-//   - ETA in milliseconds (clamped to a safe range) that the caller uses to schedule AYR polling.
+/**
+ * @brief Estimates duration (ETA) of a LONG command in ms.
+ *
+ * @param longCmd Command identifier (e.g. CALIBRATE, MOVE).
+ * @param param Command parameter (meaning depends on command).
+ *
+ * @return ETA in milliseconds (safe range).
+ */
 uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const {
     const uint16_t spr    = validStepsPerRevolution();                          // read plausible steps-per-rev (fallback to default if out-of-range)
     const uint16_t offset = normalizeOffset(_parameter.offset, spr);            // normalize stored offset into [0..spr)
@@ -162,8 +153,13 @@ uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const
 
 // --------------------------
 // 1) part of waitUntilYouAreReady()
-// compute ETA including command-specific guards (SENSOR_CHECK scaling)
-// Computes the ETA and enforces command-specific minimums so we do not poll too early.
+/**
+ * @brief Computes ETA with command-specific guards.
+ *
+ * @param longCmd Command identifier.
+ * @param param Command parameter.
+ * @return Adjusted ETA in milliseconds.
+ */
 uint32_t SlaveTwin::computeEtaWithGuards(uint8_t longCmd, uint16_t param) const {
     uint32_t eta_ms = estimateAYRdurationMs(longCmd, param);                    // base ETA from current tuning
 
@@ -180,8 +176,12 @@ uint32_t SlaveTwin::computeEtaWithGuards(uint8_t longCmd, uint16_t param) const 
 
 // --------------------------------------
 // 2) part of waitUntilYouAreReady()
-// Command-specific overshoot (how far after ETA we issue the first poll)
-// Returns the overshoot in ms we add to the ETA before the first AYR poll.
+/**
+ * @brief Computes overshoot (ms after ETA before first poll).
+ *
+ * @param longCmd Command identifier.
+ * @return Overshoot in milliseconds.
+ */
 uint32_t SlaveTwin::computeOvershoot(uint8_t longCmd) const {
     return (longCmd == MOVE)           ? 280u                                   // longer tail for MOVE
            : (longCmd == SENSOR_CHECK) ? 200u                                   // medium tail for SENSOR_CHECK, small for others
@@ -191,15 +191,24 @@ uint32_t SlaveTwin::computeOvershoot(uint8_t longCmd) const {
 
 // --------------------------------------
 // 3) part of waitUntilYouAreReady()
-// Plan absolute time for the first poll attempt
-// Combines ETA and overshoot to choose the first-poll timestamp (relative to start).
+/**
+ * @brief Calculates first poll time (ETA + overshoot).
+ *
+ * @param eta_ms Estimated time to completion.
+ * @param longCmd Command identifier.
+ * @return First poll timestamp in ms.
+ */
 uint32_t SlaveTwin::planFirstPollAt(uint32_t eta_ms, uint8_t longCmd) const {
     return eta_ms + computeOvershoot(longCmd);                                  // schedule first poll slightly after ETA
 }
 
 // 4) part of waitUntilYouAreReady()
-// Guarantee timeout covers the first fast window (avoid "quiet" timeouts)
-// Ensures the given timeout is large enough to reach and traverse the first fast-poll window.
+/**
+ * @brief Ensures timeout is long enough for first poll window.
+ *
+ * @param first_poll_at First poll timestamp.
+ * @param timeout_ms Reference to timeout budget.
+ */
 void SlaveTwin::stretchTimeoutForFirstWindow(uint32_t first_poll_at, uint32_t& timeout_ms) const {
     const uint32_t min_timeout = first_poll_at                                  // need to reach the first-poll point
                                  + (uint32_t)READY_WINDOW_MS                    // plus the fast window length
@@ -209,8 +218,14 @@ void SlaveTwin::stretchTimeoutForFirstWindow(uint32_t first_poll_at, uint32_t& t
 }
 
 // 5) part of waitUntilYouAreReady()
-// Quiet wait until it's time to poll (yields CPU using RTOS ticks)
-// Sleeps in tiny slices until first-poll time or timeout; returns false if budget is exceeded.
+/**
+ * @brief Waits quietly until first poll time or timeout.
+ *
+ * @param t0 Start timestamp.
+ * @param first_poll_at First poll timestamp.
+ * @param timeout_ms Timeout in ms.
+ * @return true if first poll reached, false if timed out.
+ */
 bool SlaveTwin::quietWait(uint32_t t0, uint32_t first_poll_at, uint32_t timeout_ms) {
     for (;;) {                                                                  // loop until we reach the first-poll moment
         const uint32_t elapsed = millis() - t0;                                 // how long we have waited so far
@@ -233,9 +248,18 @@ bool SlaveTwin::quietWait(uint32_t t0, uint32_t first_poll_at, uint32_t timeout_
 }
 
 // 6) part of waitUntilYouAreReady()
-// First poll; returns true if READY, else marks BUSY (+stats)
-// Performs the very first AYR probe. On READY it logs (optional) and returns true; otherwise
-// it records BUSY timing and returns false to let the caller continue with follow-up polling.
+/**
+ * @brief Executes first poll and checks if READY.
+ *
+ * @param t0 Start timestamp.
+ * @param longCmd Command code.
+ * @param param Command parameter.
+ * @param eta_ms Estimated completion time.
+ * @param polls Probe counter (incremented).
+ * @param seenBusy Flag set if BUSY observed.
+ * @param firstBusy_ms Time of first BUSY.
+ * @return true if READY found, false otherwise.
+ */
 bool SlaveTwin::tryFirstPoll(uint32_t t0, uint8_t longCmd, uint16_t param, uint32_t eta_ms, uint32_t& polls, bool& seenBusy, uint32_t& firstBusy_ms) {
     const bool ready = isSlaveReady();                                          // issue AYR probe (I²C short command)
     polls++;                                                                    // count this probe
@@ -264,9 +288,19 @@ bool SlaveTwin::tryFirstPoll(uint32_t t0, uint8_t longCmd, uint16_t param, uint3
 }
 
 // 7) part of waitUntilYouAreReady()
-// Coarse follow-up polling until timeout (low AYR count, fine near deadline)
-// Polls at a coarse cadence to keep AYR count low; near the deadline it tightens cadence.
-// Returns true on READY, false if the overall timeout elapses.
+/**
+ * @brief Continues polling until READY or timeout.
+ *
+ * @param t0 Start timestamp.
+ * @param timeout_ms Maximum wait time.
+ * @param eta_ms Estimated completion time.
+ * @param longCmd Command code.
+ * @param param Command parameter.
+ * @param polls Probe counter.
+ * @param seenBusy True if BUSY seen.
+ * @param firstBusy_ms Time of first BUSY.
+ * @return true if READY seen, false if timeout.
+ */
 bool SlaveTwin::followUpPolling(uint32_t t0, uint32_t timeout_ms, uint32_t eta_ms, uint8_t longCmd, uint16_t param, uint32_t& polls, bool& seenBusy,
                                 uint32_t& firstBusy_ms) {
     const uint16_t coarse_interval_ms = 200u;                                   // main cadence between polls
@@ -335,7 +369,11 @@ bool SlaveTwin::followUpPolling(uint32_t t0, uint32_t timeout_ms, uint32_t eta_m
 
 // -------------------------------
 // ---- plausibility-checked getters (use measured values if sane) ----------
-// Returns ms per revolution using measured value if plausible; otherwise falls back to default.
+/**
+ * @brief Returns ms per revolution (measured if valid, else default).
+ *
+ * @return Milliseconds per revolution.
+ */
 uint32_t SlaveTwin::validMsPerRevolution() const {
     const uint32_t v = _parameter.speed ? _parameter.speed : DEFAULT_REV_MS;    // prefer measured, else default
     if (v < REV_MS_MIN || v > REV_MS_MAX)                                       // outside plausibility band?
@@ -344,7 +382,11 @@ uint32_t SlaveTwin::validMsPerRevolution() const {
 }
 
 // -------------------------------
-// Returns steps per revolution using measured value if plausible; otherwise falls back to default.
+/**
+ * @brief Returns steps per revolution (measured if valid, else default).
+ *
+ * @return Steps per revolution.
+ */
 uint16_t SlaveTwin::validStepsPerRevolution() const {
     const uint16_t s = _parameter.steps ? _parameter.steps : DEFAULT_STEPS_PER_REV; // prefer measured, else default
     if (s < STEPS_MIN || s > STEPS_MAX)                                         // outside plausibility band?
@@ -353,7 +395,12 @@ uint16_t SlaveTwin::validStepsPerRevolution() const {
 }
 
 // -------------------------------
-// Converts a step count to milliseconds using integer math (rounded).
+/**
+ * @brief Converts steps to milliseconds.
+ *
+ * @param steps Step count.
+ * @return Equivalent time in milliseconds.
+ */
 uint32_t SlaveTwin::stepsToMs(uint32_t steps) const {
     const uint32_t rev_ms = validMsPerRevolution();                             // ms per full revolution (plausibility-checked)
     const uint16_t spr    = validStepsPerRevolution();                          // steps per full revolution (plausibility-checked)
@@ -362,13 +409,15 @@ uint32_t SlaveTwin::stepsToMs(uint32_t steps) const {
 }
 
 // ----------------------------
-// Adds a safety margin to an ETA and clamps it into sane bounds.
-// The result is used as the *timeout budget* for a LONG command’s wait.
-// - ms:      base estimate (ETA) for the command duration, in milliseconds
-// - longCmd: command code (used to choose per-command inflation/caps)
-// Returns:
-//   A time budget in milliseconds: inflated by a percentage and/or fixed
-//   overhead, then clamped to a [min..max] range depending on the command.
+
+/**
+ * @brief Inflates ETA with margin and clamps to valid range.
+ * Used as timeout budget for LONG commands.
+ *
+ * @param ms Base ETA in ms.
+ * @param longCmd Command code.
+ * @return Time budget in ms.
+ */
 uint32_t SlaveTwin::withSafety(uint32_t ms, uint8_t longCmd) const {
     uint32_t inflated;
     uint32_t min_ms;

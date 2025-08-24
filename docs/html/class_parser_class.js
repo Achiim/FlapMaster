@@ -1,0 +1,26 @@
+var class_parser_class =
+[
+    [ "ParserClass", "class_parser_class.html#a92163c73993f166b5f6628227090054c", null ],
+    [ "analyseClickEvent", "class_parser_class.html#a141916e20aa4827149a8d8b27bbf828b", null ],
+    [ "detect", "class_parser_class.html#afe12305b45cf4d8307b6f301c8ce4a89", null ],
+    [ "dispatchToReporting", "class_parser_class.html#ab17e55884cb40b90cf9118b55cd4d728", null ],
+    [ "dispatchToTwins", "class_parser_class.html#ab09badadde8b50f47fafc12fdcd21be5", null ],
+    [ "handleQueueMessage", "class_parser_class.html#aa66ac3bcd25b2d68bc90f54582c141fe", null ],
+    [ "parserPrint", "class_parser_class.html#a922eea16c25ab3c51d98f813306e19ca", null ],
+    [ "parserPrintln", "class_parser_class.html#ae784dea4c6dab6a57909b261ccb38a50", null ],
+    [ "poll", "class_parser_class.html#a7c2ea891fb2ce851d9e8791b45b010e2", null ],
+    [ "twinCommandToString", "class_parser_class.html#af59e90d4bc77aaaf92c26d76a53639b1", null ],
+    [ "_evt", "class_parser_class.html#ad5b57fb12d37999017b7ef3bad344610", null ],
+    [ "_lastClickTime", "class_parser_class.html#abdf33f4f43e25f0c91626e25142ae3d5", null ],
+    [ "_lastKey", "class_parser_class.html#abfa3a5df91c2f871a2c35febe2286bf4", null ],
+    [ "_lastReceiveTime", "class_parser_class.html#a48ab991c8e79cac8dfac1a23d8490f95", null ],
+    [ "_mappedCommand", "class_parser_class.html#a35dc7e011254e7cd58ec51529fc3731d", null ],
+    [ "_mappedReport", "class_parser_class.html#ae87be382a42bb3bdf97ea838766a4973", null ],
+    [ "_pendingKey", "class_parser_class.html#af724531814916e40d13fc4ca3736c805", null ],
+    [ "_receivedEvent", "class_parser_class.html#abe56b163caa0caff53b7431c173dcebc", null ],
+    [ "_receivedKey", "class_parser_class.html#ab14eac5dd022d61ed8ce7b6ac238f596", null ],
+    [ "_receivedValue", "class_parser_class.html#a348ee656475ce164264c2041e312610d", null ],
+    [ "_repeatCount", "class_parser_class.html#af80eceb4a3fa367cd86e2494ab9d1d50", null ],
+    [ "_singleClickPendingTime", "class_parser_class.html#a4cd5192284608e09fa7c758641d04a18", null ],
+    [ "_waitingForSecondClick", "class_parser_class.html#a765628cff1ba034550f4b57b0faa6965", null ]
+];

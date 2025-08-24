@@ -49,6 +49,12 @@ TimerHandle_t longScanTimer   = nullptr;
 TimerHandle_t availCheckTimer = nullptr;
 
 // --------------------------------------
+/**
+ * @brief on error this function makes a system halt
+ *
+ * @param reason reason for system halt
+ * @param blinkCode number of blink code to signalize reason
+ */
 void FlapTask::systemHalt(const char* reason, int blinkCode) {
     masterPrintln("===================================");
     masterPrintln("🛑 SYSTEM HALTED!");
@@ -85,8 +91,14 @@ void FlapTask::systemHalt(const char* reason, int blinkCode) {
     }
 }
 
-// --- Short-Scan (SHORT_SCAN_COUNTDOWN),
-// change to Long-Scan if all devices are available
+// ----------------------------------
+
+/**
+ * @brief  Short Regisgtry Scan (SHORT_SCAN_COUNTDOWN), change to Long-Scan if all devices are available.
+ * First makes device registry then registers unregistered devices.
+ *
+ * @param xTimer associated timer
+ */
 void shortScanCallback(TimerHandle_t xTimer) {
     #ifdef REGISTRYVERBOSE
         {
@@ -103,8 +115,15 @@ void shortScanCallback(TimerHandle_t xTimer) {
     }
 }
 
-// --- Long-Scan (LONG_SCAN_COUNTDOWN)
-//
+// ----------------------------------
+
+/**
+ * @brief  Long Regisgtry Scan (LONG_SCAN_COUNTDOWN), change to short-Scan if not all devices are available.
+ * First makes device registry then registers unregistered devices.
+ *
+ * @param xTimer associated timer
+ */
+
 void longScanCallback(TimerHandle_t xTimer) {
     #ifdef REGISTRYVERBOSE
         {
@@ -118,6 +137,11 @@ void longScanCallback(TimerHandle_t xTimer) {
 
 // --- Availability-Check (AVAILABILITY_CHECK_COUNTDOWN),
 // change back to Short-Scan, if devices are missing
+/**
+ * @brief Availability-Check (AVAILABILITY_CHECK_COUNTDOWN), change back to Short-Scan, if devices are missing
+ *
+ * @param xTimer associated timer
+ */
 void availCheckCallback(TimerHandle_t xTimer) {
     #ifdef AVAILABILITYVERBOSE
         {
