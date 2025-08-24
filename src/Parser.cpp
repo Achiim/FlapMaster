@@ -251,7 +251,7 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
             return cmd;
             break;
         case Key21::KEY_200_PLUS:
-            cmd.twinCommand = TWIN_RESET;
+            cmd.twinCommand = TWIN_FACTORY_RESET;
             return cmd;
             break;
         case Key21::KEY_0: {
@@ -472,7 +472,7 @@ const char* ParserClass::twinCommandToString(TwinCommands cmd) {
             return "TWIN_PREV_STEP";
         case TWIN_SET_OFFSET:
             return "TWIN_SET_OFFSET";
-        case TWIN_RESET:
+        case TWIN_FACTORY_RESET:
             return "TWIN_RESET";
         case TWIN_AVAILABILITY:
             return "TWIN_AVAILABILITY";

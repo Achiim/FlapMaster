@@ -53,7 +53,7 @@ enum TwinCommands {
     TWIN_NEXT_STEP         = 80,                                                // move to next step (25 steps) to adjust calibration
     TWIN_PREV_STEP         = 90,                                                // move to previous step (-25 steps) to adjust calibration
     TWIN_SET_OFFSET        = 100,                                               // save calibration offset in EEPROM
-    TWIN_RESET             = 110,                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
+    TWIN_FACTORY_RESET     = 110,                                               // do complete factory reset of slave  I2C address = 0x55, no serialNumber, EEPROM
     TWIN_AVAILABILITY      = 120,                                               // this command is used to check if twin device is available
     TWIN_REGISTER          = 130,                                               // this command is used to register a twin device
     TWIN_NEW_ADDRESS       = 140                                                // this command is used to set the base address for the twin
@@ -116,6 +116,7 @@ class SlaveTwin {
     void performAvailability();                                                 // check availability of twin device
     void performRegister();                                                     // register twin device
     void bootRelease();                                                         // release bootFlag an calibrate
+    bool waitForDeviceToComeBack(I2Caddress adr, uint32_t sn);                  // wait for device with serial number
 
     // Helper
     bool  readAllParameters(slaveParameter& p);                                 // Reads all parameters from the slave device.
@@ -134,7 +135,8 @@ class SlaveTwin {
     void updateSlaveReadyInfo(uint8_t* data);                                   // take over Read Structure
 
     // ---------------------------
-    // I2C procedures
+    // I2C command procedures
+    void      i2cLongLongCommand(LongLongMessage mess, I2Caddress adr);         // send long long command to slave
     void      i2cLongCommand(LongMessage mess);                                 // send long command to slave
     esp_err_t i2cMidCommand(MidMessage midCmd, I2Caddress slaveaddress, uint8_t* answer, int size); // send mid command to slave
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
@@ -167,7 +169,7 @@ class SlaveTwin {
 
     // ---------------------------
     // I2C Helper
-    LongMessage i2cCommandParameter(uint8_t command, u_int16_t parameter);      // prepare I2C LongCommand from paramter
+    LongMessage i2cCommandParameter(i2cCommand command, u_int16_t parameter);   // prepare I2C LongCommand from paramter
 
     // -------------------------------
     // internal i2c Helpers
