@@ -34,7 +34,7 @@ jobs:
       - name: Build Doxygen
         run: doxygen Doxyfile
 
-# Debug: prüfe, ob die HTMLs da sind
+      # Debug: prüfe, ob die HTMLs da sind
       - name: Show Doxygen output
         run: |
           ls -la
