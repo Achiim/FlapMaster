@@ -5,3 +5,7 @@
 ## Master Tasks Overview (Remote Control Part)
 
 ![](./pic/MasterTasks.png)
+
+## Documentation
+
+[![Docs](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://achiim.github.io/FlapMaster/)
