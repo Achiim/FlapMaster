@@ -581,7 +581,14 @@ void FlapReporting::drawTwinChunk(const SlaveTwin& twin, int offset, int wrapWid
     stepsLine = "";
     flapLine  = "";
 }
-
+/**
+ * @brief select symbol to build sparkling
+ *
+ * @param value
+ * @param minValue
+ * @param maxValue
+ * @return const char*
+ */
 const char* FlapReporting::selectSparklineLevel(int value, int minValue, int maxValue) {
     if (maxValue == minValue)
         return SPARKLINE_LEVELS[0];
