@@ -1,30 +1,13 @@
-/* === Base === */
-html, body { font-size: 16px !important; }
+/* globale Grundgröße */
+html { font-size: 16px; }        /* z. B. 16px statt ~14px */
 
-/* === Content area === */
-#doc-content, #doc-content .contents, #doc-content .textblock,
-#doc-content .textblock p, #doc-content .header, #doc-content .headertitle,
-.memdoc, .memitem, .memproto, .memname, .paramname, .params, table.doxtable {
-  font-size: 1rem !important;
-}
+/* Inhalte */
+body, div.contents { font-size: 1rem; }
 
-/* === Headline sizes (feintuning) === */
-.headertitle .title, .title { font-size: 1.4rem !important; }
-#projectname              { font-size: 1.2rem !important; }
-#projectbrief             { font-size: 1rem !important; }
-h1 { font-size: 1.6rem !important; }
-h2 { font-size: 1.35rem !important; }
-h3 { font-size: 1.2rem !important; }
+/* Codeblöcke/Fragmente */
+pre, code, .fragment { font-size: 0.95rem; }
 
-/* === Code / fragments === */
-pre, code, tt, .fragment, .line, .memproto .paramtype, .directory .levels {
-  font-size: 0.95rem !important;
-}
-
-/* === Sidebar / Navigation === */
-#nav-tree, #nav-tree .label, #nav-path, #nav-path a, #nav-sync {
-  font-size: 0.95rem !important;
-}
-
-/* (Optional) sichtbarer Test, ob CSS greift – danach wieder löschen: */
-/* .headertitle .title::after { content: " [CSS OK]"; color: #888; } */
+/* Titel & Navigation (optional feintunen) */
+.title       { font-size: 1.35rem; }
+#projectname { font-size: 1.15rem; }
+#nav-tree .label { font-size: 0.95rem; }
