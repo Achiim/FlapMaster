@@ -28,11 +28,17 @@ bool              g_masterBooted = true;                                        
 SemaphoreHandle_t g_i2c_mutex    = nullptr;                                     // Semaphor to protect access to I2C Bus
 
 // -------------------------
-// purpose: setup ics bus for master access
-// - introduce PINS for SDA, SCL
-// - enable pullup's
-// - define bus frequence
-// - install bus driver
+
+/**
+ * @brief setup ics bus for master access
+ * introduce PINS for SDA, SCL
+ *
+ * enable pullup's
+ *
+ * define bus frequence
+ *
+ * install bus driver
+ */
 void i2csetup() {
     if (I2C_MASTER_SDA_IO == -1 || I2C_MASTER_SCL_IO == -1 || I2C_MASTER_SDA_IO == I2C_MASTER_SCL_IO) {
         {
@@ -81,104 +87,37 @@ void i2csetup() {
 }
 
 // ----------------------------
-// purpose convert LongMessage to byte buffer, that can be send to i2c bus
+// purpose
 // - just memcpy
 //
 // parameter:
-// mess = structure form type LongMessage (size = 3 byte)
-// outBuffer = pointer to 3 byte array to get converted ic2FlapMessage
+// mess =
+// outBuffer =
 //
-void prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer) {
+/**
+ * @brief convert LongMessage to byte buffer, that can be send to i2c bus
+ *
+ * @param mess structure form type LongMessage (size = 3 byte)
+ * @param outBuffer pointer to 3 byte array to get converted ic2FlapMessage
+ */
+void prepareI2Cdata(LongMessage mess, uint8_t* outBuffer) {
     memcpy(outBuffer, &mess, sizeof(LongMessage));                              // transfer i2c message to send buffer
     #ifdef I2CMASTERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("prepare I2C-LongCommand (prepareI2Cdata) to be sent to slaveAddress 0x");
-        Serial.print(slaveAddress, HEX);
-        Serial.print(" : 0x");
-        for (size_t i = 0; i < sizeof(LongMessage); ++i) {
-        Serial.printf("%02X ", outBuffer[i]);
-        }
-        Serial.println();
+        masterPrintln("prepare LongMessage to be sent");
         }
     #endif
 }
 
-/*
-// ----------------------------
-// purpose: check if i2c slave is ready or busy
-// - access to i2c bus is protected by semaphore
-// - read data structure slaveReady (structure slaveStatus .read, .taskCode, .error, .eta)
-//
-// parameter:
-// slaveAddress = i2c address of slave that shall be checked
-//
-// return:
-// n   = Twin Number
-// -1  = no Twin found
-// -2  = device not connected
-// Twin with slaveAddress is update slaveRead.read, .taskCode, .bootFlag, .sensorStatus and .position
-//
-int check_slaveReady(I2Caddress slaveAddress) {
-    uint8_t data[6] = {0, 0, 0, 0, 0, 0};
-    #ifdef READYBUSYVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("readyness/busyness check of slave 0x");
-        Serial.println(slaveAddress, HEX);
-        }
-    #endif
-    bool found = false;
-    int  a     = 0;
-    while (a < numberOfTwins) {                                                 // is slaveAddress valide (content of adress pool)
-        if (g_slaveAddressPool[a] == slaveAddress) {
-            found = true;
-            break;
-        }
-        a++;
-    }
-
-    if (!found || Twin[a] == nullptr) {                                         // is there a valide Twin[] Object available that can communicte with
-slave #ifdef READYBUSYVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("corresponding twin object not found or not created for slave: 0x");
-        Serial.println(slaveAddress, HEX);
-        }
-#endif
-        return -1;                                                              // return no Twin found
-    }
-
-    #ifdef READYBUSYVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("corresponding twin found: Twin[%d] fits to slave: 0x", a);
-        Serial.println(slaveAddress, HEX);
-        masterPrint("sending now STATE request to slave: 0x");
-        Serial.println(slaveAddress, HEX);
-        }
-    #endif
-
-    if (Twin[a]->i2cShortCommand(CMD_GET_STATE, data, sizeof(data)) != ESP_OK) { // send  request to Slave
-    #ifdef READYBUSYVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrint("(check_slaveReady) shortCommand STATE failed to: 0x");
-        Serial.println(slaveAddress, HEX);
-        }
-    #endif
-        return -2;                                                              // twin not connected
-    }
-    Twin[a]->updateSlaveReadyInfo(data);                                        // Update Slave-Status
-    #ifdef READYBUSYVERBOSE
-        printSlaveReadyInfo(Twin[a]);
-    #endif
-
-    return a;                                                                   // return Twin[n]
-}
-*/
 // --------------------------
-// trace slave answer to STATUS
+
+/**
+ * @brief trace slave answer to STATUS
+ *
+ * @param twin
+ */
+
 void printSlaveReadyInfo(SlaveTwin* twin) {
     #ifdef MASTERVERBOSE
         {
@@ -207,7 +146,13 @@ void printSlaveReadyInfo(SlaveTwin* twin) {
 }
 
 // --------------------------
-// semaphore protected ping
+
+/**
+ * @brief semaphore protected ping
+ *
+ * @param address
+ * @return esp_err_t
+ */
 esp_err_t i2c_probe_device(I2Caddress address) {
     if (takeI2CSemaphore()) {
         esp_err_t ret = pingI2Cslave(address);
@@ -226,7 +171,14 @@ esp_err_t i2c_probe_device(I2Caddress address) {
 }
 
 // --------------------------
-// take Semaphore
+//
+
+/**
+ * @brief take Semaphore for I2C access
+ *
+ * @return true
+ * @return false
+ */
 bool takeI2CSemaphore() {
     if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(20))) {
         #ifdef SEMAPHOREVERBOSE
@@ -248,7 +200,13 @@ bool takeI2CSemaphore() {
 }
 
 // --------------------------
-// give Semaphore
+
+/**
+ * @brief give Semaphore to release I2C access
+ *
+ * @return true
+ * @return false
+ */
 bool giveI2CSemaphore() {
     if (xSemaphoreGive(g_i2c_mutex)) {
         #ifdef SEMAPHOREVERBOSE
@@ -270,7 +228,13 @@ bool giveI2CSemaphore() {
 }
 
 // --------------------------
-// request ACK from slave
+
+/**
+ * @brief request ACK from slave (ping)
+ *
+ * @param address
+ * @return esp_err_t
+ */
 esp_err_t pingI2Cslave(I2Caddress address) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();                               // I2C command buffer
     i2c_master_start(cmd);                                                      // Set start signal

@@ -116,7 +116,6 @@ class SlaveTwin {
     void performAvailability();                                                 // check availability of twin device
     void performRegister();                                                     // register twin device
     void bootRelease();                                                         // release bootFlag an calibrate
-    bool waitForDeviceToComeBack(I2Caddress adr, uint32_t sn);                  // wait for device with serial number
 
     // Helper
     bool  readAllParameters(slaveParameter& p);                                 // Reads all parameters from the slave device.
@@ -136,7 +135,6 @@ class SlaveTwin {
 
     // ---------------------------
     // I2C command procedures
-    void      i2cLongLongCommand(LongLongMessage mess, I2Caddress adr);         // send long long command to slave
     void      i2cLongCommand(LongMessage mess);                                 // send long command to slave
     esp_err_t i2cMidCommand(MidMessage midCmd, I2Caddress slaveaddress, uint8_t* answer, int size); // send mid command to slave
     esp_err_t i2cShortCommand(ShortMessage ShortCommand, uint8_t* answer, int size); // send short command to slave
@@ -145,7 +143,7 @@ class SlaveTwin {
     // RTOS queue procedures
     void readQueue();                                                           // read command from Twin queue
     void createQueue();                                                         // create queue for Twin commands
-    void sendQueue(TwinCommand twinCmd);                                        // send command to Twin queue
+    bool sendQueue(TwinCommand twinCmd);                                        // send command to Twin queue
     int  stepsByFlap[MAXIMUM_FLAPS];                                            // steps needed to move flap by flap (Bresenham-artige Verteilung)
 
    private:

@@ -29,6 +29,10 @@
 #include "MasterPrint.h"
 #include "MasterSetup.h"
 
+/**
+ * @brief General setup to start ESP32
+ *
+ */
 void setup() {
     traceSemaphore = xSemaphoreCreateMutex();                                   // Semaphore for trace messages
     g_masterBooted = true;                                                      // true, until first scan_i2c_bus
@@ -42,4 +46,9 @@ void setup() {
     masterOutrodution();                                                        // finish message of startup
 }
 
+/**
+ * @brief General Loop for ESP32
+ * empty, because everything will be done in background
+ *
+ */
 void loop() {}                                                                  // do everything in background by tasks

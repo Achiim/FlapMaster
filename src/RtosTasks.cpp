@@ -14,7 +14,12 @@
 #include "RtosTasks.h"
 
 // ----------------------------
-// freeRTOS Task Remote Control
+
+/**
+ * @brief freeRTOS Task Remote Control
+ *
+ * @param pvParameters
+ */
 void remoteControl(void* pvParameters) {
     Control = new RemoteControl();                                              // create object for task
     while (true) {
@@ -24,7 +29,12 @@ void remoteControl(void* pvParameters) {
 }
 
 // ----------------------------
-// freeRTOS Task Parser
+
+/**
+ * @brief freeRTOS Task Parser
+ *
+ * @param pvParameters
+ */
 void parserTask(void* pvParameters) {
     Parser        = new ParserClass();                                          // create object for task
     g_parserQueue = xQueueCreate(1, sizeof(uint64_t));                          // Create parser Queue
@@ -49,7 +59,12 @@ void parserTask(void* pvParameters) {
     }
 }
 // ----------------------------
-// freeRTOS Task Registry
+
+/**
+ * @brief freeRTOS Task Registry
+ *
+ * @param pvParameters
+ */
 void twinRegister(void* pvParameters) {
     Register = new FlapRegistry();
 
@@ -107,7 +122,12 @@ void twinRegister(void* pvParameters) {
 }
 
 // ----------------------------
-// freeRTOS Task Twin[index]
+
+/**
+ * @brief freeRTOS Task Twin[index]
+ *
+ * @param pvParameters
+ */
 void slaveTwinTask(void* pvParameters) {
     int twinIndex = *(int*)pvParameters;                                        // Twin Number
     Twin[twinIndex]->createQueue();                                             // Create twin Queue
@@ -118,7 +138,12 @@ void slaveTwinTask(void* pvParameters) {
 }
 
 // ----------------------------
-// freeRTOS Task Statistic
+
+/**
+ * @brief freeRTOS Task Statistic
+ *
+ * @param param
+ */
 void statisticTask(void* param) {
     TickType_t lastWakeTime = xTaskGetTickCount();                              // get current tick count
     DataEvaluation          = new FlapStatistics();                             // create Object for statistic task
@@ -139,7 +164,12 @@ void statisticTask(void* param) {
 }
 
 // ----------------------------
-// freeRTOS Task Reporting
+
+/**
+ * @brief freeRTOS Task Reporting
+ *
+ * @param pvParameters
+ */
 void reportTask(void* pvParameters) {
     Key21          receivedKey;
     ReportCommands receivedCmd;

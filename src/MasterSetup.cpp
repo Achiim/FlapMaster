@@ -25,6 +25,10 @@
 #include "FlapStatistics.h"
 #include "MasterSetup.h"
 
+/**
+ * @brief Print out Header of Master
+ *
+ */
 void masterIntroduction() {
     Serial.begin(115200);
     Serial.print("\n\n\n");
@@ -34,6 +38,11 @@ void masterIntroduction() {
     Serial.print("\n\n\n");
 }
 // ---------------------------
+
+/**
+ * @brief setup I2C connection as Master
+ *
+ */
 void masterI2Csetup() {
     #ifdef MASTERVERBOSE
         {
@@ -45,6 +54,11 @@ void masterI2Csetup() {
 }
 
 // ---------------------------
+
+/**
+ * @brief generate I2C Address Pool
+ *
+ */
 void masterAddressPool() {
     #ifdef MASTERVERBOSE
         {
@@ -76,6 +90,11 @@ void masterAddressPool() {
 }
 
 // ---------------------------
+
+/**
+ * @brief create IR receiver object for Key21 remote control
+ *
+ */
 void masterRemoteControl() {
     #ifdef MASTERVERBOSE
         {
@@ -88,6 +107,11 @@ void masterRemoteControl() {
 }
 
 // ---------------------------
+
+/**
+ * @brief create Master control object, to control TWINs
+ *
+ */
 void masterSlaveControlObject() {
     #ifdef MASTERVERBOSE
         {
@@ -110,6 +134,11 @@ void masterSlaveControlObject() {
 }
 
 // ---------------------------
+
+/**
+ * @brief start all RTOS tasks
+ *
+ */
 void masterStartRtosTasks() {
     createStatisticTask();                                                      // create statistics task
     createReportTask();                                                         // Create report tasks
@@ -120,6 +149,11 @@ void masterStartRtosTasks() {
 }
 
 // ---------------------------
+
+/**
+ * @brief finish message of master startup
+ *
+ */
 void masterOutrodution() {
     #ifdef MASTERVERBOSE
         TraceScope trace;                                                       // use semaphore to protect this block
@@ -130,6 +164,11 @@ void masterOutrodution() {
 }
 
 // ---------------------------
+
+/**
+ * @brief Create a Twin Tasks object and start freeRTOS task: SlaveTwin
+ *
+ */
 void createTwinTasks() {
     #ifdef MASTERVERBOSE
         {
@@ -169,6 +208,11 @@ void createTwinTasks() {
 }
 
 // ---------------------------
+
+/**
+ * @brief Create a Remote Control Task object and start freeRTOS task: remote control receiver for Key21 control
+ *
+ */
 void createRemoteControlTask() {
     #ifdef MASTERVERBOSE
         {
@@ -180,6 +224,11 @@ void createRemoteControlTask() {
 }
 
 // ---------------------------
+
+/**
+ * @brief Create a Statistic Task object and start freeRTOS task: StatisticTask
+ *
+ */
 void createStatisticTask() {
     #ifdef MASTERVERBOSE
         {
@@ -191,6 +240,11 @@ void createStatisticTask() {
 }
 
 // ---------------------------
+
+/**
+ * @brief Create a Report Task object and tart freeRTOS task: ReportTask and corresponding queue
+ *
+ */
 void createReportTask() {
     #ifdef MASTERVERBOSE
         {
@@ -202,6 +256,11 @@ void createReportTask() {
 }
 
 // ---------------------------
+
+/**
+ * @brief Create a Register Twins Task object and start freeRTOS task: TwinRegister
+ *
+ */
 void createRegisterTwinsTask() {
     #ifdef MASTERVERBOSE
         {
@@ -214,6 +273,11 @@ void createRegisterTwinsTask() {
 }
 
 // ---------------------------
+
+/**
+ * @brief Create a Parser Task object and start freeRTOS task: Parser
+ *
+ */
 void createParserTask() {
     #ifdef MASTERVERBOSE
         {

@@ -30,7 +30,11 @@ ParserClass::ParserClass() {
 };
 
 // ---------------------
-// dispatch keystroke by reporting device
+
+/**
+ * @brief dispatch keystroke by reporting device
+ *
+ */
 void ParserClass::dispatchToReporting() {
     #ifdef PARSERVERBOSE
         {
@@ -54,7 +58,11 @@ void ParserClass::dispatchToReporting() {
 }
 
 // ---------------------
-// dispatch keystroke to all registered devices
+
+/**
+ * @brief dispatch keystroke to all registered devices
+ *
+ */
 void ParserClass::dispatchToTwins() {
     #ifdef PARSERVERBOSE
         {
@@ -99,7 +107,13 @@ void ParserClass::dispatchToTwins() {
 }
 
 // ---------------------
-// first analysis of keystroke and assume it is a SINGLE
+
+/**
+ * @brief first analysis of keystroke and assume it is a SINGLE
+ *
+ * @param receivedKey
+ * @return ClickEvent
+ */
 ClickEvent ParserClass::detect(Key21 receivedKey) {
     unsigned long now = millis();
 
@@ -140,7 +154,11 @@ ClickEvent ParserClass::detect(Key21 receivedKey) {
 }
 
 // ---------------------
-// update the first decision about ClickEvent
+
+/**
+ * @brief update the first decision about ClickEvent
+ *
+ */
 void ParserClass::analyseClickEvent() {
     ClickEvent evt;
     if (Parser->_waitingForSecondClick) {
@@ -152,7 +170,11 @@ void ParserClass::analyseClickEvent() {
 }
 
 // ---------------------
-// read Parser input from Queue and filter
+
+/**
+ * @brief read Parser input from Queue and filter
+ *
+ */
 void ParserClass::handleQueueMessage() {
     if (xQueueReceive(g_parserQueue, &_receivedValue, 0)) {
         _receivedKey = Control->ircodeToKey21(_receivedValue);                  // filter remote signal to reduce options
@@ -170,7 +192,12 @@ void ParserClass::handleQueueMessage() {
 }
 
 // ---------------------
-// if DOUBLE click not in time, declare it as SINGLE
+
+/**
+ * @brief if DOUBLE click not in time, declare it as SINGLE
+ *
+ * @return ClickEvent
+ */
 ClickEvent ParserClass::poll() {
     /////////only for debugging///////////////////////////////////////////
     // #ifdef IRVERBOSE
@@ -202,7 +229,13 @@ ClickEvent ParserClass::poll() {
 }
 
 // -------------------------
-// map event to command
+
+/**
+ * @brief map event to TwinCommand
+ *
+ * @param event
+ * @return TwinCommand
+ */
 TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
     TwinCommand cmd;
     cmd.twinCommand   = TWIN_NO_COMMAND;
@@ -330,7 +363,13 @@ TwinCommand ParserClass::mapEvent2Command(ClickEvent event) {
 }
 
 // -------------------------
-// map event to command
+//
+/**
+ * @brief map event to ReportCommand
+ *
+ * @param event
+ * @return ReportCommand
+ */
 ReportCommand ParserClass::mapEvent2Report(ClickEvent event) {
     ReportCommand cmd;
     cmd.repCommand = REPORT_NO_COMMAND;
@@ -447,7 +486,13 @@ ReportCommand ParserClass::mapEvent2Report(ClickEvent event) {
     }
 }
 
-// Wandelt einen TwinCommands-Wert in einen lesbaren String um
+//
+/**
+ * @brief change TwinCommand value to readable String
+ *
+ * @param cmd
+ * @return const char*
+ */
 const char* ParserClass::twinCommandToString(TwinCommands cmd) {
     switch (cmd) {
         case TWIN_NO_COMMAND:

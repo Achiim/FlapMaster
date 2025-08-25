@@ -109,7 +109,7 @@ class RemoteControl {                                                           
    private:
     // ---------------------
     // private functions
-    void getIRcode();                                                           // direct contact to irConroller to receive raw data
+    void sendIRcodeToParser();                                                  // direct contact to irConroller to receive raw data
 };
 
 #endif                                                                          // RemoteControl_h

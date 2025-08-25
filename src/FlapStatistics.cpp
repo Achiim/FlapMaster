@@ -29,6 +29,11 @@
 
 // ----------------------------
 // Constructor
+
+/**
+ * @brief Construct a new Flap Statistics:: Flap Statistics object
+ *
+ */
 FlapStatistics::FlapStatistics() {
     _statsMutex = xSemaphoreCreateMutex();                                      // generate Semaphor to protect access to statistics
     if (_statsMutex == NULL) {
@@ -52,7 +57,11 @@ FlapStatistics::FlapStatistics() {
 };
 
 // -------------------------------------------------------------------------
-// every cycle transfer statisic counter to histery and switch histery index
+
+/**
+ * @brief every data collect cycle transfer statisic counter to histery and switch histery index
+ *
+ */
 void FlapStatistics::makeHistory() {
     xSemaphoreTake(_statsMutex, portMAX_DELAY);
 
@@ -82,12 +91,15 @@ void FlapStatistics::makeHistory() {
 }
 
 // ----------------------------
-// Helper to actualize statistics protected by semaphores
-//
-// parameter:
-// access = couter for i2c accesses
-// data = number of byte send by master via i2c
-// read = number of byte read by master via i2c (got from slaves)
+
+/**
+ * @brief Helper to actualize statistics protected by semaphores
+ *
+ * @param access couter for i2c accesses
+ * @param sentData number of byte send by master via i2c
+ * @param readData number of byte read by master via i2c (got from slaves)
+ * @param timeOut number of timeouts
+ */
 void FlapStatistics::increment(uint32_t access, uint32_t sentData, uint32_t readData, uint32_t timeOut) {
     xSemaphoreTake(_statsMutex, portMAX_DELAY);
     _busAccessCounter += access;                                                // count

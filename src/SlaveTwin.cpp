@@ -39,11 +39,19 @@
 #include "FlapTasks.h"
 
 // ----------------------------
-// generate for each slave one twin
+/**
+ * @brief generate for each slave one twin
+ *
+ */
 SlaveTwin* Twin[numberOfTwins];
 
 // ---------------------------------
-// Constructor
+
+/**
+ * @brief Construct a new Slave Twin:: Slave Twin object
+ *
+ * @param add
+ */
 SlaveTwin::SlaveTwin(int add) {
     _numberOfFlaps           = 0;                                               // unknown, will be set by device
     _slaveAddress            = add;                                             // take over from funktion call
@@ -71,7 +79,11 @@ SlaveTwin::SlaveTwin(int add) {
 }
 
 // ----------------------------
-// read from entry queue
+
+/**
+ * @brief read from entry queue
+ *
+ */
 void SlaveTwin::readQueue() {
     TwinCommand twinCmd;
     if (_twinQueue != nullptr) {                                                // if queue exists
@@ -90,7 +102,11 @@ void SlaveTwin::readQueue() {
 }
 
 // ----------------------------
-// create entry queue
+
+/**
+ * @brief create entry queue
+ *
+ */
 void SlaveTwin::createQueue() {
     _twinQueue = xQueueCreate(1, sizeof(TwinCommand));                          // Create twin Queue
     if (_twinQueue == nullptr) {
@@ -104,21 +120,39 @@ void SlaveTwin::createQueue() {
 }
 
 // ----------------------------
-// send into entry queue
-void SlaveTwin::sendQueue(TwinCommand twinCmd) {
-    if (_twinQueue != nullptr) {                                                // if queue exists, send to all registered twin queues
-        xQueueOverwrite(_twinQueue, &twinCmd);
-    } else {
-        {
-            TraceScope trace;                                                   // use semaphore to protect this block
+
+/**
+ * @brief send into entry queue
+ *
+ * @param twinCmd
+ * @return true success
+ * @return false no entry to queue
+ */
+bool SlaveTwin::sendQueue(TwinCommand twinCmd) {
+    if (_twinQueue != nullptr) {
+        if (xQueueOverwrite(_twinQueue, &twinCmd) == pdPASS) {
+            return true;                                                        // success
+        } else {
             #ifdef ERRORVERBOSE
-                twinPrintln("no slaveTwin available");
+                twinPrintln("xQueueOverwrite failed");
             #endif
+            return false;                                                       // error while writing to queue
         }
+    } else {
+        TraceScope trace;
+        #ifdef ERRORVERBOSE
+            twinPrintln("no slaveTwin available");
+        #endif
+        return false;                                                           // Queue does not exist
     }
 }
 
 // --------------------------------------
+/**
+ * @brief distribute TwinCommands to functions
+ *
+ * @param twinCmd
+ */
 void SlaveTwin::twinControl(TwinCommand twinCmd) {
     TwinCommands cmd   = twinCmd.twinCommand;                                   // get command
     int          param = twinCmd.twinParameter;                                 // get parameter
@@ -184,6 +218,12 @@ void SlaveTwin::twinControl(TwinCommand twinCmd) {
 }
 
 // --------------------------------------
+/**
+ * @brief trace execution and execute TwinCommand
+ *
+ * @param message
+ * @param action
+ */
 void SlaveTwin::logAndRun(const char* message, std::function<void()> action) {
     #ifdef TWINVERBOSE
         {
@@ -197,7 +237,12 @@ void SlaveTwin::logAndRun(const char* message, std::function<void()> action) {
 // --------------------------------------------
 // --------- SHOW_FLAP / MOVE -----------------
 // --------------------------------------------
-// show selected digit
+
+/**
+ * @brief show selected digit
+ *
+ * @param digit
+ */
 void SlaveTwin::showFlap(int digit) {
     _targetFlapNumber = digit;                                                  // remember requested target flap
     if (_targetFlapNumber < 0 || _targetFlapNumber >= _parameter.flaps) {       // validate range (flaps are 0..flaps-1)
@@ -258,6 +303,10 @@ void SlaveTwin::showFlap(int digit) {
 // --------------------------------------------
 // --------- CALIBRATIION ---------------------
 // --------------------------------------------
+/**
+ * @brief calibrate flap display
+ *
+ */
 void SlaveTwin::calibration() {
     const uint16_t steps_to_use = validStepsPerRevolution();                    // plausibilization of steps
     const uint16_t off_norm     = normalizeOffset(_parameter.offset, steps_to_use);
@@ -311,6 +360,10 @@ void SlaveTwin::calibration() {
 // --------------------------------------------
 // --------- STEP MEASUREMENT -----------------
 // --------------------------------------------
+/**
+ * @brief measure steps of flap display
+ *
+ */
 void SlaveTwin::stepMeasurement() {
     i2cLongCommand(i2cCommandParameter(STEP_MEASURE, 0));                       // STEP_MEASURE does not limit the steps, so we use 0
     _flapNumber = 0;                                                            // we stand at Zero after that
@@ -343,6 +396,10 @@ void SlaveTwin::stepMeasurement() {
 // --------------------------------------------
 // -------- SPEED MEASUREMENT -----------------
 // --------------------------------------------
+/**
+ * @brief measure speed of flap display
+ *
+ */
 void SlaveTwin::speedMeasurement() {
     const uint16_t steps_to_use = validStepsPerRevolution();                    // 1) validate max. steps for speed measurement
 
@@ -372,6 +429,10 @@ void SlaveTwin::speedMeasurement() {
 // --------------------------------------------
 // ------------ SENSOR CHECK ------------------
 // --------------------------------------------
+/**
+ * @brief check sensor of flap display
+ *
+ */
 void SlaveTwin::sensorCheck() {
     uint16_t stepsToCheck = (_parameter.steps > 0) ? _parameter.steps : DEFAULT_STEPS; // has a step measurement been performed before?
 
@@ -400,6 +461,10 @@ void SlaveTwin::sensorCheck() {
 // --------------------------------------------
 // -------------- NEXT FLAP -------------------
 // --------------------------------------------
+/**
+ * @brief show next flap
+ *
+ */
 void SlaveTwin::nextFlap() {
     if (_numberOfFlaps > 0) {
         _targetFlapNumber = _flapNumber + 1;
@@ -441,6 +506,10 @@ void SlaveTwin::nextFlap() {
 // --------------------------------------------
 // -------------- PREV FLAP -------------------
 // --------------------------------------------
+/**
+ * @brief show previous flap
+ *
+ */
 void SlaveTwin::prevFlap() {
     if (_numberOfFlaps > 0) {
         _targetFlapNumber = _flapNumber - 1;
@@ -481,6 +550,10 @@ void SlaveTwin::prevFlap() {
 // --------------------------------------------
 // ------- NEXT STEPS / ADJUSTMENT-------------
 // --------------------------------------------
+/**
+ * @brief adjust calibratioin forward
+ *
+ */
 void SlaveTwin::nextSteps() {
     if (_parameter.offset + _adjustOffset + ADJUSTMENT_STEPS <= _parameter.steps) { // only as positiv, as to be stepped to one revolutoin
         i2cLongCommand(i2cCommandParameter(MOVE, ADJUSTMENT_STEPS));
@@ -513,6 +586,10 @@ void SlaveTwin::nextSteps() {
 // --------------------------------------------
 // ------- PREV STEPS / ADJUSTMENT-------------
 // --------------------------------------------
+/**
+ * @brief adjust calibratioin backward
+ *
+ */
 void SlaveTwin::prevSteps() {
     if (_parameter.offset + _adjustOffset - ADJUSTMENT_STEPS >= 0) {            // only as negativ, as to be stepped back to zero
         _adjustOffset -= ADJUSTMENT_STEPS;
@@ -524,6 +601,10 @@ void SlaveTwin::prevSteps() {
 // --------------------------------------------
 // -------------- SAVE OFFSET -----------------
 // --------------------------------------------
+/**
+ * @brief store offset to EEPROM
+ *
+ */
 void SlaveTwin::setOffset() {
     if (_parameter.offset + _adjustOffset >= 0 && _parameter.offset + _adjustOffset <= _parameter.steps) {
         _parameter.offset += _adjustOffset;                                     // add adjustment to stored offset
@@ -557,6 +638,10 @@ void SlaveTwin::setOffset() {
 // --------------------------------------------
 // ----------------- RESET --------------------
 // --------------------------------------------
+/**
+ * @brief reset flap device
+ *
+ */
 void SlaveTwin::reset() {
     twinPrint("send reset to 0x:  ");
     Serial.println(_slaveAddress, HEX);
@@ -565,6 +650,13 @@ void SlaveTwin::reset() {
 }
 
 // ----------------------------
+/**
+ * @brief count steps to get to target flap
+ *
+ * @param from
+ * @param to
+ * @return int
+ */
 int SlaveTwin::countStepsToMove(int from, int to) {
     if (_numberOfFlaps > 0) {
         int sum = 0;
@@ -582,17 +674,19 @@ int SlaveTwin::countStepsToMove(int from, int to) {
     }
 }
 // ----------------------------
-// purpose: write FlapMessage to i2c slave
-// - access to i2c bus is semaphore protected
-// - increment i2c statistics
-//
-// parameter:
-// mess = message to be send (3byte structure: 1byte command, 2byte parameter)
-// slaveAddress = i2c address of slave
-//
+
+/**
+ * @brief write FlapMessage to i2c slave
+ *
+ * access to i2c bus is semaphore protected
+ *
+ * increment i2c statistics
+ *
+ * @param mess message to be send (3byte structure: 1byte command, 2byte parameter)
+ */
 void SlaveTwin::i2cLongCommand(LongMessage mess) {
     uint8_t data[sizeof(LongMessage)];
-    prepareI2Cdata(mess, _slaveAddress, data);
+    prepareI2Cdata(mess, data);
     esp_err_t error = ESP_FAIL;
 
     takeI2CSemaphore();                                                         // take semaphore
@@ -645,16 +739,16 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
     }
 }
 // ----------------------------
-// purpose: convert command and parameter to LongMessage
-// - change byte sequence of parameter, so slave can understand
-//
-// parameter:
-// command = one byte command
-// parameter = two byte integer
-//
-// return:
-// LongMessage stucture to be send to i2c
-//
+
+/**
+ * @brief convert command and parameter to LongMessage
+ *
+ * change byte sequence of parameter, so slave can understand
+ *
+ * @param command one byte command
+ * @param parameter two byte integer
+ * @return LongMessage stucture to be send to i2c bus
+ */
 LongMessage SlaveTwin::i2cCommandParameter(i2cCommand command, u_int16_t parameter) {
     LongMessage mess = {NO_COMMAND, 0x00, 0x00};                                // initial message
     mess.command     = command;                                                 // get i2c command
@@ -664,7 +758,15 @@ LongMessage SlaveTwin::i2cCommandParameter(i2cCommand command, u_int16_t paramet
 }
 
 // ----------------------------
-// purpose: send I2C short command, only one byte
+
+/**
+ * @brief send I2C short command, only one byte
+ *
+ * @param shortCmd
+ * @param answer data byte of anwser
+ * @param size size of answer buffer
+ * @return esp_err_t
+ */
 esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
     esp_err_t ret = ESP_FAIL;
 
@@ -692,7 +794,15 @@ esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int
 }
 
 // ------------------------------------------
-// helper: to build short command
+
+/**
+ * @brief helper: to build short command
+ *
+ * @param shortCmd
+ * @param answer
+ * @param size
+ * @return i2c_cmd_handle_t
+ */
 i2c_cmd_handle_t SlaveTwin::buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
@@ -713,7 +823,12 @@ i2c_cmd_handle_t SlaveTwin::buildShortCommand(ShortMessage shortCmd, uint8_t* an
 }
 
 // ---------------------------
-// helper to log sending short command
+
+/**
+ * @brief helper to log sending short command
+ *
+ * @param cmd
+ */
 void SlaveTwin::logShortRequest(ShortMessage cmd) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
@@ -727,7 +842,13 @@ void SlaveTwin::logShortRequest(ShortMessage cmd) {
 }
 
 // ---------------------------
-// helper to log response to short command
+
+/**
+ * @brief helper to log response to short command
+ *
+ * @param answer
+ * @param size
+ */
 void SlaveTwin::logShortResponse(uint8_t* answer, int size) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
@@ -743,7 +864,13 @@ void SlaveTwin::logShortResponse(uint8_t* answer, int size) {
 }
 
 // ---------------------------
-// helper to log errors for short command
+
+/**
+ * @brief helper to log errors for short command
+ *
+ * @param cmd
+ * @param err
+ */
 void SlaveTwin::logShortError(ShortMessage cmd, esp_err_t err) {
     #ifdef ERRORVERBOSE
         TraceScope trace;
@@ -758,8 +885,16 @@ void SlaveTwin::logShortError(ShortMessage cmd, esp_err_t err) {
 }
 
 // ----------------------------
-// purpose: send I2C mid command, only one byte
-//
+
+/**
+ * @brief send I2C mid command, only one byte
+ *
+ * @param midCmd
+ * @param slaveaddress
+ * @param answer
+ * @param size
+ * @return esp_err_t
+ */
 esp_err_t SlaveTwin::i2cMidCommand(MidMessage midCmd, I2Caddress slaveaddress, uint8_t* answer, int size) {
     esp_err_t ret = ESP_FAIL;
     takeI2CSemaphore();
@@ -788,7 +923,16 @@ esp_err_t SlaveTwin::i2cMidCommand(MidMessage midCmd, I2Caddress slaveaddress, u
 }
 
 // ------------------------------------------
-// helper: to build mid command
+
+/**
+ * @brief helper: to build mid command
+ *
+ * @param midCmd
+ * @param slaveAddress
+ * @param answer
+ * @param size
+ * @return i2c_cmd_handle_t
+ */
 i2c_cmd_handle_t SlaveTwin::buildMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 
@@ -812,7 +956,13 @@ i2c_cmd_handle_t SlaveTwin::buildMidCommand(MidMessage midCmd, I2Caddress slaveA
 }
 
 // ---------------------------
-// helper to log sending mid command
+
+/**
+ * @brief helper to log sending mid command
+ *
+ * @param cmd
+ * @param slaveAddress
+ */
 void SlaveTwin::logMidRequest(MidMessage cmd, I2Caddress slaveAddress) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
@@ -826,7 +976,13 @@ void SlaveTwin::logMidRequest(MidMessage cmd, I2Caddress slaveAddress) {
 }
 
 // ---------------------------
-// helper to log response to mid command
+
+/**
+ * @brief helper to log response to mid command
+ *
+ * @param answer
+ * @param size
+ */
 void SlaveTwin::logMidResponse(uint8_t* answer, int size) {
     #ifdef I2CMASTERVERBOSE
         TraceScope trace;
@@ -842,7 +998,13 @@ void SlaveTwin::logMidResponse(uint8_t* answer, int size) {
 }
 
 // ---------------------------
-// helper to log errors for mid command
+
+/**
+ * @brief helper to log errors for mid command
+ *
+ * @param cmd
+ * @param err
+ */
 void SlaveTwin::logMidError(MidMessage cmd, esp_err_t err) {
     #ifdef TWINVERBOSE
         TraceScope trace;
@@ -857,48 +1019,12 @@ void SlaveTwin::logMidError(MidMessage cmd, esp_err_t err) {
 }
 
 // ----------------------------------
+
 /**
- * @brief wait maximal 20 sec for booting device
+ * @brief set new i2c address on flap device
  *
- * @param adr
- * @param sn must have this serial number
- * @return true = device is back
- * @return false = device is runaway
+ * @param address
  */
-/*
-bool SlaveTwin::waitForDeviceToComeBack(I2Caddress adr, uint32_t sn) {
-    for (int repeat = 0; repeat < 10; repeat++) {
-        if (i2c_probe_device(adr) != ESP_OK) {                                  // send ping to booting device
-            vTaskDelay(pdMS_TO_TICKS(2000));                                    // wait 50*400 milliseconds = 20 seconds
-            {
-                TraceScope trace;
-                twinPrintln("ping...");
-            }
-        } else {
-            {
-                //                TraceScope trace;
-                //                twinPrintln("bootRelease...");
-                //                bootRelease();                                                  // release device from re-boot
-            }
-            return true;
-        }
-    }
-
-    #ifdef SCANVERBOSE
-        {
-        TraceScope trace;
-        twinPrint("slave has runaway with serial number = ");
-        Serial.println(formatSerialNumber(sn));
-        }
-    #endif
-    return false;                                                               // device lost (runawy)
-}
-// ----------------------------------
-
-void SlaveTwin::i2cLongLongCommand(LongLongMessage mess, I2Caddress adr) {}
-*/
-// ----------------------------------
-
 void SlaveTwin::setNewAddress(int address) {
     MidMessage      midCmd;
     LongLongMessage longLongCmd;
@@ -930,26 +1056,14 @@ void SlaveTwin::setNewAddress(int address) {
         Serial.println(formatSerialNumber(sn));
         //        twinPrintln("we are waiting for him to come back");
     #endif
-    /*
-        vTaskDelay(pdMS_TO_TICKS(20000));                                       // wait 20 seconds for device to come back
-
-        if (waitForDeviceToComeBack(address, sn)) {
-            #ifdef SCANVERBOSE
-                TraceScope trace;
-                twinPrint("device with serial number: ");
-                Serial.print(formatSerialNumber(sn));
-                twinPrint(" is back with address 0x");
-                Serial.println(address, HEX);
-            #endif
-            longLongCmd.command   = RESET_WHEN_SERIAL;
-            longLongCmd.parameter = sn;                                         // send RESET to device with serial number
-            i2cLongLongCommand(longLongCmd, I2C_BASE_ADDRESS);
-        }
-    */
 }
 
 // -------------------------
-// check availability of twin device
+
+/**
+ * @brief check availability of twin device
+ *
+ */
 void SlaveTwin::performAvailability() {
     uint8_t   ans = 0;
     esp_err_t ret = i2c_probe_device(_slaveAddress);                            // send ping to device/slave
@@ -977,6 +1091,10 @@ void SlaveTwin::performAvailability() {
 }
 
 // -------------------------
+/**
+ * @brief check bootFlag, if set -> reset bootFlag and calibrate
+ *
+ */
 void SlaveTwin::bootRelease() {
     uint8_t ans = 0;
     if (i2cShortCommand(CMD_GET_BOOT_FLAG, &ans, sizeof(ans)) == ESP_OK) {      // request bootFlag
@@ -1009,7 +1127,11 @@ void SlaveTwin::bootRelease() {
 }
 
 // -------------------------
-// register Twin device
+//
+/**
+ * @brief perform register of Twin device
+ *
+ */
 void SlaveTwin::performRegister() {
     uint8_t   ans = 0;
     esp_err_t ret = i2c_probe_device(_slaveAddress);                            // send ping to device/slave
@@ -1028,8 +1150,14 @@ void SlaveTwin::performRegister() {
 }
 
 // ----------------------------------------------------------
-// Central reusable logging helpers (only active with TWINVERBOSE/ERRORVERBOSE)
 
+/**
+ * @brief Central reusable logging helper for HEX bytes
+ *
+ * @param prefix
+ * @param buf
+ * @param n
+ */
 void SlaveTwin::logHexBytes(const char* prefix, const uint8_t* buf, size_t n) {
     #ifdef TWINVERBOSE
         TraceScope trace;
@@ -1042,6 +1170,12 @@ void SlaveTwin::logHexBytes(const char* prefix, const uint8_t* buf, size_t n) {
     #endif
 }
 
+/**
+ * @brief Central reusable logging helper for string
+ *
+ * @param prefix
+ * @param value
+ */
 void SlaveTwin::logInfo(const char* prefix, const String& value) {
     #ifdef TWINVERBOSE
         TraceScope trace;
@@ -1050,6 +1184,12 @@ void SlaveTwin::logInfo(const char* prefix, const String& value) {
     #endif
 }
 
+/**
+ * @brief Central reusable logging helper for uint32_t
+ *
+ * @param prefix
+ * @param v
+ */
 void SlaveTwin::logInfoU32(const char* prefix, uint32_t v) {
     #ifdef TWINVERBOSE
         TraceScope trace;
@@ -1058,6 +1198,12 @@ void SlaveTwin::logInfoU32(const char* prefix, uint32_t v) {
     #endif
 }
 
+/**
+ * @brief Central reusable logging helper for uint16_t
+ *
+ * @param prefix
+ * @param v
+ */
 void SlaveTwin::logInfoU16(const char* prefix, uint16_t v) {
     #ifdef TWINVERBOSE
         TraceScope trace;
@@ -1066,6 +1212,12 @@ void SlaveTwin::logInfoU16(const char* prefix, uint16_t v) {
     #endif
 }
 
+/**
+ * @brief Central reusable logging helper for uint8_t
+ *
+ * @param prefix
+ * @param v
+ */
 void SlaveTwin::logInfoU8(const char* prefix, uint8_t v) {
     #ifdef TWINVERBOSE
         TraceScope trace;
@@ -1074,6 +1226,12 @@ void SlaveTwin::logInfoU8(const char* prefix, uint8_t v) {
     #endif
 }
 
+/**
+ * @brief Central reusable logging helper for errors
+ *
+ * @param prefix
+ * @param v
+ */
 void SlaveTwin::logErr(const char* msg) {
     #ifdef ERRORVERBOSE
         TraceScope trace;
@@ -1082,14 +1240,22 @@ void SlaveTwin::logErr(const char* msg) {
 }
 
 // ----------------------------------------------------------
-// Individual read functions – fully encapsulated
-// Each function:
-//  - sends the corresponding I2C command
-//  - converts the received bytes into the target type
-//  - writes directly into the provided variable
-//  - logs success (TWINVERBOSE) and error (ERRORVERBOSE)
-//  - returns true if successful, false otherwise
 
+/**
+ * @brief Individual read functions – fully encapsulated
+ *
+ * Each function:
+ *
+ *  - sends the corresponding I2C command
+ *
+ *  - converts the received bytes into the target type
+ *
+ *  - writes directly into the provided variable
+ *
+ * @param outSerial
+ * @return trueif successful
+ * @return false otherwise
+ */
 bool SlaveTwin::readSerialNumber(uint32_t& outSerial) {
     uint8_t ser[4] = {0, 0, 0, 0};
     if (i2cShortCommand(CMD_GET_SERIAL, ser, sizeof(ser)) == ESP_OK) {
@@ -1102,6 +1268,15 @@ bool SlaveTwin::readSerialNumber(uint32_t& outSerial) {
     return false;
 }
 
+//------------------------------------
+
+/**
+ * @brief get slave parameter offset
+ *
+ * @param outOffset
+ * @return true
+ * @return false
+ */
 bool SlaveTwin::readOffset(uint16_t& outOffset) {
     uint8_t off[2] = {0, 0};
     if (i2cShortCommand(CMD_GET_OFFSET, off, sizeof(off)) == ESP_OK) {
@@ -1114,6 +1289,14 @@ bool SlaveTwin::readOffset(uint16_t& outOffset) {
     return false;
 }
 
+//---------------------------------
+/**
+ * @brief get slave patemeter flaps
+ *
+ * @param outFlaps
+ * @return true
+ * @return false
+ */
 bool SlaveTwin::readFlaps(uint8_t& outFlaps) {
     uint8_t flaps = 0;
     if (i2cShortCommand(CMD_GET_FLAPS, &flaps, sizeof(flaps)) == ESP_OK) {
@@ -1125,6 +1308,14 @@ bool SlaveTwin::readFlaps(uint8_t& outFlaps) {
     return false;
 }
 
+// ------------------------------
+/**
+ * @brief get slave parameter speed
+ *
+ * @param outSpeed
+ * @return true
+ * @return false
+ */
 bool SlaveTwin::readSpeed(uint16_t& outSpeed) {
     uint8_t speed[2] = {0, 0};
     if (i2cShortCommand(CMD_GET_SPEED, speed, sizeof(speed)) == ESP_OK) {
@@ -1135,7 +1326,14 @@ bool SlaveTwin::readSpeed(uint16_t& outSpeed) {
     logErr("No answer to CMD_GET_SPEED, slave is not responding, ignore command.");
     return false;
 }
-
+// -----------------------------------
+/**
+ * @brief get slave parameter steps
+ *
+ * @param outSteps
+ * @return true
+ * @return false
+ */
 bool SlaveTwin::readSteps(uint16_t& outSteps) {
     uint8_t steps[2] = {0, 0};
     if (i2cShortCommand(CMD_GET_STEPS, steps, sizeof(steps)) == ESP_OK) {
@@ -1147,6 +1345,14 @@ bool SlaveTwin::readSteps(uint16_t& outSteps) {
     return false;
 }
 
+// ------------------------------------
+/**
+ * @brief get slave parameter sensor status
+ *
+ * @param outSensorWorking
+ * @return true
+ * @return false
+ */
 bool SlaveTwin::readSensorWorking(bool& outSensorWorking) {
     uint8_t sensor = 0;
     if (i2cShortCommand(CMD_GET_SENSOR, &sensor, sizeof(sensor)) == ESP_OK) {
@@ -1157,10 +1363,13 @@ bool SlaveTwin::readSensorWorking(bool& outSensorWorking) {
     logErr("No answer to CMD_GET_SENSOR, slave is not responding, ignore command.");
     return false;
 }
-
 // ----------------------------------------------------------
-// Combined function without address parameter, uses individual readers.
-// Return value: true if *all* reads were successful.
+
+/**
+ * @brief Combined function without address parameter, uses individual readers.
+ *
+ * @return true if *all* reads were successful.
+ */
 bool SlaveTwin::readAllParameters(slaveParameter& p) {
     bool ok = true;
     ok &= readSerialNumber(p.serialnumber);
@@ -1173,21 +1382,28 @@ bool SlaveTwin::readAllParameters(slaveParameter& p) {
 }
 
 // -----------------------------------------
-// ask slave about his parameters stored in EEPROM
-// purpose:
-// - request all parameter stored in EEPROM from slave by shortCommand
-// - update structure parameter
-//
-// variable:
-// - in:  address = address of slave to be registerd/updated
-// - out: parameter = parameter that shall be updated by this function
-//
+
+/**
+ * @brief ask slave about his parameters stored in EEPROM
+ *
+ * request all parameter stored in EEPROM from slave by shortCommand
+ *
+ * update structure parameter
+ *
+ * @param parameter parameter that shall be updated by this function
+ * @return true
+ * @return false
+ */
 bool SlaveTwin::askSlaveAboutParameter(slaveParameter& parameter) {
     return readAllParameters(parameter);
 }
 
 // ----------------------------
-// compute steps needed to move flap by flap (Bresenham-artige Verteilung)
+
+/**
+ * @brief compute steps needed to move flap by flap (Bresenham-artige Verteilung)
+ *
+ */
 void SlaveTwin::calculateStepsPerFlap() {
     for (int i = 0; i < _parameter.flaps; ++i) {
         int start      = (i * _parameter.steps) / _parameter.flaps;
@@ -1197,7 +1413,13 @@ void SlaveTwin::calculateStepsPerFlap() {
 }
 
 // ----------------------------
-// filters repetation and double sendings
+
+/**
+ * @brief filters repetation and double sendings
+ *
+ * @param ircode
+ * @return Key21
+ */
 Key21 SlaveTwin::ir2Key21(uint64_t ircode) {
     Key21    key;
     uint32_t now = millis();
@@ -1240,13 +1462,15 @@ Key21 SlaveTwin::ir2Key21(uint64_t ircode) {
 }
 
 // ----------------------------
-// purpose: check if i2c slave is ready or busy
-// - access to i2c bus is protected by semaphore
-//
-// return:
-// false  = busy
-// true  = ready
-//
+
+/**
+ * @brief check if i2c slave is ready or busy
+ *
+ * access to i2c bus is protected by semaphore
+ *
+ * @return true ready
+ * @return false busy
+ */
 bool SlaveTwin::isSlaveReady() {
     uint8_t data[1] = {0};                                                      // to receive answer
     #ifdef READYBUSYVERBOSE
@@ -1284,13 +1508,17 @@ bool SlaveTwin::isSlaveReady() {
 }
 
 // ----------------------------
-// purpose: get slave state  data structure
-// - will ask slave about .ready, .taskCode, .bootFlag, .sensorStatus and .position
-// return:
-//          false  = busy
-//          true  = ready
-//          Twin will be updated: _slaveReady.ready, .taskCode, .bootFlag, .sensorStatus and .position
-//
+
+/**
+ * @brief get slave state  data structure
+ *
+ * will ask slave about .ready, .taskCode, .bootFlag, .sensorStatus and .position
+ *
+ * Twin will be updated: _slaveReady.ready, .taskCode, .bootFlag, .sensorStatus and .position
+ *
+ * @return true ready
+ * @return false busy
+ */
 bool SlaveTwin::getFullStateOfSlave() {
     uint8_t data[6] = {0, 0, 0, 0, 0, 0};                                       // structure to receive answer for STATE
     #ifdef READYBUSYVERBOSE
@@ -1321,7 +1549,12 @@ bool SlaveTwin::getFullStateOfSlave() {
 }
 
 // --------------------------
-//
+
+/**
+ * @brief transfer receive buffer form i2c to slaveReady data structure
+ *
+ * @param data
+ */
 void SlaveTwin::updateSlaveReadyInfo(uint8_t* data) {
     _slaveReady.ready        = data[0];
     _slaveReady.taskCode     = data[1];
@@ -1331,7 +1564,11 @@ void SlaveTwin::updateSlaveReadyInfo(uint8_t* data) {
 }
 
 // --------------------------
-//
+
+/**
+ * @brief make slaveReady data structure visable
+ *
+ */
 void SlaveTwin::printSlaveReadyInfo() {
     #ifdef READYBUSYVERBOSE
         {
@@ -1360,11 +1597,11 @@ void SlaveTwin::printSlaveReadyInfo() {
 }
 
 // ----------------------------
-// purpose:
-// - updates Register, if device is allready registered
-// - don't register new device
-// - updates Registry with Twin's _parameter
-//
+
+/**
+ * @brief updates Register, if device is allready registered; don't register new device (use registerDevice)
+ * updates Registry with Twin's actual member variable: _parameter
+ */
 void SlaveTwin::synchSlaveRegistry() {
     auto it = g_slaveRegistry.find(_slaveAddress);                              // search in registry
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
@@ -1450,6 +1687,12 @@ void SlaveTwin::synchSlaveRegistry() {
 }
 
 // --------------------------------------
+/**
+ * @brief system Halt cause by falal error
+ *
+ * @param reason
+ * @param blinkCode
+ */
 void SlaveTwin::systemHalt(const char* reason, int blinkCode) {
     twinPrintln("===================================");
     twinPrintln("🛑 SYSTEM HALTED!");

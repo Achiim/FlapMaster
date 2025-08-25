@@ -43,7 +43,7 @@ extern SemaphoreHandle_t g_i2c_mutex;                                           
 // -------------------------------
 void i2csetup();                                                                // initialize I2C Bus for Master access
 
-void      prepareI2Cdata(LongMessage mess, I2Caddress slaveAddress, uint8_t* outBuffer);
+void      prepareI2Cdata(LongMessage mess, uint8_t* outBuffer);                 // prepare longMessage
 esp_err_t i2c_probe_device(I2Caddress address);                                 // semaphore protected ping
 esp_err_t pingI2Cslave(I2Caddress address);                                     // just ping on I2C if slave is still online
 void      printSlaveReadyInfo(SlaveTwin* twin);                                 // print slave ready/busy information

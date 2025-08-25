@@ -35,7 +35,11 @@ IRrecv irController(IR_RECEIVER_PIN);
 decode_results results;
 
 // ---------------------
-// Constructor for RemoteControl
+
+/**
+ * @brief Construct a new Remote Control:: Remote Control object
+ *
+ */
 RemoteControl::RemoteControl() {
     #ifdef IRVERBOSE
         {
@@ -48,8 +52,12 @@ RemoteControl::RemoteControl() {
 };
 
 // ---------------------
+/**
+ * @brief receive IR code (raw data)
+ *
+ */
 void RemoteControl::getRemote() {
-    getIRcode();
+    sendIRcodeToParser();
     if (_lastGetKeyCode != 0) {
         #ifdef IRVERBOSE
             {
@@ -63,28 +71,29 @@ void RemoteControl::getRemote() {
 };
 
 // ---------------------
-void RemoteControl::getIRcode() {
+/**
+ * @brief send raw IR code to parser
+ *
+ */
+void RemoteControl::sendIRcodeToParser() {
     if (irController.decode(&results)) {
         _lastGetKeyCode = results.value;
-        //        if (_lastGetKeyCode != 0xFF9867) {                                      // is it Key100_PLUS
-
         if (g_parserQueue != nullptr) {                                         // if queue exists
             xQueueOverwrite(g_parserQueue,
                             &_lastGetKeyCode);                                  // send all other keys to all registered twin queues
         }
-        /*
-                } else {
-                    if (g_reportQueue != nullptr) {                             // if queue exists
-                        xQueueOverwrite(g_reportQueue, &_lastGetKeyCode);       // send Key100_PLUS only to status task queue
-                    }
-                }
-        */
         irController.resume();                                                  // prepare next ir receive
     }
 }
 
 // ----------------------------
-// filters repetation and double sendings
+
+/**
+ * @brief filters repetation and double sendings
+ *
+ * @param ircode
+ * @return Key21
+ */
 Key21 RemoteControl::ircodeToKey21(uint64_t ircode) {
     Key21    key;
     uint32_t now = millis();
@@ -125,6 +134,12 @@ Key21 RemoteControl::ircodeToKey21(uint64_t ircode) {
 }
 
 // ---------------------
+/**
+ * @brief convert clickType to readable string
+ *
+ * @param type
+ * @return const char*
+ */
 const char* RemoteControl::clickTypeToString(ClickType type) {
     switch (type) {
         case CLICK_SINGLE:
@@ -139,7 +154,13 @@ const char* RemoteControl::clickTypeToString(ClickType type) {
 }
 
 // ----------------------------
-// convert raw key code to Key21::key
+
+/**
+ * @brief convert raw key code to Key21::key
+ *
+ * @param code
+ * @return Key21
+ */
 Key21 RemoteControl::decodeIR(uint32_t code) {
     switch (code) {
         case 0xFFA25D:
@@ -198,7 +219,13 @@ Key21 RemoteControl::decodeIR(uint32_t code) {
 }
 
 // -----------------------------------
-// make key 21 readable
+
+/**
+ * @brief make key 21 readable
+ *
+ * @param key
+ * @return const char*
+ */
 const char* RemoteControl::key21ToString(Key21 key) {
     switch (key) {
         case Key21::KEY_CH_MINUS:
