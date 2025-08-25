@@ -2,7 +2,7 @@
 
 ![](images//Overview.jpg)
 
-## Overview
+
 The picture shows a layered architecture for a split-flap display system. End-user and admin UIs talk securely to a central service stack, which in turn persists data, integrates external systems, and drives the physical flap devices via a device/bus layer.
 
 ## Clients over HTTPS/TLS
