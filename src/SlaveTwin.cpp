@@ -865,37 +865,38 @@ void SlaveTwin::logMidError(MidMessage cmd, esp_err_t err) {
  * @return true = device is back
  * @return false = device is runaway
  */
+/*
 bool SlaveTwin::waitForDeviceToComeBack(I2Caddress adr, uint32_t sn) {
-    int repeat = 0;
-    for (int repeat = 0; repeat < 50; repeat++) {
-        if (!i2c_probe_device(adr) == ESP_OK) {                                 // send ping to booting device
-            vTaskDelay(pdMS_TO_TICKS(400));                                     // wait 50*400 milliseconds = 20 seconds
+    for (int repeat = 0; repeat < 10; repeat++) {
+        if (i2c_probe_device(adr) != ESP_OK) {                                  // send ping to booting device
+            vTaskDelay(pdMS_TO_TICKS(2000));                                    // wait 50*400 milliseconds = 20 seconds
             {
                 TraceScope trace;
                 twinPrintln("ping...");
             }
         } else {
             {
-                TraceScope trace;
-                twinPrintln("bootRelease...");
-                bootRelease();                                                  // release device from re-boot
+                //                TraceScope trace;
+                //                twinPrintln("bootRelease...");
+                //                bootRelease();                                                  // release device from re-boot
             }
             return true;
         }
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;
-            twinPrint("slave has runaway with serial number = ");
-            Serial.println(formatSerialNumber(sn));
-            }
-        #endif
-        return false;
     }
+
+    #ifdef SCANVERBOSE
+        {
+        TraceScope trace;
+        twinPrint("slave has runaway with serial number = ");
+        Serial.println(formatSerialNumber(sn));
+        }
+    #endif
+    return false;                                                               // device lost (runawy)
 }
 // ----------------------------------
 
 void SlaveTwin::i2cLongLongCommand(LongLongMessage mess, I2Caddress adr) {}
-
+*/
 // ----------------------------------
 
 void SlaveTwin::setNewAddress(int address) {
@@ -927,21 +928,24 @@ void SlaveTwin::setNewAddress(int address) {
         Serial.println(address, HEX);
         twinPrint("was received by device with serial number: ");
         Serial.println(formatSerialNumber(sn));
-        twinPrintln("we are waiting for him to come back");
+        //        twinPrintln("we are waiting for him to come back");
     #endif
+    /*
+        vTaskDelay(pdMS_TO_TICKS(20000));                                       // wait 20 seconds for device to come back
 
-    if (waitForDeviceToComeBack(address, sn)) {
-        #ifdef SCANVERBOSE
-            TraceScope trace;
-            twinPrint("device with serial number: ");
-            Serial.print(formatSerialNumber(sn));
-            twinPrint(" is back with address 0x");
-            Serial.println(address, HEX);
-        #endif
-        longLongCmd.command   = RESET_WHEN_SERIAL;
-        longLongCmd.parameter = sn;                                             // send RESET to device with serial number
-        i2cLongLongCommand(longLongCmd, I2C_BASE_ADDRESS);
-    }
+        if (waitForDeviceToComeBack(address, sn)) {
+            #ifdef SCANVERBOSE
+                TraceScope trace;
+                twinPrint("device with serial number: ");
+                Serial.print(formatSerialNumber(sn));
+                twinPrint(" is back with address 0x");
+                Serial.println(address, HEX);
+            #endif
+            longLongCmd.command   = RESET_WHEN_SERIAL;
+            longLongCmd.parameter = sn;                                         // send RESET to device with serial number
+            i2cLongLongCommand(longLongCmd, I2C_BASE_ADDRESS);
+        }
+    */
 }
 
 // -------------------------
