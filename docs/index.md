@@ -1,6 +1,8 @@
 # The ultimativ Flap Display I²C Master
 
-Kurze Beschreibung …
+![](../pic/Overview.png)
+
+This Flap System is highly flexible and adaptable to your needs.
 
 ## Quickstart
 - read doc
