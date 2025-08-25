@@ -454,7 +454,7 @@ void FlapRegistry::registerUnregistered() {
         {
             TraceScope trace;                                                   // use semaphore to protect this block
             #ifdef SCANVERBOSE
-                registerPrint("Send to unregistered slave (with I2C_BASE_ADDRESS) next free I2C Address: 0x");
+                registerPrint("Send TWIN_NEW_ADDRESS with free I2C Address: 0x");
                 Serial.println(nextFreeAddress, HEX);
             #endif
         }
@@ -463,13 +463,5 @@ void FlapRegistry::registerUnregistered() {
         twinCmd.twinCommand   = TWIN_NEW_ADDRESS;                               // set command to send base address
         twinCmd.twinParameter = nextFreeAddress;                                // set new base address
         Twin[0]->sendQueue(twinCmd);                                            // send command to Twin[0] to set base address
-        #ifdef SCANVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            registerPrintln("send TwinCommand: %s to TWIN[0]", Parser->twinCommandToString(twinCmd.twinCommand));
-            registerPrint("Unregistered slave will now be registered with I2C address: 0x");
-            Serial.println(nextFreeAddress, HEX);
-        #endif
-        }
     }
 }
