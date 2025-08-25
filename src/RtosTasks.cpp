@@ -46,7 +46,7 @@ void parserTask(void* pvParameters) {
             Parser->analyseClickEvent();
             if (Parser->_receivedEvent.type != CLICK_NONE && Parser->_receivedEvent.key != Key21::NONE) {
                 if (Parser->_receivedEvent.type == CLICK_DOUBLE) {
-                    Parser->dispatchToReporting();                              // execute key by report task
+                    Parser->dispatchToOther();                                  // execute key by other task
                 } else {
                     if (Parser->_receivedEvent.type == CLICK_SINGLE) {
                         Parser->dispatchToTwins();                              // execute key by twins

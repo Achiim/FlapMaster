@@ -27,6 +27,8 @@ ParserClass::ParserClass() {
     _mappedCommand.twinCommand   = TWIN_NO_COMMAND;                             // init with no command
     _mappedCommand.twinParameter = 0;                                           // no parameter
     _mappedCommand.responsQueue  = nullptr;                                     // no respons queue
+    _ds.mode                     = MODE_BROADCAST;                              // default mode, send to all
+    _ds.currentIndex             = -1;                                          // no selection
 };
 
 // ---------------------
@@ -35,7 +37,7 @@ ParserClass::ParserClass() {
  * @brief dispatch keystroke by reporting device
  *
  */
-void ParserClass::dispatchToReporting() {
+void ParserClass::dispatchToOther() {
     #ifdef PARSERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
@@ -52,8 +54,12 @@ void ParserClass::dispatchToReporting() {
     #endif
     _mappedReport = mapEvent2Report(_receivedEvent);                            // map ClickEvent to ReportCommand
 
-    if (g_reportQueue != nullptr) {                                             // if queue exists
-        xQueueOverwrite(g_reportQueue, &_mappedReport);                         // send Reporting Command to reporting task
+    if (_mappedReport.repCommand != REPORT_NO_COMMAND) {
+        if (g_reportQueue != nullptr) {                                         // if queue exists
+            xQueueOverwrite(g_reportQueue, &_mappedReport);                     // send Reporting Command to reporting task
+        }
+    } else {
+        mapEvent2Parser(_receivedEvent);                                        // map ClickEvent to ParserCommand
     }
 }
 
@@ -84,9 +90,31 @@ void ParserClass::dispatchToTwins() {
         }
     #endif
 
+    if (_ds.mode == MODE_BROADCAST && _mappedCommand.twinCommand == TWIN_FACTORY_RESET) {
+        #ifdef ERRORVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            parserPrintln("TWIN_FACTORY_RESET not supported in MODE_BROADCAST");
+            }
+        #endif
+        return;
+    }
+
+    if (_ds.mode == MODE_UNICAST && _ds.currentIndex >= 0) {                    // send only to the one and only selected Twin[n]
+        Twin[_ds.currentIndex]->sendQueue(_mappedCommand);                      // send command to selected twin
+        #ifdef PARSERVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            parserPrintln("send Twin_Command: %s to Twin 0x%02x", twinCommandToString(_mappedCommand.twinCommand), g_slaveAddressPool[m]);
+            parserPrintln("send Twin_Parameter: %d to Twin 0x%02x", _mappedCommand.twinParameter, g_slaveAddressPool[m]);
+            }
+        #endif
+        return;
+    }
+
     for (int m = 0; m < numberOfTwins; m++) {
         auto it = g_slaveRegistry.find(g_slaveAddressPool[m]);                  // search in registry
-        if (it != g_slaveRegistry.end()) {                                      // if slave is registerd
+        if (it != g_slaveRegistry.end()) {                                      // if slave is registered
             Twin[m]->sendQueue(_mappedCommand);                                 // send mapped command to twin
             #ifdef PARSERVERBOSE
                 {
@@ -484,6 +512,147 @@ ReportCommand ParserClass::mapEvent2Report(ClickEvent event) {
             break;
         }
     }
+}
+// -------------------------
+//
+/**
+ * @brief map event to ReportCommand
+ *
+ * @param event
+ * @return ReportCommand
+ */
+void ParserClass::mapEvent2Parser(ClickEvent event) {
+    switch (event.key) {
+        case Key21::KEY_CH_MINUS:
+            selectPrevTwin();
+            break;
+        case Key21::KEY_CH:
+            toggleBroadcastMode();
+            break;
+        case Key21::KEY_CH_PLUS:
+            selectNextTwin();
+            #ifdef MASTERVERBOSE
+                {
+                TraceScope trace;
+                parserPrint("selected Twin index: ");
+                Serial.println(_ds.currentIndex);
+                }
+            #endif
+            break;
+        default: {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                parserPrint("Unknown key21: ");
+                Serial.println(static_cast<int>(event.key));
+                }
+            #endif
+            break;
+        }
+    }
+}
+
+// -----------------------------
+
+/**
+ * @brief toggle broadcast mode MODE_BROADCAST / MODE UNICAST
+ *
+ */
+void ParserClass::toggleBroadcastMode() {
+    if (_ds.mode == MODE_BROADCAST) {
+        _ds.mode = MODE_UNICAST;
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            parserPrint("switched to MODE_UNICAST, send to Twin[n]  n= ");
+            Serial.print(_ds.currentIndex);
+            Serial.print(" with address 0x");
+            Serial.println(g_slaveAddressPool[_ds.currentIndex]);
+            }
+        #endif
+    } else {
+        _ds.mode = MODE_BROADCAST;
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            parserPrintln("switched to MODE_BROADCAST");
+            }
+        #endif
+    }
+};
+
+// -----------------------------
+
+/**
+ * @brief select next Twin to communicate with
+ *
+ */
+void ParserClass::selectNextTwin() {
+    if (_ds.mode == MODE_BROADCAST)
+        return;                                                                 // do nothing, only valid in UNICAST mode
+
+    if (numberOfTwins == 0) {
+        _ds.currentIndex = -1;
+        return;
+    }
+    int start        = (_ds.currentIndex < 0) ? -1 : _ds.currentIndex;
+    _ds.currentIndex = findNextOnlineIndex(start, +1);
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;
+        parserPrint("selected Twin index: ");
+        Serial.println(_ds.currentIndex);
+        }
+    #endif
+}
+
+// -----------------------------
+
+/**
+ * @brief select previous Twin to communicate with
+ *
+ */
+void ParserClass::selectPrevTwin() {
+    if (_ds.mode == MODE_BROADCAST)
+        return;                                                                 // do nothing, only valid in UNICAST mode
+
+    if (numberOfTwins == 0) {
+        _ds.currentIndex = -1;
+        return;
+    }
+    int start        = (_ds.currentIndex < 0) ? 0 : _ds.currentIndex;
+    _ds.currentIndex = findNextOnlineIndex(start, -1);
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;
+        parserPrint("selected Twin index: ");
+        Serial.println(_ds.currentIndex);
+        }
+    #endif
+}
+
+// -----------------------------
+
+/**
+ * @brief find Twin in registry
+ *
+ */
+int ParserClass::findNextOnlineIndex(int start, int dir) {
+    if (numberOfTwins <= 0)
+        return -1;
+    if (start < 0)
+        start = (dir > 0) ? -1 : 0;
+    for (int i = 0; i < numberOfTwins; ++i) {
+        int     idx  = (start + dir + numberOfTwins) % numberOfTwins;
+        uint8_t addr = g_slaveAddressPool[idx];
+        auto    it   = g_slaveRegistry.find(addr);
+        if (it != g_slaveRegistry.end()) {
+            // optional: if (it->second.online) ...
+            return idx;
+        }
+        start = idx;
+    }
+    return -1;
 }
 
 //
