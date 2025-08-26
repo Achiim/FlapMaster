@@ -56,7 +56,6 @@ std::map<I2Caddress, I2CSlaveDevice*> g_slaveRegistry;
  *
  * - de-register this device
  */
-
 void FlapRegistry::availabilityCheck() {
     TwinCommand cmd{};                                                          // zero-init for all
     cmd.twinCommand   = TWIN_AVAILABILITY;
@@ -99,6 +98,7 @@ void FlapRegistry::availabilityCheck() {
  * @brief erase slave from registry
  *
  * @param slaveAddress = address to be erased from registry
+ *
  */
 void FlapRegistry::deRegisterDevice(I2Caddress slaveAddress) {
     auto it = g_slaveRegistry.find(slaveAddress);
@@ -153,8 +153,9 @@ void FlapRegistry::deviceRegistryOutro() {
 }
 
 /**
- * @brief Query all expected addresses (from the fixed address pool) and trigger
- *        unknown slaves to register themselves (send TWIN_REGISTER to their Twin[n] queue).
+ * @brief Query all expected addresses (from the fixed address pool)
+ * and trigger (send TWIN_REGISTER to their Twin[n] queue)
+ * not registered slaves to be registered by theis twin .
  */
 void FlapRegistry::registerDevice() {
     deviceRegistryIntro();                                                      // announce what we're about to do
@@ -165,7 +166,6 @@ void FlapRegistry::registerDevice() {
     cmd.twinCommand   = TWIN_REGISTER;                                          // ask the device to register
     cmd.twinParameter = 0;                                                      // no parameter
     cmd.responsQueue  = nullptr;                                                // no response queue expected
-
     for (int i = 0; i < slotCount; ++i) {
         const I2Caddress addr = addressAt(i);                                   // mapping: addr = I2C_MINADR + i
 
@@ -180,7 +180,6 @@ void FlapRegistry::registerDevice() {
             #endif
         }
     }
-
     deviceRegistryOutro();                                                      // wrap up logging
 }
 
@@ -199,7 +198,7 @@ void FlapRegistry::registerDevice() {
  * @param parameter = parameter to be used fpr update or register
  */
 void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) {
-    int n = indexOfAddr(address);
+    int n = indexOfAddress(address);
     if (n < 0 || Twin[n] == nullptr)
         return;                                                                 // no Twin exists
 
@@ -311,10 +310,11 @@ void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) 
 /**
  * @brief print configuration steps steps by flap
  *
- * @param address
- * @param steps
- * @param flaps
- * @param perLine
+ * @param address device address
+ * @param steps parameter steps
+ * @param flaps parameter flaps
+ * @param perLine print x steps per line
+ *
  */
 void FlapRegistry::printStepsByFlapLines(I2Caddress address, int* steps, int flaps, int perLine) {
     if (!steps || flaps <= 0) {
@@ -339,7 +339,8 @@ void FlapRegistry::printStepsByFlapLines(I2Caddress address, int* steps, int fla
 /**
  * @brief deliver number of Twins
  *
- * @return int
+ * @return int number of twins
+ *
  */
 int FlapRegistry::capacity() const {
     return numberOfTwins;
@@ -350,7 +351,7 @@ int FlapRegistry::capacity() const {
 /**
  * @brief number of registered devices
  *
- * @return int
+ * @return int number of registered devices
  */
 int FlapRegistry::size() const {
     return static_cast<int>(g_slaveRegistry.size());
@@ -362,8 +363,8 @@ int FlapRegistry::size() const {
  * @brief is index valid based on number of Twins
  *
  * @param idx
- * @return true
- * @return false
+ * @return true index is valid;
+ * @return false index is invalid
  */
 bool FlapRegistry::isValidIndex(int idx) const {
     return idx >= 0 && idx < numberOfTwins;
@@ -374,7 +375,7 @@ bool FlapRegistry::isValidIndex(int idx) const {
 /**
  * @brief deliver address at index
  *
- * @param idx
+ * @param idx twin index
  * @return uint8_t addresss or 0 if invalid
  */
 uint8_t FlapRegistry::addressAt(int idx) const {
@@ -389,7 +390,7 @@ uint8_t FlapRegistry::addressAt(int idx) const {
  * @param addr i2c adress
  * @return int index of Twin[n]
  */
-int FlapRegistry::indexOfAddr(I2Caddress addr) const {                          // get index from address
+int FlapRegistry::indexOfAddress(I2Caddress addr) const {                       // get index from address
     int idx = int(addr) - int(I2C_MINADR);
     return (idx >= 0 && idx < capacity()) ? idx : -1;
 }
@@ -399,7 +400,7 @@ int FlapRegistry::indexOfAddr(I2Caddress addr) const {                          
 /**
  * @brief is address registered
  *
- * @param addr
+ * @param addr device address
  * @return true
  * @return false
  */
@@ -459,7 +460,7 @@ I2Caddress FlapRegistry::findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr)
 /**
  * @brief navigate to first registered device
  *
- * @return int
+ * @return int twin index of first registered device
  */
 int FlapRegistry::firstRegisteredIndex() const {
     const int n = capacity();
@@ -506,8 +507,8 @@ int FlapRegistry::nextRegisteredIndex(int start, int dir) const {
 /**
  * @brief send to TwinQueue n
  *
- * @param idx
- * @param cmd
+ * @param idx twin index
+ * @param cmd TwinCommand to be send
  * @return true
  * @return false
  */
@@ -607,6 +608,7 @@ void FlapRegistry::repairOutOfPoolDevices() {
 /**
  * @brief register unregistered devices
  * because no Twin is connected to address 0x55 (unregistered) -> Twin[0] is used
+ *
  */
 void FlapRegistry::registerUnregistered() {
     I2Caddress nextFreeAddress = 0;

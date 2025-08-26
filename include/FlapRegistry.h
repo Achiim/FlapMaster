@@ -72,7 +72,7 @@ class FlapRegistry {
 
     // address pool access
     int        capacity() const;                                                // numberOfTwins
-    int        indexOfAddr(I2Caddress addr) const;                              // get index from address
+    int        indexOfAddress(I2Caddress addr) const;                           // get index from address
     bool       isValidIndex(int idx) const;                                     // verify twin index
     I2Caddress addressAt(int idx) const;                                        // 0 if invalid
 
