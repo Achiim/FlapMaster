@@ -224,7 +224,7 @@ void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) 
     const auto oldBoot  = device->bootFlag;
     const auto oldSens  = device->parameter.sensorworking;
 
-    // Gemeinsame Zuweisungen (wie gehabt)
+    // take over actual parameter and states
     device->parameter               = parameter;                                // speed/offset/steps/flaps
     device->position                = Twin[n]->_slaveReady.position;
     device->bootFlag                = Twin[n]->_slaveReady.bootFlag;
@@ -536,7 +536,7 @@ bool FlapRegistry::sendToIndex(int idx, const TwinCommand& cmd) const {
 // ---------------------------------
 
 /**
- * @brief sen to all TwinQueues
+ * @brief send to all TwinQueues
  *
  * @param cmd
  */
