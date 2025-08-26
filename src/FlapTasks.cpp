@@ -109,7 +109,7 @@ void shortScanCallback(TimerHandle_t xTimer) {
     Register->registerDevice();
     Register->registerUnregistered();
 
-    if (Register->numberOfRegisterdDevices() >= numberOfTwins) {
+    if (Register->size() >= Register->capacity()) {
         xTimerStop(shortScanTimer, 0);
         xTimerStart(longScanTimer, 0);
     }
@@ -151,7 +151,7 @@ void availCheckCallback(TimerHandle_t xTimer) {
     #endif
     Register->availabilityCheck();
 
-    if (Register->numberOfRegisterdDevices() < numberOfTwins) {
+    if (Register->size() < Register->capacity()) {
         // missing one device → Short-Scan
         if (xTimerIsTimerActive(shortScanTimer) == pdFALSE) {
             xTimerStop(longScanTimer, 0);

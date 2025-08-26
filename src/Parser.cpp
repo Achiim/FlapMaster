@@ -14,6 +14,7 @@
 #include <Arduino.h>
 #include "Parser.h"
 #include "FlapTasks.h"
+#include "FlapRegistry.h"
 #include "SlaveTwin.h"
 #include "RemoteControl.h"
 
@@ -100,38 +101,21 @@ void ParserClass::dispatchToTwins() {
         return;
     }
 
-    if (_ds.mode == MODE_UNICAST && _ds.currentIndex >= 0) {                    // send only to the one and only selected Twin[n]
-        Twin[_ds.currentIndex]->sendQueue(_mappedCommand);                      // send command to selected twin
-        #ifdef PARSERVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            parserPrintln("send Twin_Command: %s to Twin 0x%02x", twinCommandToString(_mappedCommand.twinCommand), g_slaveAddressPool[m]);
-            parserPrintln("send Twin_Parameter: %d to Twin 0x%02x", _mappedCommand.twinParameter, g_slaveAddressPool[m]);
-            }
-        #endif
-        return;
-    }
-
-    for (int m = 0; m < numberOfTwins; m++) {
-        auto it = g_slaveRegistry.find(g_slaveAddressPool[m]);                  // search in registry
-        if (it != g_slaveRegistry.end()) {                                      // if slave is registered
-            Twin[m]->sendQueue(_mappedCommand);                                 // send mapped command to twin
-            #ifdef PARSERVERBOSE
-                {
-                TraceScope trace;                                               // use semaphore to protect this block
-                parserPrintln("send Twin_Command: %s to Twin 0x%02x", twinCommandToString(_mappedCommand.twinCommand), g_slaveAddressPool[m]);
-                parserPrintln("send Twin_Parameter: %d to Twin 0x%02x", _mappedCommand.twinParameter, g_slaveAddressPool[m]);
-                }
-            #endif
-        } else {
+    // UNICAST
+    if (_ds.mode == MODE_UNICAST) {
+        if (!Register->sendToIndex(_ds.currentIndex, _mappedCommand)) {
             #ifdef ERRORVERBOSE
                 {
-                TraceScope trace;                                               // use semaphore to protect this block
-                parserPrintln("Twin 0x%02x not registered", g_slaveAddressPool[m]);
+                TraceScope trace;
+                parserPrintln("UNICAST: send failed (index=%d)", _ds.currentIndex);
                 }
             #endif
         }
+        return;
     }
+
+    // BROADCAST
+    Register->sendToAll(_mappedCommand);                                        // send to all registered devices
 }
 
 // ---------------------
@@ -531,13 +515,6 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
             break;
         case Key21::KEY_CH_PLUS:
             selectNextTwin();
-            #ifdef MASTERVERBOSE
-                {
-                TraceScope trace;
-                parserPrint("selected Twin index: ");
-                Serial.println(_ds.currentIndex);
-                }
-            #endif
             break;
         default: {
             #ifdef ERRORVERBOSE
@@ -559,19 +536,22 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
  *
  */
 void ParserClass::toggleBroadcastMode() {
-    if (_ds.mode == MODE_BROADCAST) {
-        _ds.mode = MODE_UNICAST;
+    _ds.mode = (_ds.mode == MODE_BROADCAST) ? MODE_UNICAST : MODE_BROADCAST;
+    if (_ds.mode == MODE_UNICAST && !Register->containsIndex(_ds.currentIndex)) {
+        _ds.currentIndex = Register->firstRegisteredIndex();
+    }
+
+    if (_ds.mode == MODE_UNICAST) {
         #ifdef MASTERVERBOSE
             {
             TraceScope trace;
             parserPrint("switched to MODE_UNICAST, send to Twin[n]  n= ");
             Serial.print(_ds.currentIndex);
             Serial.print(" with address 0x");
-            Serial.println(g_slaveAddressPool[_ds.currentIndex]);
+            Serial.println(g_slaveAddressPool[_ds.currentIndex], HEX);
             }
         #endif
     } else {
-        _ds.mode = MODE_BROADCAST;
         #ifdef MASTERVERBOSE
             {
             TraceScope trace;
@@ -584,19 +564,11 @@ void ParserClass::toggleBroadcastMode() {
 // -----------------------------
 
 /**
- * @brief select next Twin to communicate with
+ * @brief select next Twin to communicate with in UNICAST mode
  *
  */
 void ParserClass::selectNextTwin() {
-    if (_ds.mode == MODE_BROADCAST)
-        return;                                                                 // do nothing, only valid in UNICAST mode
-
-    if (numberOfTwins == 0) {
-        _ds.currentIndex = -1;
-        return;
-    }
-    int start        = (_ds.currentIndex < 0) ? -1 : _ds.currentIndex;
-    _ds.currentIndex = findNextOnlineIndex(start, +1);
+    _ds.currentIndex = Register->nextRegisteredIndex(_ds.currentIndex, +1);
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;
@@ -609,19 +581,11 @@ void ParserClass::selectNextTwin() {
 // -----------------------------
 
 /**
- * @brief select previous Twin to communicate with
+ * @brief select previous Twin to communicate with in UNICAST mode
  *
  */
 void ParserClass::selectPrevTwin() {
-    if (_ds.mode == MODE_BROADCAST)
-        return;                                                                 // do nothing, only valid in UNICAST mode
-
-    if (numberOfTwins == 0) {
-        _ds.currentIndex = -1;
-        return;
-    }
-    int start        = (_ds.currentIndex < 0) ? 0 : _ds.currentIndex;
-    _ds.currentIndex = findNextOnlineIndex(start, -1);
+    _ds.currentIndex = Register->nextRegisteredIndex(_ds.currentIndex, -1);
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;
@@ -629,30 +593,6 @@ void ParserClass::selectPrevTwin() {
         Serial.println(_ds.currentIndex);
         }
     #endif
-}
-
-// -----------------------------
-
-/**
- * @brief find Twin in registry
- *
- */
-int ParserClass::findNextOnlineIndex(int start, int dir) {
-    if (numberOfTwins <= 0)
-        return -1;
-    if (start < 0)
-        start = (dir > 0) ? -1 : 0;
-    for (int i = 0; i < numberOfTwins; ++i) {
-        int     idx  = (start + dir + numberOfTwins) % numberOfTwins;
-        uint8_t addr = g_slaveAddressPool[idx];
-        auto    it   = g_slaveRegistry.find(addr);
-        if (it != g_slaveRegistry.end()) {
-            // optional: if (it->second.online) ...
-            return idx;
-        }
-        start = idx;
-    }
-    return -1;
 }
 
 //

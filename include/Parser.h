@@ -72,7 +72,6 @@ class ParserClass {                                                             
     void toggleBroadcastMode();
     void selectNextTwin();
     void selectPrevTwin();
-    int  findNextOnlineIndex(int start, int dir);                               // find next Twin in registry to be selected
 };
 
 #endif                                                                          // Parser_h

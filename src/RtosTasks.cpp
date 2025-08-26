@@ -106,7 +106,7 @@ void twinRegister(void* pvParameters) {
 
     // --- loop until either boot window expires or all expected devices are registered ---
     while ((xTaskGetTickCount() - startTick) < bootWindowMs) {
-        if (Register->numberOfRegisterdDevices() >= numberOfTwins) {
+        if (Register->size() >= Register->capacity()) {
             // all expected devices found -> break out of fast mode earlier
             break;
         }
