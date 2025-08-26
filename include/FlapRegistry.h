@@ -66,8 +66,8 @@ class FlapRegistry {
     int        size() const;                                                    // number of registered devices (Registry-size)
     int        firstRegisteredIndex() const;                                    // -1, if no first
     int        nextRegisteredIndex(int start, int dir) const;                   // dir: +1 forward, -1 backward
-    bool       containsAddr(I2Caddress addr) const;                             // is address registered?
-    bool       containsIndex(int idx) const;                                    // is index valid and registered?
+    bool       isAddressRegistered(I2Caddress addr) const;                      // is address registered?
+    bool       isIndexRegistered(int idx) const;                                // is index valid and registered?
     I2Caddress getNextFreeAddress();                                            // next free i2c address form slave registry
 
     // address pool access
@@ -84,7 +84,7 @@ class FlapRegistry {
     inline void forEachRegisteredIdx(Fn&& fn) const {                           // loop all registered devices
         for (int i = 0; i < capacity(); ++i) {
             I2Caddress addr = addressAt(i);                                     // addr -> device
-            if (containsAddr(addr))
+            if (isAddressRegistered(addr))
                 fn(i, addr);
         }
     }
@@ -106,5 +106,7 @@ class FlapRegistry {
     void deviceRegistryOutro();                                                 // outro scan_i2c_bus
 
     I2Caddress findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr);         // free address from register
+
+    void printStepsByFlapLines(I2Caddress address, int* steps, int flaps, int perLine = 10);
 };
 #endif                                                                          // FlapRegistry_h

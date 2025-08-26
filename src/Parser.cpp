@@ -537,7 +537,7 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
  */
 void ParserClass::toggleBroadcastMode() {
     _ds.mode = (_ds.mode == MODE_BROADCAST) ? MODE_UNICAST : MODE_BROADCAST;
-    if (_ds.mode == MODE_UNICAST && !Register->containsIndex(_ds.currentIndex)) {
+    if (_ds.mode == MODE_UNICAST && !Register->isIndexRegistered(_ds.currentIndex)) {
         _ds.currentIndex = Register->firstRegisteredIndex();
     }
 

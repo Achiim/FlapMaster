@@ -297,7 +297,8 @@ void SlaveTwin::showFlap(int digit) {
         }
     #endif
     getFullStateOfSlave();                                                      // get result of move
-    synchSlaveRegistry();                                                       // update registry with confirmed state
+                            //    synchSlaveRegistry();                                                       // update registry with confirmed state
+    Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
 }
 
 // --------------------------------------------
@@ -354,7 +355,8 @@ void SlaveTwin::calibration() {
 
     readOffset(_parameter.offset);                                              // get offset to be secure
     getFullStateOfSlave();                                                      // get result of calibration
-    synchSlaveRegistry();                                                       // take over confirmed values to registry
+    //    synchSlaveRegistry();                                                       // take over confirmed values to registry
+    Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
 }
 
 // --------------------------------------------
@@ -390,7 +392,8 @@ void SlaveTwin::stepMeasurement() {
 
     readSteps(_parameter.steps);                                                // read new steps from slave
     getFullStateOfSlave();                                                      // get result of step measurement
-    synchSlaveRegistry();                                                       // take over measured value to registry
+    //    synchSlaveRegistry();                                                       // take over measured value to registry
+    Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
 }
 
 // --------------------------------------------
@@ -423,7 +426,8 @@ void SlaveTwin::speedMeasurement() {
     #endif
     readSpeed(_parameter.speed);
     getFullStateOfSlave();
-    synchSlaveRegistry();
+    //    synchSlaveRegistry();
+    Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
 }
 
 // --------------------------------------------
@@ -455,7 +459,8 @@ void SlaveTwin::sensorCheck() {
         #endif
     }
     getFullStateOfSlave();                                                      // get result of sensor check
-    synchSlaveRegistry();                                                       // take over measured value to registry
+                            //    synchSlaveRegistry();                                                       // take over measured value to registry
+    Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
 }
 
 // --------------------------------------------
@@ -494,7 +499,8 @@ void SlaveTwin::nextFlap() {
                 twinPrintln("request result of nextFlap");
             #endif
             getFullStateOfSlave();                                              // get result of move
-            synchSlaveRegistry();                                               // update registry with confirmed state
+            //            synchSlaveRegistry();                                               // update registry with confirmed state
+            Register->updateRegistry(_slaveAddress, _parameter);                // register slave
         }
     } else {
         #ifdef ERRORVERBOSE
@@ -538,7 +544,8 @@ void SlaveTwin::prevFlap() {
                 twinPrintln("request result of prevFlap");
             #endif
             getFullStateOfSlave();                                              // get result of move
-            synchSlaveRegistry();                                               // update registry with confirmed state
+            //            synchSlaveRegistry();                                               // update registry with confirmed state
+            Register->updateRegistry(_slaveAddress, _parameter);                // register slave
         }
     } else {
         #ifdef ERRORVERBOSE
@@ -579,7 +586,8 @@ void SlaveTwin::nextSteps() {
         twinPrintln("to be stored offset: %d (not yet stored)", _parameter.offset + _adjustOffset);
 
         getFullStateOfSlave();                                                  // get result of move
-        synchSlaveRegistry();                                                   // update registry with confirmed state
+        //        synchSlaveRegistry();                                                   // update registry with confirmed state
+        Register->updateRegistry(_slaveAddress, _parameter);                    // register slave
     }
 }
 
@@ -594,7 +602,8 @@ void SlaveTwin::prevSteps() {
     if (_parameter.offset + _adjustOffset - ADJUSTMENT_STEPS >= 0) {            // only as negativ, as to be stepped back to zero
         _adjustOffset -= ADJUSTMENT_STEPS;
         twinPrintln("to be stored offset: %d (not yet stored)", _parameter.offset + _adjustOffset);
-        synchSlaveRegistry();                                                   // update registry with confirmed state
+        //        synchSlaveRegistry();                                                   // update registry with confirmed state
+        Register->updateRegistry(_slaveAddress, _parameter);                    // register slave
     }
 }
 
@@ -632,7 +641,8 @@ void SlaveTwin::setOffset() {
     #ifdef TWINVERBOSE
         twinPrintln("request result of adjustment");
     #endif
-    synchSlaveRegistry();                                                       // take over new offset to registry
+    //    synchSlaveRegistry();                                                       // take over new offset to registry
+    Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
 }
 
 // --------------------------------------------

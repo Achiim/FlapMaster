@@ -56,36 +56,41 @@ std::map<I2Caddress, I2CSlaveDevice*> g_slaveRegistry;
  *
  * - de-register this device
  */
+
 void FlapRegistry::availabilityCheck() {
-    for (auto it = g_slaveRegistry.begin(); it != g_slaveRegistry.end();) {     // iterate over all registered slaves
-        const I2Caddress addr = it->first;                                      // get address of current slave
+    TwinCommand cmd{};                                                          // zero-init for all
+    cmd.twinCommand   = TWIN_AVAILABILITY;
+    cmd.twinParameter = 0;
 
-        #ifdef AVAILABILITYVERBOSE
-            {
-            TraceScope trace;                                                   // debug: trace scope
-            registerPrint("check availability of registered I²C-Slave 0x");     // debug: print message
-            Serial.println(addr, HEX);                                          // print address in hex
-            }
-        #endif
-
-        #ifdef AVAILABILITYVERBOSE
-            {
-            TraceScope trace;                                                   // debug: trace scope
-            registerPrint("send TWIN_AVAILABILITY to twin 0x");                 // debug: print message
-            Serial.println(addr, HEX);                                          // print address in hex
-            }
-        #endif
-
-        TwinCommand twinCmd;                                                    // create new TwinCommand object
-        twinCmd.twinCommand   = TWIN_AVAILABILITY;                              // command = "availability check"
-        twinCmd.twinParameter = 0;                                              // no parameter required
-        twinCmd.responsQueue  = nullptr;                                        // no direct response requested
-        int n                 = indexOfAddr(addr);                              // resolve twin index from slave address
-        Twin[n]->sendQueue(twinCmd);                                            // trigger availability check on twin
-                                                    // -> evaluation & deregistration
-                                                    //    are handled inside the Twin
-        ++it;                                                                   // continue with next registry entry
-    }
+    forEachRegisteredIdx([&](int idx, I2Caddress addr) {                        // all registered devices
+        {
+            #ifdef AVAILABILITYVERBOSE
+                {
+                TraceScope trace;
+                registerPrint("send TWIN_AVAILABILITY to twin 0x");
+                Serial.println(addr, HEX);
+                }
+            #endif
+        }
+        if (!Twin[idx]) {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;                                               // debug: trace scope
+                registerPrintln("Twin does not exist");
+                }
+            #endif
+            return;
+        }
+        bool rc = Twin[idx]->sendQueue(cmd);                                    // send to twin with registered device
+        if (!rc) {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;                                               // debug: trace scope
+                registerPrintln("send to Twin Queue failed");
+                }
+            #endif
+        }
+    });                                                                         // next registered device
 }
 
 // ----------------------------
@@ -164,7 +169,7 @@ void FlapRegistry::registerDevice() {
     for (int i = 0; i < slotCount; ++i) {
         const I2Caddress addr = addressAt(i);                                   // mapping: addr = I2C_MINADR + i
 
-        if (!containsAddr(addr)) {                                              // Only act on addresses that are not yet present in the registry
+        if (!isAddressRegistered(addr)) {                                       // Only act on addresses that are not yet present in the registry
             Twin[i]->sendQueue(cmd);                                            // send to twins entry queue
 
             #ifdef REGISTRYVERBOSE
@@ -194,6 +199,135 @@ void FlapRegistry::registerDevice() {
  * @param parameter = parameter to be used fpr update or register
  */
 void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) {
+    int n = indexOfAddr(address);
+    if (n < 0 || Twin[n] == nullptr)
+        return;                                                                 // no Twin exists
+
+    I2CSlaveDevice* device      = nullptr;                                      // generate new device
+    bool            deviceIsNew = false;
+
+    auto it = g_slaveRegistry.find(address);
+    if (it != g_slaveRegistry.end() && it->second) {                            // is device allready registered?
+        device = it->second;
+    } else {
+        deviceIsNew              = true;                                        // is't a new device
+        device                   = new I2CSlaveDevice();
+        g_slaveRegistry[address] = device;                                      // insert device in registry
+    }
+
+    // --- remember changes before overwriting them
+    const auto oldSteps = device->parameter.steps;
+    const auto oldFlaps = device->parameter.flaps;
+    const auto oldOff   = device->parameter.offset;
+    const auto oldSpeed = device->parameter.speed;
+    const auto oldPos   = device->position;
+    const auto oldBoot  = device->bootFlag;
+    const auto oldSens  = device->parameter.sensorworking;
+
+    // Gemeinsame Zuweisungen (wie gehabt)
+    device->parameter               = parameter;                                // speed/offset/steps/flaps
+    device->position                = Twin[n]->_slaveReady.position;
+    device->bootFlag                = Twin[n]->_slaveReady.bootFlag;
+    device->parameter.sensorworking = Twin[n]->_slaveReady.sensorStatus;        // :contentReference[oaicite:3]{index=3}
+
+    if (deviceIsNew) {
+        Twin[n]->_parameter = parameter;                                        // wie bisher nur bei neuen Geräten
+    }
+
+    // changes of movement parameter
+    const bool stepsChanged = (oldSteps != parameter.steps);
+    const bool flapsChanged = (oldFlaps != parameter.flaps);
+    if (stepsChanged || flapsChanged) {
+        Twin[n]->_numberOfFlaps = parameter.flaps;
+        Twin[n]->calculateStepsPerFlap();                                       // recalculate relative movement
+
+        #ifdef SCANVERBOSE
+            {
+            TraceScope trace;
+            printStepsByFlapLines(address, Twin[n]->stepsByFlap, parameter.flaps);
+            }
+        #endif
+    }
+
+    // other changes
+    const bool offChanged   = (oldOff != parameter.offset);
+    const bool speedChanged = (oldSpeed != parameter.speed);
+    const bool bootChanged  = (oldBoot != Twin[n]->_slaveReady.bootFlag);
+    const bool posChanged   = (oldPos != Twin[n]->_slaveReady.position);
+    const bool sensChanged  = (oldSens != Twin[n]->_slaveReady.sensorStatus);
+
+    if (offChanged) {
+        #ifdef SCANVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("device 0x%02X offset changed to: ", address);
+            Serial.println(device->parameter.offset);
+            }
+        #endif
+    }
+
+    if (speedChanged) {
+        #ifdef SCANVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("device 0x%02X speed changed to: ", address);
+            Serial.println(device->parameter.speed);
+            }
+        #endif
+    }
+
+    if (bootChanged) {
+        #ifdef SCANVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("device 0x%02X bootFlag changed to: ", address);
+            Serial.println(device->bootFlag);
+            }
+        #endif
+    }
+
+    if (posChanged) {
+        #ifdef SCANVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("device 0x%02X position changed to: ", address);
+            Serial.println(device->position);
+            }
+        #endif
+    }
+
+    if (sensChanged) {
+        #ifdef SCANVERBOSE
+            {
+            TraceScope trace;
+            registerPrint("device 0x%02X sensor status changed to: ", address);
+            device->parameter.sensorworking ? Serial.println("working") : Serial.println("broken");
+            }
+        #endif
+    }
+}
+
+void FlapRegistry::printStepsByFlapLines(I2Caddress address, int* steps, int flaps, int perLine) {
+    if (!steps || flaps <= 0) {
+        return;
+    }
+    for (int i = 0; i < flaps; ++i) {
+        if ((i % perLine) == 0) {                                               // neue Zeile (mit Kopf) starten
+                                   //            if (i != 0)
+                                   //                Serial.println();                                               // Umbruch vor Folgelinien
+            registerPrint("device 0x%02X Steps by Flap are: ", address);
+        }
+        Serial.print(steps[i]);
+        const bool endOfLine = ((i % perLine) == perLine - 1) || (i == flaps - 1);
+        if (endOfLine) {
+            Serial.println();                                                   // Zeile beenden
+        } else {
+            Serial.print(", ");                                                 // kein Komma am Zeilenende
+        }
+    }
+}
+/*
+void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) {
     int n = indexOfAddr(address);                                               // resolve twin index for this address
     if (n < 0 || Twin[n] == nullptr) {                                          // guard against invalid twin index/pointer
         {
@@ -208,8 +342,8 @@ void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) 
         return;                                                                 // nothing to do without a valid Twin
     }
 
-    I2CSlaveDevice* device      = nullptr;                                      // Prepare a pointer to the device object (either existing or newly created).
-    bool            deviceIsNew = false;
+    I2CSlaveDevice* device      = nullptr;                                      // Prepare a pointer to the device object (either existing or
+newly created). bool            deviceIsNew = false;
 
     auto it = g_slaveRegistry.find(address);                                    // search registry for this address
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // if device already exists in registry
@@ -294,7 +428,7 @@ void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) 
         }
     }
 }
-
+*/
 // -----------------------------------------
 
 /**
@@ -364,7 +498,7 @@ int FlapRegistry::indexOfAddr(I2Caddress addr) const {                          
  * @return true
  * @return false
  */
-bool FlapRegistry::containsAddr(I2Caddress addr) const {
+bool FlapRegistry::isAddressRegistered(I2Caddress addr) const {
     return g_slaveRegistry.find(addr) != g_slaveRegistry.end();
 }
 
@@ -377,8 +511,8 @@ bool FlapRegistry::containsAddr(I2Caddress addr) const {
  * @return true
  * @return false
  */
-bool FlapRegistry::containsIndex(int idx) const {
-    return isValidIndex(idx) && containsAddr(addressAt(idx));
+bool FlapRegistry::isIndexRegistered(int idx) const {
+    return isValidIndex(idx) && isAddressRegistered(addressAt(idx));
 }
 
 // -----------------------------------------
@@ -425,7 +559,7 @@ I2Caddress FlapRegistry::findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr)
 int FlapRegistry::firstRegisteredIndex() const {
     const int n = capacity();
     for (int i = 0; i < n; ++i) {
-        if (containsIndex(i))
+        if (isIndexRegistered(i))
             return i;
     }
     return -1;
@@ -455,7 +589,7 @@ int FlapRegistry::nextRegisteredIndex(int start, int dir) const {
         if (next < 0)
             next += n;
 
-        if (containsIndex(next))
+        if (isIndexRegistered(next))
             return next;
         cur = next;
     }
@@ -473,7 +607,7 @@ int FlapRegistry::nextRegisteredIndex(int start, int dir) const {
  * @return false
  */
 bool FlapRegistry::sendToIndex(int idx, const TwinCommand& cmd) const {
-    if (!containsIndex(idx)) {
+    if (!isIndexRegistered(idx)) {
         #ifdef ERRORVERBOSE
             {
             TraceScope trace;
