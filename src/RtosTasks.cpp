@@ -10,8 +10,25 @@
 #include "FlapReporting.h"
 #include "FlapStatistics.h"
 #include "Parser.h"
+#include "Liga.h"
 #include "RemoteControl.h"
 #include "RtosTasks.h"
+
+// ----------------------------
+
+/**
+ * @brief freeRTOS task Liga
+ *
+ * @param pvParameters
+ */
+void ligaTask(void* pvParameters) {
+    Liga = new LigaTable();
+    Liga->connect();
+    while (true) {
+        Liga->fetch();
+        vTaskDelay(pdMS_TO_TICKS(60000));                                       // Delay for 60s
+    }
+}
 
 // ----------------------------
 

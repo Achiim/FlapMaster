@@ -144,7 +144,8 @@ void masterStartRtosTasks() {
     createReportTask();                                                         // Create report tasks
     createTwinTasks();                                                          // Create twin tasks
     createRemoteControlTask();                                                  // Create remote control
-    createParserTask();                                                         // create remote creator task
+    createParserTask();                                                         // create parser task
+    createLigaTask();                                                           // create liga task
     createRegisterTwinsTask();                                                  // Create Register Twins task
 }
 
@@ -286,4 +287,20 @@ void createParserTask() {
         }
     #endif
     xTaskCreate(parserTask, "Parser", STACK_PARSER, NULL, PRIO_PARSER, &g_parserHandle);
+}
+
+// ---------------------------
+
+/**
+ * @brief Create a Liga Task object and start freeRTOS task: Liga
+ *
+ */
+void createLigaTask() {
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        masterPrintln("start freeRTOS task: Liga");
+        }
+    #endif
+    xTaskCreate(ligaTask, "Liga", STACK_LIGA, NULL, PRIO_LIGA, &g_ligaHandle);
 }

@@ -6,6 +6,7 @@
 *.bin
 *.map
 *.dSYM/
+*.pem
 *.DS_Store
 # Ignoriere doxygen
 /build/

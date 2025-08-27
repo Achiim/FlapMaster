@@ -21,10 +21,12 @@
 #include <FlapGlobal.h>
 #include "RemoteControl.h"
 #include "Parser.h"
+#include "Liga.h"
 #include "FlapStatistics.h"
 #include "FlapRegistry.h"
 
 // Task Priorites
+#define PRIO_LIGA 6                                                             // Liga task
 #define PRIO_TWIN 5                                                             // Twin Tasks 0-n
 #define PRIO_REGISTRY 4                                                         // Registry Task
 #define PRIO_REPORT 3                                                           // Reportimg Task
@@ -33,6 +35,7 @@
 #define PRIO_STATISTICS 1                                                       // Statistics Task
 
 // Task Stack sizes
+#define STACK_LIGA 5632                                                         // Liga Task 22kB
 #define STACK_TWIN 3072                                                         // Twin Tasks 0-n
 #define STACK_REGISTRY 2536                                                     // Registry Task
 #define STACK_REPORT 2048                                                       // Reportimg Task
@@ -53,6 +56,7 @@
 
 // Global variables for RTOS task handles https://www.freertos.org/a00019.html#xTaskHandle
 extern TaskHandle_t g_remoteControlHandle;                                      // RTOS Task Handler
+extern TaskHandle_t g_ligaHandle;                                               // RTOS Task Handler
 extern TaskHandle_t g_parserHandle;                                             // RTOS Task Handler
 extern TaskHandle_t g_registryHandle;                                           // RTOS Task Handler
 extern TaskHandle_t g_reportHandle;                                             // RTOS Task Handler
@@ -68,6 +72,7 @@ extern RemoteControl*  Control;                                                 
 extern ParserClass*    Parser;                                                  // Parser class to filter key from remote control
 extern FlapRegistry*   Register;                                                // class for Registry Task
 extern FlapStatistics* DataEvaluation;                                          // class to collect and evaluate operation statistics
+extern LigaTable*      Liga;                                                    // class for Bundesliga
 
 // Global count down Timer-Handles
 extern TimerHandle_t shortScanTimer;                                            // ic2 scan in short modus

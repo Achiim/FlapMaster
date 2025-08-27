@@ -27,6 +27,7 @@
 // Global defines for RTOS task handles
 TaskHandle_t g_remoteControlHandle = nullptr;                                   // Task handlers https://www.freertos.org/a00019.html#xTaskHandle
 TaskHandle_t g_parserHandle        = nullptr;
+TaskHandle_t g_ligaHandle          = nullptr;
 TaskHandle_t g_registryHandle      = nullptr;
 TaskHandle_t g_reportHandle        = nullptr;
 TaskHandle_t g_statisticHandle     = nullptr;
@@ -38,6 +39,7 @@ QueueHandle_t g_parserQueue = nullptr;
 
 // Global Objects for Tasks
 RemoteControl*  Control        = nullptr;                                       // Remote Control with 21 keys
+LigaTable*      Liga           = nullptr;                                       // Object for Liga task
 ParserClass*    Parser         = nullptr;                                       // Parser to filter 21 keys and convert to twin commands
 FlapRegistry*   Register       = nullptr;                                       // Object for Registry Task
 FlapStatistics* DataEvaluation = nullptr;                                       // Object for Statistics Task
