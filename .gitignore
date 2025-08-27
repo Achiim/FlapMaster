@@ -7,8 +7,9 @@
 *.map
 *.dSYM/
 *.DS_Store
-platformio.ini
-# Ingnoriere doxygen
+# Ignoriere doxygen
 /build/
 # Ignoriere Symlink zur SharedLib
 lib/SharedLib/
+secret.h
+cert.all
