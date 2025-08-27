@@ -24,8 +24,16 @@
 void ligaTask(void* pvParameters) {
     Liga = new LigaTable();
     Liga->connect();
+    int season, group;
+    Liga->getSeasonAndGroup(season, group);                                     // get actual data
+
     while (true) {
-        Liga->fetch();
+        if (Liga->pollLastChange()) {
+            Liga->openLigaDBHealth();                                           // check if openLigaDB is online
+            Liga->tableChanged();                                               // has the table changed?
+            Liga->getNextMatch();                                               // get next match
+            Liga->getGoal();                                                    // get goal event
+        }
         vTaskDelay(pdMS_TO_TICKS(60000));                                       // Delay for 60s
     }
 }

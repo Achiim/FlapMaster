@@ -24,8 +24,14 @@
 class LigaTable {
    public:
     bool connect();                                                             // connect to external data provider for liga data
-    bool fetch();                                                               // get data from external provider
+    bool fetchTable();                                                          // get data from external provider
     bool disconnect();                                                          // disconnect from external data provider for liga data
+    void getNextMatch();
+    void openLigaDBHealth();
+    void getGoal();
+    void tableChanged();
+    bool pollLastChange();
+    bool getSeasonAndGroup(int& season, int& group);
 
     // Constructor for LigaTable
     LigaTable();
