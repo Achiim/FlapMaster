@@ -52,6 +52,13 @@ static const DfbMap DFB2[] = {
     // ggf. weitere Vereine später ergänzen (Rostock, Osnabrück, Wiesbaden, Sandhausen, Ulm …)
 };
 
+// Merker für adaptives Polling
+static String         s_lastChange;                                             // dein vorhandener ISO-String
+static time_t         s_lastChangeEpoch      = 0;                               // Epoch zum schnellen Vergleich
+static time_t         s_nextKickoffEpoch     = 0;                               // nächster Anstoß (Epoch UTC)
+static uint32_t       s_lastKickoffRefreshMs = 0;                               // wann zuletzt berechnet
+static const uint32_t KICKOFF_REFRESH_MS     = 300000;                          // 5 min
+
 // ----- Datentypen -----
 struct LiveGoalEvent {
     int    matchID = 0;
@@ -84,7 +91,7 @@ static MatchState* stateFor(int id) {
 }
 
 // Merker
-static String s_lastChange;                                                     // z.B. "2025-08-24T17:24:08.0000000Z"
+// static String s_lastChange;                                                     // z.B. "2025-08-24T17:24:08.0000000Z"
 
 static bool parseIsoZ(const String& s, struct tm& out) {                        // "YYYY-MM-DDTHH:MM:SSZ" (oder +00:00)
     if (s.length() < 19)
@@ -275,7 +282,13 @@ bool LigaTable::pollLastChange() {
         return false;
 
     ligaPrintln("LigaTable changed at %s please actualize", latest.c_str());
-    s_lastChange = latest;
+
+    time_t t = toUtcTimeT(latest);
+    if (t > 0)
+        s_lastChangeEpoch = t;                                                  // letzter Zeitpunkt des schnellen poll (während ein Spiel läuft)
+
+    s_lastChange = latest;                                                      // letzter Zeitpunkt des normalen poll (wenn kein Spiel läuft)
+
     return true;
 }
 
@@ -514,42 +527,56 @@ constexpr int W_SP    = 2;                                                      
 constexpr int W_DIFF  = 4;                                                      // -99..+99
 constexpr int W_PKT   = 3;                                                      // 0..99
 
-static void printBorder() {
-    auto dash = [](int w) {
-        for (int i = 0; i < w + 2; i++)
-            Serial.write('-');
-        Serial.write('+');
-    };
-    Serial.write('+');
-    dash(W_POS);
-    dash(W_TEAM);
-    dash(W_SHORT);
-    dash(W_DFB);
-    dash(W_SP);
-    dash(W_DIFF);
-    dash(W_PKT);
-    Serial.write('\r');
-    Serial.write('\n');
+static void printHeader() {
+    Serial.println("┌─────┬──────────────────────────┬────────────┬─────┬────┬────────────┐");
+    Serial.println("│ Pos │ Mannschaft               │ Name       │ DFB │ Sp │ Diff │ Pkt │");
+    Serial.println("├─────┼──────────────────────────┼────────────┼─────┼────┼────────────┤");
 }
 
-static void printHeader() {
-    printBorder();
-    Serial.print("| ");
-    printUtf8Cell("Pos", W_POS);
-    Serial.print(" | ");
-    printUtf8Cell("teamName", W_TEAM);
-    Serial.print(" | ");
-    printUtf8Cell("shortName", W_SHORT);
-    Serial.print(" | ");
-    printUtf8Cell("DFB", W_DFB);
-    Serial.print(" | ");
-    printUtf8Cell("Sp", W_SP);
-    Serial.print(" | ");
-    printUtf8Cell("Diff", W_DIFF);
-    Serial.print(" | ");
-    printUtf8Cell("Pkt", W_PKT);
-    Serial.println(" |");
-    printBorder();
+static void printFooter() {
+    Serial.println("└─────┴──────────────────────────┴────────────┴─────┴────┴────────────┘");
+}
+
+static void refreshNextKickoffEpoch() {
+    if (millis() - s_lastKickoffRefreshMs < KICKOFF_REFRESH_MS)
+        return;
+    s_lastKickoffRefreshMs = millis();
+
+    JsonDocument doc;                                                           // klein halten, kein Riesenfilter nötig
+    if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", doc))
+        return;
+    JsonArray arr = doc.as<JsonArray>();
+    if (arr.isNull() || arr.size() == 0)
+        return;
+
+    time_t nowT = time(nullptr);
+    time_t best = 0;
+    for (JsonObject m : arr) {
+        String dt = m["matchDateTimeUTC"] | m["MatchDateTimeUTC"] | m["matchDateTime"] | "";
+        if (dt.length() == 0)
+            continue;
+        time_t t = toUtcTimeT(dt);
+        if (t > nowT && (best == 0 || t < best))
+            best = t;
+    }
+    if (best)
+        s_nextKickoffEpoch = best;
+}
+
+uint32_t LigaTable::decidePollMs() {
+    refreshNextKickoffEpoch();
+    time_t nowT = time(nullptr);
+
+    // 10 min vor Anstoß: schneller
+    if (s_nextKickoffEpoch && (s_nextKickoffEpoch - nowT) <= 10 * 60) {
+        return 5000;                                                            // 5 s
+    }
+    // Während Live-Phase: in den letzten 15 min gab es Änderungen
+    if (s_lastChangeEpoch && (nowT - s_lastChangeEpoch) <= 15 * 60) {
+        return 3000;                                                            // 3 s
+    }
+    // Sonst gemütlich
+    return 60000;                                                               // 60 s
 }
 
 // ===== LigaTable: Implementierung =====
@@ -722,7 +749,7 @@ bool LigaTable::fetchTable() {
     }
 
     // Ausgabe
-    Serial.println(F("\r\nBundesliga-Tabelle (OpenLigaDB):"));
+    Serial.println(F("Bundesliga-Tabelle (OpenLigaDB):"));
     printHeader();
 
     uint16_t rank = 1;
@@ -742,25 +769,25 @@ bool LigaTable::fetchTable() {
 
         String dfb = dfbCodeForTeamStrict(teamName);                            // strikt: ggf. ""
 
-        Serial.print("| ");
+        Serial.print("│ ");
         Serial.printf("%*u", W_POS, rank);
-        Serial.print(" | ");
+        Serial.print(" │ ");
         printUtf8Cell(teamName, W_TEAM);
-        Serial.print(" | ");
+        Serial.print(" │ ");
         printUtf8Cell(shortName, W_SHORT);
-        Serial.print(" | ");
+        Serial.print(" │ ");
         printUtf8Cell(dfb.c_str(), W_DFB);
-        Serial.print(" | ");
+        Serial.print(" │ ");
         Serial.printf("%*d", W_SP, matches);
-        Serial.print(" | ");
+        Serial.print(" │ ");
         Serial.printf("%*d", W_DIFF, goalDiff);
-        Serial.print(" | ");
+        Serial.print(" │ ");
         Serial.printf("%*d", W_PKT, points);
-        Serial.println(" |");
+        Serial.println(" │");
 
         rank++;
     }
-    printBorder();
+    printFooter();
 
     http.end();
     client.stop();                                                              // explizit schließen

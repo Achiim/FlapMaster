@@ -47,7 +47,7 @@ FlapReporting::FlapReporting() {}
 // trace print I2C usage statistic
 void FlapReporting::reportI2CStatistic() {
     if (DataEvaluation == nullptr) {
-        #ifdef MASTERVERBOSE
+        #ifdef ERRORVERBOSE
             Serial.println("reportingTask(): DataEvaluation not available!");
         #endif
         return;

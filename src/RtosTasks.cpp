@@ -24,8 +24,6 @@
 void ligaTask(void* pvParameters) {
     Liga = new LigaTable();
     Liga->connect();
-    int season, group;
-    Liga->getSeasonAndGroup(season, group);                                     // get actual data
 
     while (true) {
         if (Liga->pollLastChange()) {
@@ -34,7 +32,7 @@ void ligaTask(void* pvParameters) {
             Liga->getNextMatch();                                               // get next match
             Liga->getGoal();                                                    // get goal event
         }
-        vTaskDelay(pdMS_TO_TICKS(60000));                                       // Delay for 60s
+        vTaskDelay(pdMS_TO_TICKS(Liga->decidePollMs()));                        // dynamic Delay depending on current game or not
     }
 }
 
