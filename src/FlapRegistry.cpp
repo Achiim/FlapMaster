@@ -19,6 +19,7 @@
 #include <freertos/timers.h>                                                    // Real Time OS time
 #include "i2cMaster.h"
 #include "SlaveTwin.h"
+#include "Parser.h"
 #include "FlapRegistry.h"
 #include "RtosTasks.h"
 #include "FlapTasks.h"
@@ -527,7 +528,7 @@ bool FlapRegistry::sendToIndex(int idx, const TwinCommand& cmd) const {
     #ifdef REGISTRYVERBOSE
         {
         TraceScope trace;
-        registerPrintln("send Twin_Command: %s to Twin 0x%02x", twinCommandToString(cmd.twinCommand), addr);
+        registerPrintln("send Twin_Command: %s to Twin 0x%02x", Parser->twinCommandToString(cmd.twinCommand), addr);
         registerPrintln("send Twin_Parameter: %d to Twin 0x%02x", cmd.twinParameter, addr);
         }
     #endif
@@ -542,12 +543,12 @@ bool FlapRegistry::sendToIndex(int idx, const TwinCommand& cmd) const {
  * @param cmd
  */
 void FlapRegistry::sendToAll(const TwinCommand& cmd) const {
-    forEachRegisteredIdx([&](int idx, I2Caddress /*addr*/) {
+    forEachRegisteredIdx([&](int idx, I2Caddress addr) {
         Twin[idx]->sendQueue(cmd);
         #ifdef REGISTRYVERBOSE
             {
             TraceScope trace;
-            registerPrintln("send Twin_Command: %s to Twin 0x%02x", twinCommandToString(cmd.twinCommand), addr);
+            registerPrintln("send Twin_Command: %s to Twin 0x%02x", Parser->twinCommandToString(cmd.twinCommand), addr);
             registerPrintln("send Twin_Parameter: %d to Twin 0x%02x", cmd.twinParameter, addr);
             }
         #endif

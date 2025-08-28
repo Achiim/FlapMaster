@@ -22,13 +22,25 @@
  * @param pvParameters
  */
 void ligaTask(void* pvParameters) {
+    int           season   = 0;
+    int           matchday = 0;
+    ReportCommand repCmd;
+
     Liga = new LigaTable();
-    Liga->connect();
+    Liga->connect();                                                            // connect to openLigaDB
 
     while (true) {
-        if (Liga->pollLastChange()) {
+        if (Liga->pollLastChange(&season, &matchday)) {
+            LigaSnapshot snap;                                                  // snapshot of table
+            snap.clear();                                                       // clear snapshot
+            Liga->fetchTable(snap);                                             // fill snapshot
+            Liga->commit(snap);                                                 // Commit snapshot LigaTable (double-buffer flip)
+            repCmd.repCommand   = REPORT_LIGA_TABLE;
+            repCmd.responsQueue = nullptr;
+            if (g_reportQueue)                                                  // Trigger trace snapshot
+                xQueueOverwrite(g_reportQueue, &repCmd);
+
             Liga->openLigaDBHealth();                                           // check if openLigaDB is online
-            Liga->tableChanged();                                               // has the table changed?
             Liga->getNextMatch();                                               // get next match
             Liga->getGoal();                                                    // get goal event
         }
@@ -197,12 +209,12 @@ void reportTask(void* pvParameters) {
     Key21          receivedKey;
     ReportCommands receivedCmd;
 
-    FlapReporting* Reports;                                                     // create object for task
-    g_reportQueue = xQueueCreate(1, sizeof(ReportCommand));                     // Create task Queue
+    FlapReporting* Reports = new FlapReporting();                               // create instance for object
+    g_reportQueue          = xQueueCreate(1, sizeof(ReportCommands));           // Create task Queue
 
     while (true) {
         if (xQueueReceive(g_reportQueue, &receivedCmd, portMAX_DELAY)) {        // wait for Queue message
-            Reports->reportPrintln("======== Flap Master Health Overview ========"); // Report Header
+            Reports->reportPrintln("======== Flap Master Report ========");     // Report Header
             if (receivedCmd == REPORT_TASKS_STATUS)
                 Reports->reportTaskStatus();                                    // uptime and scheduled scans
             if (receivedCmd == REPORT_MEMORY)
@@ -214,9 +226,11 @@ void reportTask(void* pvParameters) {
             if (receivedCmd == REPORT_REGISTRY)
                 Reports->reportSlaveRegistry();                                 // show registry
             if (receivedCmd == REPORT_I2C_STATISTIC)
-                Reports->reportI2CStatistic();                                  // shoe I2C usage
+                Reports->reportI2CStatistic();                                  // show I2C usage
+            if (receivedCmd == REPORT_LIGA_TABLE)
+                Reports->reportLigaTable();                                     // show liga tabelle
+            Reports->reportPrintln("======== Flap Master Report End ====");
         }
-        Reports->reportPrintln("======== Flap Master Health Overview End ====");
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }

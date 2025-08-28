@@ -9,28 +9,26 @@
 #include "secret.h"                                                             // const char* ssid, const char* password
 #include "cert.all"                                                             // certificate for https with OpenLigaDB
 
-// ===== DFB/DFL 3-Letter Mapping (strict; kein Fallback/keine Heuristik) =====
-static String normKey(String s) {
-    s.trim();
-    s.replace("\xC2\xA0", " ");                                                 // NBSP -> Space
-    s.replace("ä", "ae");
-    s.replace("ö", "oe");
-    s.replace("ü", "ue");
-    s.replace("Ä", "AE");
-    s.replace("Ö", "OE");
-    s.replace("Ü", "UE");
-    s.replace("ß", "ss");
-    s.replace("-", " ");
-    s.replace(".", " ");
-    while (s.indexOf("  ") >= 0)
-        s.replace("  ", " ");
-    s.toUpperCase();
-    return s;
-}
-
 struct DfbMap {
     const char* key;
     const char* code;
+};
+
+// ----- Datentypen -----
+struct LiveGoalEvent {
+    int    matchID = 0;
+    String kickOffUTC;                                                          // Spiel-Anstoß (UTC)
+    String goalTimeUTC;                                                         // Zeitpunkt des Goals (aus lastUpdate / Konstrukt)
+    int    minute = -1;
+    int    score1 = 0, score2 = 0;
+    String team1, team2, scorer;
+    bool   isPenalty = false, isOwnGoal = false, isOvertime = false;
+};
+
+// Merker pro Spiel (höchste gesehene goalID)
+struct MatchState {
+    int matchID;
+    int lastGoalID;
 };
 
 // 1. Bundesliga
@@ -59,22 +57,6 @@ static time_t         s_nextKickoffEpoch     = 0;                               
 static uint32_t       s_lastKickoffRefreshMs = 0;                               // wann zuletzt berechnet
 static const uint32_t KICKOFF_REFRESH_MS     = 300000;                          // 5 min
 
-// ----- Datentypen -----
-struct LiveGoalEvent {
-    int    matchID = 0;
-    String kickOffUTC;                                                          // Spiel-Anstoß (UTC)
-    String goalTimeUTC;                                                         // Zeitpunkt des Goals (aus lastUpdate / Konstrukt)
-    int    minute = -1;
-    int    score1 = 0, score2 = 0;
-    String team1, team2, scorer;
-    bool   isPenalty = false, isOwnGoal = false, isOvertime = false;
-};
-
-// Merker pro Spiel (höchste gesehene goalID)
-struct MatchState {
-    int matchID;
-    int lastGoalID;
-};
 static MatchState s_state[40];                                                  // reicht für einen Spieltag
 static size_t     s_stateN = 0;
 
@@ -89,9 +71,6 @@ static MatchState* stateFor(int id) {
     }
     return nullptr;
 }
-
-// Merker
-// static String s_lastChange;                                                     // z.B. "2025-08-24T17:24:08.0000000Z"
 
 static bool parseIsoZ(const String& s, struct tm& out) {                        // "YYYY-MM-DDTHH:MM:SSZ" (oder +00:00)
     if (s.length() < 19)
@@ -147,10 +126,10 @@ static String nowUTC_ISO() {
     return String(buf);
 }
 
-// Dein vorhandener HTTPS-JSON-Helper (gleiche TLS-Konfig wie in fetch())
+// ----- Kernfunktion -----
+// foreward declaration
 static bool httpGetJson(const char* url, JsonDocument& doc);
 
-// ----- Kernfunktion -----
 // Sammelt ALLE neuen Tore über alle aktuell laufenden BL1-Spiele.
 // Rückgabe = Anzahl neuer Tore; schreibt sie in 'out[0..n)'.
 size_t collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
@@ -259,15 +238,23 @@ bool LigaTable::getSeasonAndGroup(int& season, int& group) {
 }
 
 // pollLastChange: vergleicht aktuellen und letzter Spieltag, nimmt den neueren Änderungszeitpunkt
-bool LigaTable::pollLastChange() {
+bool LigaTable::pollLastChange(int* seasonOut, int* matchdayOut) {
     int season = 0, group = 0;
     if (!getSeasonAndGroup(season, group))
         return false;
 
+    // Season/Matchday immer nach außen geben & intern merken
+    if (seasonOut)
+        *seasonOut = season;
+    if (matchdayOut)
+        *matchdayOut = group;
+    _currentSeason   = season;                                                  // Saison
+    _currentMatchDay = group;                                                   // match day
+
     String lcCur, lcPrev;
-    if (!getLastChange(season, group, lcCur))
+    if (!getLastChange(season, group, lcCur))                                   // last change of current matchday
         lcCur = "";
-    if (group > 1 && !getLastChange(season, group - 1, lcPrev))
+    if (group > 1 && !getLastChange(season, group - 1, lcPrev))                 // last change of previous matchday
         lcPrev = "";
 
     if (lcCur.isEmpty() && lcPrev.isEmpty())
@@ -309,7 +296,7 @@ static bool waitForTime(uint32_t maxMs = 15000) {
 }
 
 static String dfbCodeForTeamStrict(const String& teamName) {
-    String key = normKey(teamName);
+    String key;
     for (auto& e : DFB1)
         if (key == e.key)
             return e.code;
@@ -493,39 +480,69 @@ static ApiHealth checkOpenLigaDB(unsigned timeoutMs = 5000) {
     return {true, 200, int(millis() - t0), "UP", "OK"};
 }
 
-// ===== UTF-8-Ausrichtung (Umlaute korrekt, exakt width Spalten) =====
-static void printUtf8Cell(const char* s, int width) {
-    const uint8_t* p   = (const uint8_t*)s;
-    const uint8_t* end = p;
-    int            cps = 0;
-    while (*p && cps < width) {
-        uint8_t c = *p;
-        if ((c & 0x80) == 0x00)
-            p += 1;
-        else if ((c & 0xE0) == 0xC0)
-            p += 2;
-        else if ((c & 0xF0) == 0xE0)
-            p += 3;
-        else if ((c & 0xF8) == 0xF0)
-            p += 4;
-        else
-            p += 1;
-        cps++;
-        end = p;                                                                // end nach dem Vorrücken setzen
+// -------------------- Helpers (safe strings) --------------------
+// sichere NUL-terminierende Kopie (falls du sie im Fetch nutzt)
+static inline void copy_str_bounded(char* dst, size_t dst_sz, const char* src) {
+    if (!dst || dst_sz == 0)
+        return;
+    if (!src) {
+        dst[0] = '\0';
+        return;
     }
-    Serial.write((const char*)s, (size_t)(end - (const uint8_t*)s));
-    for (int i = cps; i < width; ++i)
-        Serial.write(' ');
+    size_t i = 0;
+    for (; i + 1 < dst_sz && src[i] != '\0'; ++i)
+        dst[i] = src[i];
+    dst[i] = '\0';
 }
 
-// Kompakte Spaltenbreiten
-constexpr int W_POS   = 3;                                                      // 1..18
-constexpr int W_TEAM  = 24;                                                     // z. B. „Borussia Mönchengladbach“
-constexpr int W_SHORT = 10;                                                     // „Union Berlin“ ggf. gekürzt
-constexpr int W_DFB   = 3;                                                      // 3-Letter
-constexpr int W_SP    = 2;                                                      // Spiele (1..34)
-constexpr int W_DIFF  = 4;                                                      // -99..+99
-constexpr int W_PKT   = 3;                                                      // 0..99
+// ---- UTF-8 bounded print: schneidet an Zeichen-Grenzen & liest nie > maxBytes ----
+static inline bool isUtf8Cont(uint8_t b) {
+    return (b & 0xC0) == 0x80;
+}
+static inline size_t safe_strnlen_(const char* s, size_t maxb) {
+    if (!s)
+        return 0;
+    size_t n = 0;
+    while (n < maxb && s[n] != '\0')
+        n++;
+    return n;
+}
+
+static void printUtf8PaddedBounded(const char* s, size_t maxBytes, size_t cols) {
+    const char* p = s ? s : "";
+    size_t      n = safe_strnlen_(p, maxBytes);                                 // nie über den Feldpuffer hinaus
+    size_t      i = 0, printed = 0;
+    while (i < n && printed < cols) {
+        uint8_t c    = (uint8_t)p[i];
+        size_t  step = 1;
+        if ((c & 0x80) == 0x00)
+            step = 1;
+        else if ((c & 0xE0) == 0xC0)
+            step = 2;
+        else if ((c & 0xF0) == 0xE0)
+            step = 3;
+        else if ((c & 0xF8) == 0xF0)
+            step = 4;
+
+        // validiere Fortsetzungsbytes innerhalb n
+        if (i + step > n)
+            step = 1;
+        else {
+            for (size_t k = 1; k < step; k++)
+                if (!isUtf8Cont((uint8_t)p[i + k])) {
+                    step = 1;
+                    break;
+                }
+        }
+
+        for (size_t k = 0; k < step && (i + k) < n; k++)
+            Serial.write((uint8_t)p[i + k]);
+        i += step;
+        printed += 1;
+    }
+    for (; printed < cols; ++printed)
+        Serial.write(' ');
+}
 
 static void printHeader() {
     Serial.println("┌─────┬──────────────────────────┬────────────┬─────┬────┬────────────┐");
@@ -579,10 +596,33 @@ uint32_t LigaTable::decidePollMs() {
     return 60000;                                                               // 60 s
 }
 
-// ===== LigaTable: Implementierung =====
+// ===== LigaTable: Constructor =====
 LigaTable::LigaTable() {
-    // Berlin: CET/CEST
-    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov"); // synch time
+    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov"); // synch time .. Berlin: CET/CEST
+
+    buf_[0].clear();                                                            // clear both snapshot buffer
+    buf_[1].clear();
+    active_.store(0, std::memory_order_relaxed);
+}
+
+// Writer (LigaTask) calls this after fully building a new snapshot.
+void LigaTable::commit(const LigaSnapshot& s) {
+    uint8_t cur  = active_.load(std::memory_order_relaxed);
+    uint8_t next = 1 - cur;
+    buf_[next]   = s;                                                           // full copy into the inactive buffer
+    active_.store(next, std::memory_order_release);                             // Publish with release semantics so reader sees a fully written snapshot.
+}
+
+// Reader (ReportTask) obtains a copy of the currently active snapshot.
+void LigaTable::get(LigaSnapshot& out) const {
+    uint8_t idx = active_.load(std::memory_order_acquire);
+    out         = buf_[idx];
+}
+
+// Useful for boot/first-run logic in ReportTask.
+bool LigaTable::hasSnapshot() const {
+    uint8_t idx = active_.load(std::memory_order_acquire);
+    return buf_[idx].teamCount > 0;
 }
 
 void LigaTable::openLigaDBHealth() {
@@ -594,26 +634,27 @@ void LigaTable::openLigaDBHealth() {
         ligaPrintln("OpenLigaDB Zeit nicht synchron - TLS kann scheitern");
     }
     ApiHealth h = checkOpenLigaDB(5000);
-    ligaPrintln("openLigaDB - Status: %s (http=%d, %d ms) %s\n", h.status.c_str(), h.httpCode, h.elapsedMs, h.detail.c_str());
+    ligaPrintln("openLigaDB - Status: %s (http=%d, %d ms) %s", h.status.c_str(), h.httpCode, h.elapsedMs, h.detail.c_str());
 }
 
 void LigaTable::getNextMatch() {
     NextMatch nm;
 
     if (WiFi.status() != WL_CONNECTED && !connect()) {
-        Serial.println("[NextMatch] WLAN down");
+        ligaPrintln("(getNextMatch)  WLAN down");
         return;
     }
     if (!waitForTime()) {
-        Serial.println("[NextMatch] Zeit nicht synchron - Ergebnis evtl. falsch");
+        ligaPrintln("(getNextMatch)  Zeit nicht synchron - Ergebnis evtl. falsch");
     }
 
     if (getNextUpcomingBL1(nm)) {
-        Serial.printf("Saison %d, Spieltag %d:\n", nm.season, nm.group);
-        Serial.printf("Nächstes Spiel (BL1): %s\n", nm.dateUTC.c_str());
-        Serial.printf("Begegnung: %s (%s) vs. %s (%s)\n", nm.team1.c_str(), nm.team1Short.c_str(), nm.team2.c_str(), nm.team2Short.c_str());
+        ligaPrint("(getNextMatch) Saison %d, Spieltag %d:", nm.season, nm.group);
+        Serial.printf(" Nächstes Spiel (BL1): %s\n", nm.dateUTC.c_str());
+        ligaPrintln("(getNextMatch) Begegnung: %s (%s) vs. %s (%s)", nm.team1.c_str(), nm.team1Short.c_str(), nm.team2.c_str(),
+                    nm.team2Short.c_str());
     } else {
-        Serial.println("Kein zukünftiges Spiel gefunden (Saison evtl. vorbei oder API down).");
+        ligaPrintln("(getNextMatch) Kein zukünftiges Spiel gefunden (Saison evtl. vorbei oder API down).");
     }
 }
 
@@ -635,21 +676,25 @@ bool LigaTable::connect() {
     return true;
 }
 
-bool LigaTable::fetchTable() {
+// --- Implementation: LigaTable::fetchTable (builds the snapshot) -------------
+bool LigaTable::fetchTable(LigaSnapshot& out) {
+    // Ensure WiFi is up (reuse your existing helpers)
     if (WiFi.status() != WL_CONNECTED && !connect()) {
         ligaPrintln("OpenLigaDB WLAN down");
         return false;
     }
     if (!waitForTime()) {
-        ligaPrintln("OpenLigaDB Zeit nicht synchron - TLS kann scheitern");
+        // TLS may fail without a correct clock, but we try anyway
+        ligaPrintln("OpenLigaDB time not synced - TLS may fail");
     }
+
     WiFiClientSecure client = makeSecureClient();
     HTTPClient       http;
     http.setReuse(false);
     http.setConnectTimeout(8000);
     http.setTimeout(8000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.useHTTP10(true);                                                       // vermeidet chunked
+    http.useHTTP10(true);                                                       // avoid chunked if possible
     http.setUserAgent("ESP32-Flap/1.0");
     http.addHeader("Accept", "application/json");
     http.addHeader("Accept-Encoding", "identity");
@@ -657,140 +702,106 @@ bool LigaTable::fetchTable() {
     http.collectHeaders(hdrs, 3);
 
     if (!http.begin(client, apiURL)) {
-        ligaPrintln("http.begin() fehlgeschlagen");
+        ligaPrintln("http.begin() failed");
         return false;
     }
-    int code = http.GET();
+
+    const int code = http.GET();
     if (code != HTTP_CODE_OK) {
-        ligaPrintln("Fehler beim Abrufen: %d\r\n", code);
+        ligaPrintln("HTTP GET failed: %d", code);
         http.end();
         return false;
     }
 
-    // komplett einlesen (funktioniert auch bei chunked)
-    int    len = http.getSize();
-    String payload;
-    if (len > 0) {
-        payload.reserve(len);
-        WiFiClient* s = http.getStreamPtr();
-        while (len > 0) {
-            uint8_t buf[256];
-            int     n = s->read(buf, (len > 256) ? 256 : len);
-            if (n <= 0) {
-                delay(1);
-                continue;
-            }
-            payload.concat(String((const char*)buf).substring(0, n));           // simpel, kostet etwas CPU/RAM
-            len -= n;
-        }
-    } else {
-        payload = http.getString();                                             // Fallback (chunked)
+    // Parse JSON directly from the HTTP stream to avoid building a big String
+    Stream* s = http.getStreamPtr();
+
+    // Skip UTF-8 BOM if present
+    if (s && s->peek() == 0xEF) {
+        uint8_t bom[3];
+        s->readBytes(bom, 3);
     }
 
-    if (payload.isEmpty()) {
-        const size_t MAX_BYTES = 65536;
-        Stream&      s         = http.getStream();
-        uint32_t     t0        = millis();
-        while ((millis() - t0) < 10000) {
-            while (s.available()) {
-                payload += (char)s.read();
-                if (payload.length() >= MAX_BYTES)
-                    break;
-            }
-            const size_t MAX_BYTES = 65536;
-            Stream&      s         = http.getStream();
-            uint32_t     t0 = millis(), last = t0;
-            size_t       lastSize = payload.length();
-            while (millis() - t0 < 10000) {                                     // 10 s Gesamt-Timeout
-                while (s.available()) {
-                    char c = (char)s.read();
-                    payload += c;
-                    if (payload.length() >= MAX_BYTES)
-                        break;
-                    last = millis();
-                }
-                // Kein weiterer Fortschritt seit 250 ms? -> fertig.
-                if (millis() - last > 250)
-                    break;
-                delay(1);
-                if (payload.length() >= MAX_BYTES)
-                    break;
-            }
-            delay(1);
-            if (payload.length() >= MAX_BYTES)
-                break;
-        }
-    }
-
-    // BOM + Whitespace
-    if (payload.length() >= 3 && (uint8_t)payload[0] == 0xEF && (uint8_t)payload[1] == 0xBB && (uint8_t)payload[2] == 0xBF)
-        payload.remove(0, 3);
-    payload.trim();
-
-    if (!payload.startsWith("[") && !payload.startsWith("{")) {
-        ligaPrintln("Antwort ist kein JSON - bitte apiURL prüfen");
-        http.end();
-        return false;
-    }
-
-    JsonDocument         doc;
-    DeserializationError err = deserializeJson(doc, payload);
+    JsonDocument         doc;                                                   // dynamic document (ArduinoJson 7); scope-limited to this function
+    DeserializationError err = deserializeJson(doc, *s);
     if (err) {
-        ligaPrintln(String("Fehler beim JSON-Parsen: ") + err.c_str());
+        ligaPrintln("JSON parse error: %s", err.c_str());
         http.end();
         return false;
     }
 
-    JsonArray arr = doc.as<JsonArray>();
+    // Accept either an array of teams or an object containing an array
+    JsonArray arr;
+    if (doc.is<JsonArray>()) {
+        arr = doc.as<JsonArray>();
+    } else if (doc.is<JsonObject>()) {
+        JsonObject obj = doc.as<JsonObject>();
+        // Try common keys used by OpenLigaDB variants
+        if (obj["table"].is<JsonArray>())
+            arr = obj["table"].as<JsonArray>();
+        else if (obj["Table"].is<JsonArray>())
+            arr = obj["Table"].as<JsonArray>();
+        else if (obj["rows"].is<JsonArray>())
+            arr = obj["rows"].as<JsonArray>();
+    }
+
     if (arr.isNull()) {
-        ligaPrintln("Unerwartetes JSON-Format - Array erwartet");
+        ligaPrintln("Unexpected JSON format - array of teams expected");
         http.end();
         return false;
     }
 
-    // Ausgabe
-    Serial.println(F("Bundesliga-Tabelle (OpenLigaDB):"));
-    printHeader();
+    // Build the compact snapshot
+    LigaSnapshot snap;                                                          // local temp; we only expose the compact POD
+    snap.clear();
+    snap.fetchedAtUTC = (uint32_t)(millis() / 1000);
+
+    // Take over season and matchday from poll
+    snap.season   = Liga->_currentSeason;
+    snap.matchday = Liga->_currentMatchDay;
 
     uint16_t rank = 1;
     for (JsonObject team : arr) {
+        if (snap.teamCount >= LIGA_MAX_TEAMS)
+            break;                                                              // safety bound
+
         const char* teamName  = team["teamName"] | team["TeamName"] | "";
         const char* shortName = team["shortName"] | team["ShortName"] | "";
 
-        int won  = team["won"] | 0;
-        int draw = team["draw"] | 0;
-        int lost = team["lost"] | 0;
+        // Numeric fields with robust fallbacks
+        int won  = team["won"] | team["Won"] | 0;
+        int draw = team["draw"] | team["Draw"] | 0;
+        int lost = team["lost"] | team["Lost"] | 0;
         int gf   = team["goals"] | team["Goals"] | 0;
         int ga   = team["opponentGoals"] | team["OpponentGoals"] | 0;
 
-        int matches  = team["matches"] | (won + draw + lost);
+        int matches  = team["matches"] | team["Matches"] | (won + draw + lost);
         int goalDiff = team["goalDiff"] | team["GoalDiff"] | (gf - ga);
         int points   = team["points"] | team["Points"] | team["pts"] | 0;
 
-        String dfb = dfbCodeForTeamStrict(teamName);                            // strikt: ggf. ""
+        // Map DFB code using your existing helper
+        String dfb = dfbCodeForTeamStrict(teamName);                            // may return ""
 
-        Serial.print("│ ");
-        Serial.printf("%*u", W_POS, rank);
-        Serial.print(" │ ");
-        printUtf8Cell(teamName, W_TEAM);
-        Serial.print(" │ ");
-        printUtf8Cell(shortName, W_SHORT);
-        Serial.print(" │ ");
-        printUtf8Cell(dfb.c_str(), W_DFB);
-        Serial.print(" │ ");
-        Serial.printf("%*d", W_SP, matches);
-        Serial.print(" │ ");
-        Serial.printf("%*d", W_DIFF, goalDiff);
-        Serial.print(" │ ");
-        Serial.printf("%*d", W_PKT, points);
-        Serial.println(" │");
+        // Fill row
+        LigaRow& r = snap.rows[snap.teamCount];
+        r.pos      = (uint8_t)rank;
+        r.sp       = (uint8_t)max(0, min(99, matches));
+        r.diff     = (int8_t)max(-99, min(99, goalDiff));
+        r.pkt      = (uint8_t)max(0, min(255, points));
 
+        copy_str_bounded(r.team, sizeof(r.team), teamName);
+        copy_str_bounded(r.shortName, sizeof(r.shortName), shortName);
+        copy_str_bounded(r.dfb, sizeof(r.dfb), dfb.c_str());
+
+        snap.teamCount++;
         rank++;
     }
-    printFooter();
+
+    // Output the result to caller without exposing any JSON object
+    out = snap;
 
     http.end();
-    client.stop();                                                              // explizit schließen
+    client.stop();                                                              // explicitly close
     return true;
 }
 
@@ -806,8 +817,4 @@ void LigaTable::getGoal() {
         }
         // -> hier: Flap-Animation, Buzzer, etc.
     }
-}
-
-void LigaTable::tableChanged() {
-    fetchTable();                                                               // get table
 }

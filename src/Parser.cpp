@@ -469,7 +469,7 @@ ReportCommand ParserClass::mapEvent2Report(ClickEvent event) {
             break;
         }
         case Key21::KEY_7: {
-            cmd.repCommand = REPORT_NO_COMMAND;
+            cmd.repCommand = REPORT_LIGA_TABLE;
             return cmd;
             break;
         }

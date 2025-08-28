@@ -43,6 +43,167 @@ const char* FlapReporting::SPARKLINE_LEVELS[] = {u8"▁", u8"▂", u8"▃", u8"�
  */
 FlapReporting::FlapReporting() {}
 
+// trace liga tabelle
+void FlapReporting::reportLigaTable() {
+    LigaSnapshot snap;                                                          // local copy of liga table (small)
+    Liga->get(snap);
+    renderLigaTable(snap);
+};
+
+// ==== UTF-8 helpers: crop by code points (not bytes), pad with spaces ====
+static inline bool isUtf8Cont(uint8_t b) {
+    return (b & 0xC0) == 0x80;
+}
+
+// returns number of BYTES you may keep to get at most `maxCols` code points
+static size_t utf8_prefix_bytes_for_cols(const char* s, size_t maxCols) {
+    size_t bytes = 0, cols = 0;
+    while (s[bytes] && cols < maxCols) {
+        uint8_t c    = (uint8_t)s[bytes];
+        size_t  step = 1;
+        if ((c & 0x80) == 0x00)
+            step = 1;                                                           // ASCII
+        else if ((c & 0xE0) == 0xC0)
+            step = 2;                                                           // 2-byte
+        else if ((c & 0xF0) == 0xE0)
+            step = 3;                                                           // 3-byte
+        else if ((c & 0xF8) == 0xF0)
+            step = 4;                                                           // 4-byte
+        else {
+            step = 1;
+        }                                                                       // fallback
+        // avoid cutting inside multi-byte sequence
+        for (size_t k = 1; k < step; ++k) {
+            if (s[bytes + k] == '\0' || !isUtf8Cont((uint8_t)s[bytes + k])) {
+                step = 1;
+                break;                                                          // broken sequence: treat as single
+            }
+        }
+        // advance
+        bytes += step;
+        cols += 1;
+    }
+    return bytes;
+}
+
+// print cropped (by code points) and right-pad to `cols` with spaces
+static void printUtf8Padded(const char* s, size_t cols) {
+    if (!s)
+        s = "";
+    size_t keep = utf8_prefix_bytes_for_cols(s, cols);
+
+    // print safe prefix
+    for (size_t i = 0; i < keep; ++i)
+        Serial.write((uint8_t)s[i]);
+
+    // count printed code points for correct padding
+    size_t count = 0;
+    for (size_t i = 0; i < keep;) {
+        uint8_t c    = (uint8_t)s[i];
+        size_t  step = 1;
+        if ((c & 0x80) == 0x00)
+            step = 1;
+        else if ((c & 0xE0) == 0xC0)
+            step = 2;
+        else if ((c & 0xF0) == 0xE0)
+            step = 3;
+        else if ((c & 0xF8) == 0xF0)
+            step = 4;
+        count++;
+        i += step;
+    }
+
+    // pad spaces to fill the column
+    for (size_t i = count; i < cols; ++i)
+        Serial.write(' ');
+}
+
+static inline void printUIntRight(unsigned v, int width) {
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%*u", width, v);
+    Serial.print(buf);
+}
+static inline void printIntRight(int v, int width) {
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%*d", width, v);
+    Serial.print(buf);
+}
+
+// returns number of code points in the first `nbytes` (for padding)
+static size_t utf8_count_codepoints(const char* s, size_t nbytes) {
+    size_t cols = 0;
+    for (size_t i = 0; i < nbytes;) {
+        uint8_t c    = (uint8_t)s[i];
+        size_t  step = 1;
+        if ((c & 0x80) == 0x00)
+            step = 1;
+        else if ((c & 0xE0) == 0xC0)
+            step = 2;
+        else if ((c & 0xF0) == 0xE0)
+            step = 3;
+        else if ((c & 0xF8) == 0xF0)
+            step = 4;
+        cols++;
+        i += step;
+    }
+    return cols;
+}
+
+static void printIntRight(int v, uint8_t width) {
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%*d", width, v);
+    Serial.print(buf);
+}
+
+static void printLigaHeader() {
+    Serial.println("┌─────┬──────────────────────────┬────────────┬─────┬────┬──────┬─────┐");
+    Serial.println("│ Pos │ Mannschaft               │ Name       │ DFB │ Sp │ Diff │ Pkt │");
+    Serial.println("├─────┼──────────────────────────┼────────────┼─────┼────┼──────┼─────┤");
+}
+
+static void printLigaFooter() {
+    Serial.println("└─────┴──────────────────────────┴────────────┴─────┴────┴──────┴─────┘");
+}
+
+// ==== Rendering: nur die Zeilen, Header/Footer ===================
+void FlapReporting::printTableRow(const LigaRow& r) {
+    // Spalten: │ Pos │ Mannschaft │ Name │ DFB │ Sp │ Diff │ Pkt │
+    Serial.print("│ ");
+    Serial.printf("%*u", W_POS, r.pos);
+    Serial.print(" │ ");
+    printUtf8Padded(r.team, W_TEAM);
+    Serial.print(" │ ");
+    printUtf8Padded(r.shortName, W_SHORT);
+    Serial.print(" │ ");
+    printUtf8Padded(r.dfb, W_DFB);
+    Serial.print(" │ ");
+    Serial.printf("%*u", W_SP, r.sp);
+    Serial.print(" │ ");
+    Serial.printf("%*d", W_DIFF, (int)r.diff);                                  // signed!
+    Serial.print(" │ ");
+    Serial.printf("%*u", W_PKT, r.pkt);
+    Serial.println(" │");
+}
+
+// Beispiel-Verwendung mit deinen Header/Footer (unverändert):
+void FlapReporting::renderLigaTable(const LigaSnapshot& s) {
+    if (s.teamCount == 0) {
+        Serial.println(F("(Liga) No data available."));
+        return;
+    }
+
+    Serial.print(F("Bundesliga Table: Season "));
+    Serial.print(s.season);
+    Serial.print(F(", Matchday "));
+    Serial.println(s.matchday);
+
+    printLigaHeader();                                                          // UTF-8 Kopfzeile
+    for (uint8_t i = 0; i < s.teamCount; ++i) {
+        printTableRow(s.rows[i]);                                               // Row
+    }
+    printLigaFooter();                                                          // UTF-8 Fußzeile
+}
+
 // -----------------------------------
 // trace print I2C usage statistic
 void FlapReporting::reportI2CStatistic() {
@@ -210,26 +371,29 @@ void FlapReporting::reportRtosTasks() {
         Serial.println(buffer);
     };
 
-    // Aktuelle Task (ReportingTask)
-    printTaskInfo(pcTaskGetName(NULL), uxTaskGetStackHighWaterMark(NULL), STACK_REPORT, PRIO_REPORT);
-
-    // Weitere registrierte Tasks
-    if (g_remoteControlHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_remoteControlHandle), uxTaskGetStackHighWaterMark(g_remoteControlHandle), STACK_REMOTE, PRIO_REMOTE);
-
-    if (g_parserHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_parserHandle), uxTaskGetStackHighWaterMark(g_parserHandle), STACK_PARSER, PRIO_PARSER);
-
-    if (g_registryHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_registryHandle), uxTaskGetStackHighWaterMark(g_registryHandle), STACK_REGISTRY, PRIO_REGISTRY);
-
-    if (g_statisticHandle != nullptr)
-        printTaskInfo(pcTaskGetName(g_statisticHandle), uxTaskGetStackHighWaterMark(g_statisticHandle), STACK_STATISTICS, PRIO_STATISTICS);
+    // registrierte Tasks nach Priorität absteigend gelistet
+    if (g_ligaHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_ligaHandle), uxTaskGetStackHighWaterMark(g_ligaHandle), STACK_LIGA, PRIO_LIGA);
 
     for (uint8_t i = 0; i < numberOfTwins; i++) {
         if (g_twinHandle[i] != nullptr)
             printTaskInfo(pcTaskGetName(g_twinHandle[i]), uxTaskGetStackHighWaterMark(g_twinHandle[i]), STACK_TWIN, PRIO_TWIN);
     }
+
+    if (g_registryHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_registryHandle), uxTaskGetStackHighWaterMark(g_registryHandle), STACK_REGISTRY, PRIO_REGISTRY);
+
+    if (g_parserHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_parserHandle), uxTaskGetStackHighWaterMark(g_parserHandle), STACK_PARSER, PRIO_PARSER);
+
+    if (g_reportHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_reportHandle), uxTaskGetStackHighWaterMark(g_reportHandle), STACK_REPORT, PRIO_REPORT);
+
+    if (g_remoteControlHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_remoteControlHandle), uxTaskGetStackHighWaterMark(g_remoteControlHandle), STACK_REMOTE, PRIO_REMOTE);
+
+    if (g_statisticHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_statisticHandle), uxTaskGetStackHighWaterMark(g_statisticHandle), STACK_STATISTICS, PRIO_STATISTICS);
 
     Serial.println("╚════════════════════════════════════════════════════════════════════════════╝");
 }

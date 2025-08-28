@@ -262,7 +262,7 @@ void SlaveTwin::showFlap(int digit) {
         twinPrint("showFlap: digit ");
         Serial.println(digit);
         twinPrint("showFlap: targetFlapNumber ");
-        Serial.println(targetFlapNumber);
+        Serial.println(_targetFlapNumber);
         }
     #endif
 
@@ -319,13 +319,13 @@ void SlaveTwin::calibration() {
     const uint32_t eta_ms     = estimateAYRdurationMs(CALIBRATE, steps_to_est); // etimate duration of CALIBRATE
     const uint32_t timeout_ms = withSafety(eta_ms, CALIBRATE);
 
-    #ifdef TWINVERBOSE
+    #ifdef AYRVERBOSE
         {
         TraceScope     trace;
         const uint32_t rev_ms = (_parameter.speed ? _parameter.speed : 1);
         const uint32_t sps    = (_parameter.steps * 1000u) / rev_ms;
         twinPrint("CALIBRATE spr=");
-        Serial.print(spr);
+        Serial.print(steps_to_use);
         twinPrint(" off_norm=");
         Serial.print(off_norm);
         twinPrint(" steps_to_est=");
