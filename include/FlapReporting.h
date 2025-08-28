@@ -32,7 +32,7 @@
 // Kompakte Spaltenbreiten
 constexpr int W_POS   = 3;                                                      // 1..18
 constexpr int W_TEAM  = 24;                                                     // z. B. „Borussia Mönchengladbach“
-constexpr int W_SHORT = 10;                                                     // „Union Berlin“ ggf. gekürzt
+constexpr int W_SHORT = 12;                                                     // „Union Berlin“ ggf. gekürzt
 constexpr int W_DFB   = 3;                                                      // 3-Letter
 constexpr int W_SP    = 2;                                                      // Spiele (1..34)
 constexpr int W_DIFF  = 4;                                                      // -99..+99
