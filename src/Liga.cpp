@@ -32,22 +32,22 @@ struct MatchState {
 };
 
 // 1. Bundesliga
-static const DfbMap DFB1[] = {
-    {"FC BAYERN MUENCHEN", "FCB"},   {"BORUSSIA DORTMUND", "BVB"}, {"RB LEIPZIG", "RBL"},
-    {"BAYER 04 LEVERKUSEN", "B04"},  {"1 FSV MAINZ 05", "M05"},    {"BORUSSIA MOENCHENGLADBACH", "BMG"},
-    {"EINTRACHT FRANKFURT", "SGE"},  {"VFL WOLFSBURG", "WOB"},     {"1 FC UNION BERLIN", "FCU"},
-    {"SC FREIBURG", "SCF"},          {"TSG HOFFENHEIM", "TSG"},    {"VFB STUTTGART", "VFB"},
-    {"SV WERDER BREMEN", "SVW"},     {"FC AUGSBURG", "FCA"},       {"1 FC KOELN", "KOE"},
-    {"1 FC HEIDENHEIM 1846", "HDH"}, {"HAMBURGER SV", "HSV"},      {"FC ST PAULI", "STP"},
-};
+static const DfbMap DFB1[] = {{"FC Bayern München", "FCB"},     {"Borussia Dortmund", "BVB"}, {"RB Leipzig", "RBL"},
+                              {"Bayer 04 Leverkusen", "B04"},   {"1. FSV Mainz 05", "M05"},   {"Borussia Mönchengladbach", "BMG"},
+                              {"Eintracht Frankfurt", "SGE"},   {"VfL Wolfsburg", "WOB"},     {"1. FC Union Berlin", "FCU"},
+                              {"SC Freiburg", "SCF"},           {"TSG Hoffenheim", "TSG"},    {"VfB Stuttgart", "VFB"},
+                              {"SV Werder Bremen", "SVW"},      {"FC Augsburg", "FCA"},       {"1. FC Köln", "KOE"},
+                              {"1. FC Heidenheim 1846", "HDH"}, {"Hamburger SV", "HSV"},      {"FC St. Pauli", "STP"}};
 
 // 2. Bundesliga (ergänzbar – strikt nach Namen)
 static const DfbMap DFB2[] = {
-    {"HERTHA BSC", "BSC"},          {"VFL BOCHUM 1848", "BOC"}, {"EINTRACHT BRAUNSCHWEIG", "EBS"}, {"SV DARMSTADT 98", "SVD"},
-    {"FORTUNA DUESSELDORF", "F95"}, {"SV ELVERSBERG", "ELV"},   {"SPVGG GREUTHER FUERTH", "SGF"},  {"HANNOVER 96", "H96"},
-    {"1 FC KAISERSLAUTERN", "FCK"}, {"KARLSRUHER SC", "KSC"},   {"1 FC MAGDEBURG", "FCM"},         {"1 FC NUERNBERG", "FCN"},
-    {"SC PADERBORN 07", "SCP"},     {"HOLSTEIN KIEL", "KSV"},   {"FC SCHALKE 04", "S04"},          {"SC PREUSSEN MUENSTER", "PRM"},
-    // ggf. weitere Vereine später ergänzen (Rostock, Osnabrück, Wiesbaden, Sandhausen, Ulm …)
+    {"Hertha BSC", "BSC"},           {"VfL Bochum 1848", "BOC"},    {"Eintracht Braunschweig", "EBS"},
+    {"SV Darmstadt 98", "SVD"},      {"Fortuna Düsseldorf", "F95"}, {"SV Elversberg", "ELV"},
+    {"SpVgg Greuther Fürth", "SGF"}, {"Hannover 96", "H96"},        {"1. FC Kaiserslautern", "FCK"},
+    {"Karlsruher SC", "KSC"},        {"1. FC Magdeburg", "FCM"},    {"1. FC Nürnberg", "FCN"},
+    {"SC Paderborn 07", "SCP"},      {"Holstein Kiel", "KSV"},      {"FC Schalke 04", "S04"},
+    {"SC Preußen Münster", "PRM"}
+    // ggf. später ergänzen (Hansa Rostock, VfL Osnabrück, SV Wehen Wiesbaden, …)
 };
 
 // Merker für adaptives Polling
@@ -296,7 +296,7 @@ static bool waitForTime(uint32_t maxMs = 15000) {
 }
 
 static String dfbCodeForTeamStrict(const String& teamName) {
-    String key;
+    String key = teamName;
     for (auto& e : DFB1)
         if (key == e.key)
             return e.code;
