@@ -156,13 +156,13 @@ static void printIntRight(int v, uint8_t width) {
 }
 
 static void printLigaHeader() {
-    Serial.println("┌─────┬──────────────────────────┬────────────┬─────┬────┬──────┬─────┐");
-    Serial.println("│ Pos │ Mannschaft               │ Name       │ DFB │ Sp │ Diff │ Pkt │");
-    Serial.println("├─────┼──────────────────────────┼────────────┼─────┼────┼──────┼─────┤");
+    Serial.println("┌─────┬──────────────────────────┬──────────────┬─────┬────┬──────┬─────┐");
+    Serial.println("│ Pos │ Mannschaft               │ Name         │ DFB │ Sp │ Diff │ Pkt │");
+    Serial.println("├─────┼──────────────────────────┼──────────────┼─────┼────┼──────┼─────┤");
 }
 
 static void printLigaFooter() {
-    Serial.println("└─────┴──────────────────────────┴────────────┴─────┴────┴──────┴─────┘");
+    Serial.println("└─────┴──────────────────────────┴──────────────┴─────┴────┴──────┴─────┘");
 }
 
 // ==== Rendering: nur die Zeilen, Header/Footer ===================
@@ -217,7 +217,7 @@ void FlapReporting::reportI2CStatistic() {
     //                                     1                   2                   3                   4
     //              123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
     Serial.println("┌─────────────────────────────────────────────────────────────────────────────┐");
-    Serial.println("│               FLAP I²C STATISTIC AND HISTRORY OF LAST MINUTES               │");
+    Serial.println("│               FLAP I²C STATISTIC AND HISTORY OF LAST MINUTES                │");
 
     printI2CHistory();                                                          // show history of I2C usage
 
