@@ -36,11 +36,11 @@
 
 // Task Stack sizes
 #define STACK_LIGA 8192                                                         // Liga Task 22kB
-#define STACK_TWIN 3072                                                         // Twin Tasks 0-n
-#define STACK_REGISTRY 2536                                                     // Registry Task
-#define STACK_REPORT 4096                                                       // Reportimg Task
+#define STACK_TWIN 2048                                                         // Twin Tasks 0-n
+#define STACK_REGISTRY 2048                                                     // Registry Task
+#define STACK_REPORT 3072                                                       // Reportimg Task
 #define STACK_REMOTE 2048                                                       // Remote Control Task
-#define STACK_PARSER 2536                                                       // Remote Parser Task
+#define STACK_PARSER 2048                                                       // Remote Parser Task
 
 #ifdef STATISTICVERBOSE
     #define STACK_STATISTICS 2048                                               // Statistics Task
