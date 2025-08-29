@@ -36,7 +36,7 @@
 
 // Task Stack sizes
 #define STACK_LIGA 8192                                                         // Liga Task 22kB
-#define STACK_TWIN 2048                                                         // Twin Tasks 0-n
+#define STACK_TWIN 4096                                                         // Twin Tasks 0-n
 #define STACK_REGISTRY 2048                                                     // Registry Task
 #define STACK_REPORT 3072                                                       // Reportimg Task
 #define STACK_REMOTE 2048                                                       // Remote Control Task
@@ -50,9 +50,12 @@
 #endif
 
 // Task Countdown Timer
-#define LONG_SCAN_COUNTDOWN 1000 * 60 * 20                                      // 20 minutes
-#define SHORT_SCAN_COUNTDOWN 1000 * 15                                          // 15 seconds
-#define AVAILABILITY_CHECK_COUNTDOWN 1000 * 60                                  // 1 minute
+#define LONG_SCAN_COUNTDOWN 1000UL * 60UL * 20UL                                // 20 minutes
+#define SHORT_SCAN_COUNTDOWN 1000UL * 90UL                                      // 90 seconds
+#define FAST_SCAN_COUNTDOWN 1000UL * 2UL                                        // 2 seconds
+#define AVAILABILITY_CHECK_COUNTDOWN (1000UL * (8UL * 60UL + 7UL))              // 8:07 minutes 7 seconds
+#define FAST_AVAI_COUNTDOWN 1000UL * 1UL                                        // 1 second
+#define BOOT_WINDOW 1000UL * 30UL                                               // 30 seconds duration of fast mode
 
 // Global variables for RTOS task handles https://www.freertos.org/a00019.html#xTaskHandle
 extern TaskHandle_t g_remoteControlHandle;                                      // RTOS Task Handler
@@ -75,14 +78,16 @@ extern FlapStatistics* DataEvaluation;                                          
 extern LigaTable*      Liga;                                                    // class for Bundesliga
 
 // Global count down Timer-Handles
-extern TimerHandle_t shortScanTimer;                                            // ic2 scan in short modus
-extern TimerHandle_t longScanTimer;                                             // i2c scan in long modus
+extern TimerHandle_t regiScanTimer;                                             // registry ic2 scan
 extern TimerHandle_t availCheckTimer;                                           // device availability check
 
 // Global Timer-Callbacks
-extern void shortScanCallback(TimerHandle_t xTimer);                            // execute short Time i2c bus scan
-extern void longScanCallback(TimerHandle_t xTimer);                             // execute Long Time i2c bus scan
+extern void regiScanCallback(TimerHandle_t xTimer);                             // execute short Time i2c bus scan
 extern void availCheckCallback(TimerHandle_t xTimer);                           // execute Availability Check
+
+// Global Scan modes
+enum scanModes { SCAN_FAST, SCAN_SHORT, SCAN_LONG, NO_SCAN };
+extern scanModes g_scanMode;                                                    // registry scan mode
 
 class FlapTask {
    public:

@@ -171,14 +171,14 @@ void FlapRegistry::registerDevice() {
         const I2Caddress addr = addressAt(i);                                   // mapping: addr = I2C_MINADR + i
 
         if (!isAddressRegistered(addr)) {                                       // Only act on addresses that are not yet present in the registry
-            Twin[i]->sendQueue(cmd);                                            // send to twins entry queue
 
-            #ifdef REGISTRYVERBOSE
-                {
-                TraceScope trace;
-                registerPrintln("probe/register: idx=%d addr=0x%02x (not registered)", i, addr);
-                }
-            #endif
+        #ifdef REGISTRYVERBOSE
+            {
+            TraceScope trace;
+            registerPrintln("probe/register: idx=%d addr=0x%02x (not registered)", i, addr);
+            }
+        #endif
+            Twin[i]->sendQueue(cmd);                                            // send to twins entry queue
         }
     }
     deviceRegistryOutro();                                                      // wrap up logging
@@ -623,8 +623,9 @@ void FlapRegistry::registerUnregistered() {
         {
             TraceScope trace;                                                   // use semaphore to protect this block
             #ifdef SCANVERBOSE
-                registerPrint("Send TWIN_NEW_ADDRESS with free I2C Address: 0x");
-                Serial.println(nextFreeAddress, HEX);
+                registerPrintln("Check for unregistered slaves to be registered");
+                //    registerPrintln("Send TWIN_NEW_ADDRESS with free I2C Address: 0x");
+                //    Serial.println(nextFreeAddress, HEX);
             #endif
         }
 

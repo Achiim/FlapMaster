@@ -36,6 +36,7 @@ struct LigaRow {
     char    team[32];                                                           // ASCII only (pretransliterated)
     char    shortName[16];                                                      // ASCII only
     char    dfb[4];                                                             // ASCII (3-letter + NUL)
+    uint8_t flap;                                                               // flap
 };
 
 struct LigaSnapshot {

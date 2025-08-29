@@ -46,9 +46,11 @@ FlapStatistics* DataEvaluation = nullptr;                                       
 FlapTask*       Master         = nullptr;
 
 // Global Timer-Handles
-TimerHandle_t shortScanTimer  = nullptr;
-TimerHandle_t longScanTimer   = nullptr;
+TimerHandle_t regiScanTimer   = nullptr;
 TimerHandle_t availCheckTimer = nullptr;
+
+// Global registry scan mode
+scanModes g_scanMode = NO_SCAN;                                                 // registry scan mode
 
 // --------------------------------------
 /**
@@ -101,40 +103,21 @@ void FlapTask::systemHalt(const char* reason, int blinkCode) {
  *
  * @param xTimer associated timer
  */
-void shortScanCallback(TimerHandle_t xTimer) {
+void regiScanCallback(TimerHandle_t xTimer) {
     #ifdef REGISTRYVERBOSE
         {
         TraceScope trace;
-        Register->registerPrintln("========== I²C Short Scan Check ================");
+        Register->registerPrint("========== Registry I²C Scan = ");
+        if (g_scanMode == SCAN_SHORT)
+        Serial.print("SHORT");
+        if (g_scanMode == SCAN_LONG)
+        Serial.print("LONG");
+        if (g_scanMode == SCAN_FAST)
+        Serial.print("FAST");
+        Serial.println(" ===========");
         }
     #endif
     Register->registerDevice();
-    Register->registerUnregistered();
-
-    if (Register->size() >= Register->capacity()) {
-        xTimerStop(shortScanTimer, 0);
-        xTimerStart(longScanTimer, 0);
-    }
-}
-
-// ----------------------------------
-
-/**
- * @brief  Long Regisgtry Scan (LONG_SCAN_COUNTDOWN), change to short-Scan if not all devices are available.
- * First makes device registry then registers unregistered devices.
- *
- * @param xTimer associated timer
- */
-
-void longScanCallback(TimerHandle_t xTimer) {
-    #ifdef REGISTRYVERBOSE
-        {
-        TraceScope trace;
-        Register->registerPrintln("========== I²C Long Scan Check ================");
-        }
-    #endif
-    Register->registerDevice();
-    Register->registerUnregistered();
 }
 
 // --- Availability-Check (AVAILABILITY_CHECK_COUNTDOWN),
@@ -151,31 +134,33 @@ void availCheckCallback(TimerHandle_t xTimer) {
         Register->registerPrintln("======= Device-Availability Check =============");
         }
     #endif
-    Register->availabilityCheck();
 
-    if (Register->size() < Register->capacity()) {
-        // missing one device → Short-Scan
-        if (xTimerIsTimerActive(shortScanTimer) == pdFALSE) {
-            xTimerStop(longScanTimer, 0);
-            xTimerStart(shortScanTimer, 0);
-            #ifdef AVAILABILITYVERBOSE
+    Register->availabilityCheck();
+    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
+    Register->registerUnregistered();                                           // register devices that are known but not yet registered
+    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
+    Register->repairOutOfPoolDevices();                                         // reassign devices that are outside the address pool
+
+    if (Register->size() >= Register->capacity()) {
+        if (g_scanMode != SCAN_LONG) {
+            xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), 0);
+            #ifdef MASTERVERBOSE
                 {
                 TraceScope trace;
-                Register->registerPrintln("switch to Short scan modus for I²C bus");
+                masterPrintln("all devices %d from %d registered- Registry is going back to long scan", Register->size(), Register->capacity());
                 }
             #endif
-        } else {
-            // all devices on board → Long-Scan
-            if (xTimerIsTimerActive(longScanTimer) == pdFALSE) {
-                xTimerStop(shortScanTimer, 0);
-                xTimerStart(longScanTimer, 0);
-                #ifdef AVAILABILITYVERBOSE
-                    {
-                    TraceScope trace;
-                    Register->registerPrintln("switch to Long scan modus for I²C bus");
-                    }
-                #endif
-            }
+        }
+    } else {
+        if (g_scanMode != SCAN_SHORT) {
+            xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), 0);
+            #ifdef MASTERVERBOSE
+                {
+                TraceScope trace;
+                masterPrintln("missing devices %d from %d - Registry is going back to short scan", Register->capacity() - Register->size(),
+                Register->capacity());
+                }
+            #endif
         }
     }
 }

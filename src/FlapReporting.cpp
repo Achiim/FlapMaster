@@ -156,18 +156,18 @@ static void printIntRight(int v, uint8_t width) {
 }
 
 static void printLigaHeader() {
-    Serial.println("┌─────┬──────────────────────────┬──────────────┬─────┬────┬──────┬─────┐");
-    Serial.println("│ Pos │ Mannschaft               │ Name         │ DFB │ Sp │ Diff │ Pkt │");
-    Serial.println("├─────┼──────────────────────────┼──────────────┼─────┼────┼──────┼─────┤");
+    Serial.println("┌─────┬──────────────────────────┬──────────────┬─────┬──────┬────┬──────┬─────┐");
+    Serial.println("│ Pos │ Mannschaft               │ Name         │ DFB │ Flap │ Sp │ Diff │ Pkt │");
+    Serial.println("├─────┼──────────────────────────┼──────────────┼─────┼──────┼────┼──────┼─────┤");
 }
 
 static void printLigaFooter() {
-    Serial.println("└─────┴──────────────────────────┴──────────────┴─────┴────┴──────┴─────┘");
+    Serial.println("└─────┴──────────────────────────┴──────────────┴─────┴──────┴────┴──────┴─────┘");
 }
 
 // ==== Rendering: nur die Zeilen, Header/Footer ===================
 void FlapReporting::printTableRow(const LigaRow& r) {
-    // Spalten: │ Pos │ Mannschaft │ Name │ DFB │ Sp │ Diff │ Pkt │
+    // Spalten: │ Pos │ Mannschaft │ Name │ DFB │ Flap │ Sp │ Diff │ Pkt │
     Serial.print("│ ");
     Serial.printf("%*u", W_POS, r.pos);
     Serial.print(" │ ");
@@ -176,6 +176,8 @@ void FlapReporting::printTableRow(const LigaRow& r) {
     printUtf8Padded(r.shortName, W_SHORT);
     Serial.print(" │ ");
     printUtf8Padded(r.dfb, W_DFB);
+    Serial.print(" │ ");
+    Serial.printf("%*.*u", W_FLAP, 2, r.flap);                                  // column width = W_FLAP, 2 digits with leading 0
     Serial.print(" │ ");
     Serial.printf("%*u", W_SP, r.sp);
     Serial.print(" │ ");
@@ -217,7 +219,7 @@ void FlapReporting::reportI2CStatistic() {
     //                                     1                   2                   3                   4
     //              123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
     Serial.println("┌─────────────────────────────────────────────────────────────────────────────┐");
-    Serial.println("│               FLAP I²C STATISTIC AND HISTORY OF LAST MINUTES                │");
+    Serial.printf("│ FLAP I²C STATISTIC AND HISTORY OF LAST MINUTES     Bus-Frequency: %3dkHz   │\n", I2C_MASTER_FREQ_HZ / 1000);
 
     printI2CHistory();                                                          // show history of I2C usage
 
@@ -518,12 +520,8 @@ uint32_t FlapReporting::getNextScanRemainingMs() {
     TickType_t now = xTaskGetTickCount();
     // wenn shortScan aktiv ist, nimmt dessen nächstes Ablaufdatum,
     // sonst das von longScan (falls aktiv)
-    if (shortScanTimer && xTimerIsTimerActive(shortScanTimer)) {
-        TickType_t expiry = xTimerGetExpiryTime(shortScanTimer);
-        return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
-    }
-    if (longScanTimer && xTimerIsTimerActive(longScanTimer)) {
-        TickType_t expiry = xTimerGetExpiryTime(longScanTimer);
+    if (regiScanTimer && xTimerIsTimerActive(regiScanTimer)) {
+        TickType_t expiry = xTimerGetExpiryTime(regiScanTimer);
         return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
     }
     return 0;                                                                   // no Timer aktive

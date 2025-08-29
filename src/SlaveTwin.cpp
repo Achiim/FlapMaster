@@ -1146,12 +1146,33 @@ void SlaveTwin::performRegister() {
     uint8_t   ans = 0;
     esp_err_t ret = i2c_probe_device(_slaveAddress);                            // send ping to device/slave
     if (ret != ESP_OK) {
-        return;                                                                 // Device not ready
-    } else if (!getFullStateOfSlave()) {                                        // get all status of device
+        #ifdef TWINVERBOSE
+            TraceScope trace;
+            twinPrintln("(performRegister) slave not ready");
+        #endif
+        return;
+    }
+    // Device not ready
+    else if (!getFullStateOfSlave()) {                                          // get all status of device
+        {
+            #ifdef TWINVERBOSE
+                TraceScope trace;
+                twinPrintln("(performRegister) did not get fullState from slave");
+            #endif
+        }
         return;                                                                 // Device not ready
     } else if (!askSlaveAboutParameter(_parameter)) {                           // get all parameter of device
+        {
+            #ifdef TWINVERBOSE
+                TraceScope trace;
+                twinPrintln("(performRegister) did not get paramerter from slave");
+            #endif
+        }
         return;                                                                 // Device not ready
     }
+
+    //    getFullStateOfSlave();
+    //    askSlaveAboutParameter(_parameter);
     Register->updateRegistry(_slaveAddress, _parameter);                        // register slave
     if (_slaveReady.bootFlag)
         bootRelease();                                                          // release bootFlag and calibrate

@@ -10,15 +10,16 @@
 #include "cert.all"                                                             // certificate for https with OpenLigaDB
 
 struct DfbMap {
-    const char* key;
-    const char* code;
+    const char* key;                                                            // team name
+    const char* code;                                                           // 3-char DFB abbriviation
+    const int   flap;                                                           // falp number
 };
 
 // ----- Datentypen -----
 struct LiveGoalEvent {
     int    matchID = 0;
-    String kickOffUTC;                                                          // Spiel-Anstoß (UTC)
-    String goalTimeUTC;                                                         // Zeitpunkt des Goals (aus lastUpdate / Konstrukt)
+    String kickOffUTC;                                                          // kick-off time (UTC)
+    String goalTimeUTC;                                                         // time of Goals (aus lastUpdate / Konstrukt)
     int    minute = -1;
     int    score1 = 0, score2 = 0;
     String team1, team2, scorer;
@@ -32,23 +33,20 @@ struct MatchState {
 };
 
 // 1. Bundesliga
-static const DfbMap DFB1[] = {{"FC Bayern München", "FCB"},     {"Borussia Dortmund", "BVB"}, {"RB Leipzig", "RBL"},
-                              {"Bayer 04 Leverkusen", "B04"},   {"1. FSV Mainz 05", "M05"},   {"Borussia Mönchengladbach", "BMG"},
-                              {"Eintracht Frankfurt", "SGE"},   {"VfL Wolfsburg", "WOB"},     {"1. FC Union Berlin", "FCU"},
-                              {"SC Freiburg", "SCF"},           {"TSG Hoffenheim", "TSG"},    {"VfB Stuttgart", "VFB"},
-                              {"SV Werder Bremen", "SVW"},      {"FC Augsburg", "FCA"},       {"1. FC Köln", "KOE"},
-                              {"1. FC Heidenheim 1846", "HDH"}, {"Hamburger SV", "HSV"},      {"FC St. Pauli", "STP"}};
+static const DfbMap DFB1[] = {{"FC Bayern München", "FCB", 1},     {"Borussia Dortmund", "BVB", 7}, {"RB Leipzig", "RBL", 13},
+                              {"Bayer 04 Leverkusen", "B04", 2},   {"1. FSV Mainz 05", "M05", 8},   {"Borussia Mönchengladbach", "BMG", 14},
+                              {"Eintracht Frankfurt", "SGE", 3},   {"VfL Wolfsburg", "WOB", 9},     {"1. FC Union Berlin", "FCU", 15},
+                              {"SC Freiburg", "SCF", 4},           {"TSG Hoffenheim", "TSG", 10},   {"VfB Stuttgart", "VFB", 16},
+                              {"SV Werder Bremen", "SVW", 5},      {"FC Augsburg", "FCA", 11},      {"1. FC Köln", "KOE", 17},
+                              {"1. FC Heidenheim 1846", "HDH", 6}, {"Hamburger SV", "HSV", 12},     {"FC St. Pauli", "STP", 18}};
 
 // 2. Bundesliga (ergänzbar – strikt nach Namen)
-static const DfbMap DFB2[] = {
-    {"Hertha BSC", "BSC"},           {"VfL Bochum 1848", "BOC"},    {"Eintracht Braunschweig", "EBS"},
-    {"SV Darmstadt 98", "SVD"},      {"Fortuna Düsseldorf", "F95"}, {"SV Elversberg", "ELV"},
-    {"SpVgg Greuther Fürth", "SGF"}, {"Hannover 96", "H96"},        {"1. FC Kaiserslautern", "FCK"},
-    {"Karlsruher SC", "KSC"},        {"1. FC Magdeburg", "FCM"},    {"1. FC Nürnberg", "FCN"},
-    {"SC Paderborn 07", "SCP"},      {"Holstein Kiel", "KSV"},      {"FC Schalke 04", "S04"},
-    {"SC Preußen Münster", "PRM"}
-    // ggf. später ergänzen (Hansa Rostock, VfL Osnabrück, SV Wehen Wiesbaden, …)
-};
+static const DfbMap DFB2[] = {{"Hertha BSC", "BSC", 19},           {"VfL Bochum 1848", "BOC", 25},    {"Eintracht Braunschweig", "EBS", 30},
+                              {"SV Darmstadt 98", "SVD", 20},      {"Fortuna Düsseldorf", "F95", 26}, {"SV 07 Elversberg", "ELV", 31},
+                              {"SpVgg Greuther Fürth", "SGF", 21}, {"Hannover 96", "H96", 27},        {"1. FC Kaiserslautern", "FCK", 32},
+                              {"Karlsruher SC", "KSC", 22},        {"1. FC Magdeburg", "FCM", 28},    {"1. FC Nürnberg", "FCN", 33},
+                              {"SC Paderborn 07", "SCP", 23},      {"Holstein Kiel", "KSV", 29},      {"FC Schalke 04", "S04", 34},
+                              {"SC Preußen Münster", "PRM", 24},   {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
 
 // Merker für adaptives Polling
 static String         s_lastChange;                                             // dein vorhandener ISO-String
@@ -130,44 +128,42 @@ static String nowUTC_ISO() {
 // foreward declaration
 static bool httpGetJson(const char* url, JsonDocument& doc);
 
-// Sammelt ALLE neuen Tore über alle aktuell laufenden BL1-Spiele.
-// Rückgabe = Anzahl neuer Tore; schreibt sie in 'out[0..n)'.
 size_t collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
     size_t outN = 0;
-    // 1) aktuellen Spieltag laden
+
     JsonDocument doc;
     if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", doc))
         return 0;
+
     JsonArray matches = doc.as<JsonArray>();
     if (matches.isNull() || matches.size() == 0)
         return 0;
 
-    const String nowIso = nowUTC_ISO();
-    const time_t nowT   = toUtcTimeT(nowIso);
+    const time_t nowT = toUtcTimeT(nowUTC_ISO());
 
     for (JsonObject m : matches) {
-        // a) Status / Zeiten
+        // a) nur laufende Spiele
         bool finished = m["matchIsFinished"] | m["MatchIsFinished"] | false;
         if (finished)
             continue;
 
-        String kick = m["matchDateTimeUTC"] | m["MatchDateTimeUTC"] | m["matchDateTime"] | "";
-        if (kick.length() == 0)
+        const char* kickC = m["matchDateTimeUTC"] | m["MatchDateTimeUTC"] | m["matchDateTime"] | "";
+        if (!*kickC)
             continue;
-        time_t kickT = toUtcTimeT(kick);
+        time_t kickT = toUtcTimeT(kickC);
         if (kickT == 0)
             continue;
 
-        // "läuft": Anstoß <= jetzt und nicht fertig (mit Pufferfenster 3h)
-        if (nowT + 0 < kickT)
+        if (nowT < kickT)
             continue;                                                           // noch nicht angepfiffen
         if (nowT > kickT + 3 * 3600)
-            continue;                                                           // sehr alt -> ignorieren (Sicherung)
+            continue;                                                           // sehr alt -> ignorieren
 
         // b) Goals auswerten
         int mid = m["matchID"] | 0;
         if (mid <= 0)
             continue;
+
         MatchState* st = stateFor(mid);
         if (!st)
             continue;
@@ -176,33 +172,43 @@ size_t collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
 
         JsonArray goals = m["goals"].as<JsonArray>();
         if (!goals.isNull()) {
+            JsonObject  t1      = m["team1"].isNull() ? m["Team1"] : m["team1"];
+            JsonObject  t2      = m["team2"].isNull() ? m["Team2"] : m["team2"];
+            const char* name1   = t1["teamName"] | t1["TeamName"] | "";
+            const char* name2   = t2["teamName"] | t2["TeamName"] | "";
+            const char* lastUpd = m["lastUpdateDateTime"] | "";
+
             for (JsonObject g : goals) {
                 int gid = g["goalID"] | 0;
-                if (gid > st->lastGoalID && outN < maxOut) {
-                    LiveGoalEvent ev;
-                    ev.matchID     = mid;
-                    ev.kickOffUTC  = kick;
-                    ev.minute      = g["matchMinute"] | -1;
-                    ev.isPenalty   = g["isPenalty"] | false;
-                    ev.isOwnGoal   = g["isOwnGoal"] | false;
-                    ev.isOvertime  = g["isOvertime"] | false;
-                    ev.score1      = g["scoreTeam1"] | 0;
-                    ev.score2      = g["scoreTeam2"] | 0;
-                    ev.scorer      = (const char*)(g["goalGetterName"] | "");
-                    ev.goalTimeUTC = m["lastUpdateDateTime"] | "";              // OLGDB aktualisiert das beim Ereignis
-                    JsonObject t1  = m["team1"].isNull() ? m["Team1"] : m["team1"];
-                    JsonObject t2  = m["team2"].isNull() ? m["Team2"] : m["team2"];
-                    ev.team1       = (const char*)(t1["teamName"] | t1["TeamName"] | "");
-                    ev.team2       = (const char*)(t2["teamName"] | t2["TeamName"] | "");
-                    out[outN++]    = ev;
-                }
+                if (gid <= st->lastGoalID)
+                    continue;
+                if (outN >= maxOut)
+                    break;
+
+                // --- in-place befüllen (keine extra Kopie der Strings) ---
+                LiveGoalEvent& ev = out[outN++];
+                ev.matchID        = mid;
+                ev.kickOffUTC     = kickC;
+                ev.minute         = g["matchMinute"] | -1;
+                ev.isPenalty      = g["isPenalty"] | false;
+                ev.isOwnGoal      = g["isOwnGoal"] | false;
+                ev.isOvertime     = g["isOvertime"] | false;
+                ev.score1         = g["scoreTeam1"] | 0;
+                ev.score2         = g["scoreTeam2"] | 0;
+                ev.scorer         = (const char*)(g["goalGetterName"] | "");
+                ev.goalTimeUTC    = lastUpd;
+                ev.team1          = name1;
+                ev.team2          = name2;
+
                 if (gid > maxSeen)
                     maxSeen = gid;
             }
         }
+
         // c) höchsten gesehenen goalID-Stand merken
         if (maxSeen > st->lastGoalID)
             st->lastGoalID = maxSeen;
+
         if (outN >= maxOut)
             break;                                                              // Ausgabepuffer voll
     }
@@ -305,6 +311,18 @@ static String dfbCodeForTeamStrict(const String& teamName) {
             return e.code;
     return "";                                                                  // strikt: kein Treffer => leeres Kürzel
 }
+
+static int flapForTeamStrict(const String& teamName) {
+    String key = teamName;
+    for (auto& e : DFB1)
+        if (key == e.key)
+            return e.flap;
+    for (auto& e : DFB2)
+        if (key == e.key)
+            return e.flap;
+    return -1;                                                                  // strikt: kein Treffer => -1
+}
+
 struct NextMatch {
     int    season  = 0;
     int    group   = 0;
@@ -782,12 +800,16 @@ bool LigaTable::fetchTable(LigaSnapshot& out) {
         // Map DFB code using your existing helper
         String dfb = dfbCodeForTeamStrict(teamName);                            // may return ""
 
+        // Map flap using your existing helper
+        int flap = flapForTeamStrict(teamName);                                 // may return -1
+
         // Fill row
         LigaRow& r = snap.rows[snap.teamCount];
         r.pos      = (uint8_t)rank;
         r.sp       = (uint8_t)max(0, min(99, matches));
         r.diff     = (int8_t)max(-99, min(99, goalDiff));
         r.pkt      = (uint8_t)max(0, min(255, points));
+        r.flap     = (uint8_t)max(0, min(255, flap));
 
         copy_str_bounded(r.team, sizeof(r.team), teamName);
         copy_str_bounded(r.shortName, sizeof(r.shortName), shortName);

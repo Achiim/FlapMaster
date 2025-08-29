@@ -180,7 +180,7 @@ esp_err_t i2c_probe_device(I2Caddress address) {
  * @return false
  */
 bool takeI2CSemaphore() {
-    if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(20))) {
+    if (xSemaphoreTake(g_i2c_mutex, pdMS_TO_TICKS(50))) {
         #ifdef SEMAPHOREVERBOSE
             {
             TraceScope trace;                                                   // use semaphore to protect this block

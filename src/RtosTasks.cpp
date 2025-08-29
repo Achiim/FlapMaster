@@ -93,6 +93,7 @@ void parserTask(void* pvParameters) {
         }
     }
 }
+
 // ----------------------------
 
 /**
@@ -101,14 +102,6 @@ void parserTask(void* pvParameters) {
  * @param pvParameters
  */
 void twinRegister(void* pvParameters) {
-    Register = new FlapRegistry();
-
-    Register->registerDevice();                                                 // initial full scan for known devices
-    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
-    Register->registerUnregistered();                                           // register devices that are known but not yet registered
-    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
-    Register->repairOutOfPoolDevices();                                         // reassign devices that are outside the address pool
-
     #ifdef DISABLEREGISTRY
         {
         TraceScope trace;
@@ -118,38 +111,66 @@ void twinRegister(void* pvParameters) {
         }
     #endif
 
+    Register = new FlapRegistry();
+
+    Register->registerDevice();                                                 // initial full scan for known devices
+    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
+    Register->registerUnregistered();                                           // register devices that are known but not yet registered
+    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
+    Register->repairOutOfPoolDevices();                                         // reassign devices that are outside the address pool
+
     // --- create timers for cyclic tasks ---
-    shortScanTimer  = xTimerCreate("ScanShort", pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), pdTRUE, nullptr, shortScanCallback);
-    longScanTimer   = xTimerCreate("ScanLong", pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), pdTRUE, nullptr, longScanCallback);
+    regiScanTimer   = xTimerCreate("RegiScan", pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), pdTRUE, nullptr, regiScanCallback);
     availCheckTimer = xTimerCreate("AvailChk", pdMS_TO_TICKS(AVAILABILITY_CHECK_COUNTDOWN), pdTRUE, nullptr, availCheckCallback);
 
     // --- FAST MODE immediately after boot ---
-    const TickType_t bootWindowMs = pdMS_TO_TICKS(30000);                       // maximum 30s fast mode (boot window)
-    const TickType_t fastShort    = pdMS_TO_TICKS(2000);                        // fast short-scan every 2s
-    const TickType_t fastAvail    = pdMS_TO_TICKS(1000);                        // fast availability check every 1s
+    const TickType_t bootWindowMs = pdMS_TO_TICKS(BOOT_WINDOW);                 // maximum 30s fast mode (boot window)
+    const TickType_t fastShort    = pdMS_TO_TICKS(FAST_SCAN_COUNTDOWN);         // fast short-scan every 2s
 
     // configure timers for fast mode
-    xTimerChangePeriod(shortScanTimer, fastShort, 0);
-    xTimerChangePeriod(availCheckTimer, fastAvail, 0);
+    xTimerChangePeriod(regiScanTimer, fastShort, 0);                            // fast short-scan
 
     // start timers now
-    xTimerStart(shortScanTimer, 0);
-    xTimerStart(longScanTimer, 0);
-    xTimerStart(availCheckTimer, 0);
+    xTimerStart(regiScanTimer, 0);                                              // start scan
+    xTimerStart(availCheckTimer, 0);                                            // start availability check
 
     TickType_t startTick = xTaskGetTickCount();                                 // remember start time of fast mode
 
-    // --- loop until either boot window expires or all expected devices are registered ---
-    while ((xTaskGetTickCount() - startTick) < bootWindowMs) {
-        if (Register->size() >= Register->capacity()) {
-            // all expected devices found -> break out of fast mode earlier
-            break;
+    if (Register->size() < Register->capacity()) {
+        g_scanMode = SCAN_FAST;                                                 // actual scan mode
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            Register->registerPrintln("Registry starts in fast scan");
+            }
+        #endif
+
+        // --- loop until either boot window expires or all expected devices are registered ---
+        while ((xTaskGetTickCount() - startTick) < bootWindowMs && (Register->size() < Register->capacity())) {
+            vTaskDelay(pdMS_TO_TICKS(500));                                     // wait a bit before checking again
         }
-        vTaskDelay(pdMS_TO_TICKS(500));                                         // wait a bit before checking again
     }
 
     // --- switch back to normal scan intervals ---
-    xTimerChangePeriod(shortScanTimer, pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), 0);
+    if (Register->size() < Register->capacity()) {
+        g_scanMode = SCAN_SHORT;                                                // actual scan mode
+        xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), 0);
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            Register->registerPrintln("Registry switches to short scan");
+            }
+        #endif
+    } else {
+        g_scanMode = SCAN_LONG;                                                 // actual scan mode
+        xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), 0);
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            Register->registerPrintln("Registry switches to long scan");
+            }
+        #endif
+    }
     xTimerChangePeriod(availCheckTimer, pdMS_TO_TICKS(AVAILABILITY_CHECK_COUNTDOWN), 0);
 
     // --- hand over to timers, suspend this task ---
