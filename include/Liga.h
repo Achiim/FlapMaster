@@ -27,6 +27,29 @@
 // --- Configuration -----------------------------------------------------------
 #define LIGA_MAX_TEAMS 18
 
+struct DfbMap {
+    const char* key;                                                            // team name
+    const char* code;                                                           // 3-char DFB abbriviation
+    const int   flap;                                                           // falp number
+};
+
+// ----- Datentypen -----
+struct LiveGoalEvent {
+    int    matchID = 0;
+    String kickOffUTC;                                                          // kick-off time (UTC)
+    String goalTimeUTC;                                                         // time of Goals (aus lastUpdate / Konstrukt)
+    int    minute = -1;
+    int    score1 = 0, score2 = 0;
+    String team1, team2, scorer;
+    bool   isPenalty = false, isOwnGoal = false, isOvertime = false;
+};
+
+// Merker pro Spiel (höchste gesehene goalID)
+struct MatchState {
+    int matchID;
+    int lastGoalID;
+};
+
 // ---------- DATA (ASCII-only snapshot) ----------
 struct LigaRow {
     uint8_t pos;                                                                // 1..18
@@ -74,6 +97,7 @@ class LigaTable {
     void     get(LigaSnapshot& out) const;                                      // get snapshot from openLigaDB
     void     commit(const LigaSnapshot& s);                                     // release snahpshot to be accessed by reporting
     uint32_t decidePollMs();                                                    // get time to wait until poll openLigaDB again
+    size_t   collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut);
 
     // Constructor for LigaTable
     LigaTable();

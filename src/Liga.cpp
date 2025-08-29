@@ -9,29 +9,6 @@
 #include "secret.h"                                                             // const char* ssid, const char* password
 #include "cert.all"                                                             // certificate for https with OpenLigaDB
 
-struct DfbMap {
-    const char* key;                                                            // team name
-    const char* code;                                                           // 3-char DFB abbriviation
-    const int   flap;                                                           // falp number
-};
-
-// ----- Datentypen -----
-struct LiveGoalEvent {
-    int    matchID = 0;
-    String kickOffUTC;                                                          // kick-off time (UTC)
-    String goalTimeUTC;                                                         // time of Goals (aus lastUpdate / Konstrukt)
-    int    minute = -1;
-    int    score1 = 0, score2 = 0;
-    String team1, team2, scorer;
-    bool   isPenalty = false, isOwnGoal = false, isOvertime = false;
-};
-
-// Merker pro Spiel (höchste gesehene goalID)
-struct MatchState {
-    int matchID;
-    int lastGoalID;
-};
-
 // 1. Bundesliga
 static const DfbMap DFB1[] = {{"FC Bayern München", "FCB", 1},     {"Borussia Dortmund", "BVB", 7}, {"RB Leipzig", "RBL", 13},
                               {"Bayer 04 Leverkusen", "B04", 2},   {"1. FSV Mainz 05", "M05", 8},   {"Borussia Mönchengladbach", "BMG", 14},
@@ -124,43 +101,160 @@ static String nowUTC_ISO() {
     return String(buf);
 }
 
+// Kleine Helper, um Keys case-robust zu lesen
+static const char* strOr(JsonObjectConst o, const char* def, const char* k1, const char* k2 = nullptr, const char* k3 = nullptr,
+                         const char* k4 = nullptr) {
+    if (k1 && !o[k1].isNull())
+        return o[k1];
+    if (k2 && !o[k2].isNull())
+        return o[k2];
+    if (k3 && !o[k3].isNull())
+        return o[k3];
+    if (k4 && !o[k4].isNull())
+        return o[k4];
+    return def;
+}
+static int intOr(JsonObjectConst o, int def, const char* k1, const char* k2 = nullptr, const char* k3 = nullptr) {
+    if (k1 && !o[k1].isNull())
+        return o[k1].as<int>();
+    if (k2 && !o[k2].isNull())
+        return o[k2].as<int>();
+    if (k3 && !o[k3].isNull())
+        return o[k3].as<int>();
+    return def;
+}
+static bool boolOr(JsonObjectConst o, bool def, const char* k1, const char* k2 = nullptr, const char* k3 = nullptr) {
+    if (k1 && !o[k1].isNull())
+        return o[k1].as<bool>();
+    if (k2 && !o[k2].isNull())
+        return o[k2].as<bool>();
+    if (k3 && !o[k3].isNull())
+        return o[k3].as<bool>();
+    return def;
+}
+
 // ----- Kernfunktion -----
 // foreward declaration
 static bool httpGetJson(const char* url, JsonDocument& doc);
 
-size_t collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
+// ---- Robuster Loader: ermittelt Season & Group und lädt den Spieltag ----
+static bool loadCurrentBL1Matchday(JsonDocument& outDoc, int* outSeason, int* outGroupOrderId) {
+    // 1) Primär: getcurrentgroup/bl1
+    {
+        JsonDocument gdoc;
+        if (httpGetJson("https://api.openligadb.de/getcurrentgroup/bl1", gdoc)) {
+            // Manche Instanzen liefern ein Objekt, andere (selten) ein Array mit einem Eintrag
+            int season = 0, groupOrderID = 0;
+            if (gdoc.is<JsonObject>()) {
+                JsonObject g = gdoc.as<JsonObject>();
+                season       = g["leagueSeason"] | g["LeagueSeason"] | 0;
+                groupOrderID = g["groupOrderID"] | g["GroupOrderID"] | 0;
+            } else if (gdoc.is<JsonArray>()) {
+                JsonArray arr = gdoc.as<JsonArray>();
+                if (arr.size() > 0 && arr[0].is<JsonObject>()) {
+                    JsonObject g = arr[0].as<JsonObject>();
+                    season       = g["leagueSeason"] | g["LeagueSeason"] | 0;
+                    groupOrderID = g["groupOrderID"] | g["GroupOrderID"] | 0;
+                }
+            }
+            if (season > 0 && groupOrderID > 0) {
+                char url[160];
+                snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/bl1/%d/%d", season, groupOrderID);
+                Serial.printf("[collector] GET %s\n", url);
+                if (httpGetJson(url, outDoc)) {
+                    if (outSeason)
+                        *outSeason = season;
+                    if (outGroupOrderId)
+                        *outGroupOrderId = groupOrderID;
+                    return true;
+                } else {
+                    Serial.println("[collector] getmatchdata/<season>/<group> fehlgeschlagen (Primärpfad)");
+                }
+            } else {
+                Serial.println("[collector] getcurrentgroup: season/groupOrderID nicht gefunden");
+            }
+        } else {
+            Serial.println("[collector] getcurrentgroup fehlgeschlagen");
+        }
+    }
+
+    // 2) Fallback: grober Endpoint -> Season & Group aus erstem Match extrahieren
+    {
+        JsonDocument tmp;
+        if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", tmp)) {
+            Serial.println("[collector] Fallback: getmatchdata/bl1 fehlgeschlagen");
+            return false;
+        }
+        JsonArray matches = tmp.as<JsonArray>();
+        if (matches.isNull() || matches.size() == 0) {
+            Serial.println("[collector] Fallback: keine Matches im groben Endpoint");
+            return false;
+        }
+        // Nimm das erste Match und lies Season/Group robust
+        JsonObject m0           = matches[0].as<JsonObject>();
+        int        season       = m0["leagueSeason"] | m0["LeagueSeason"] | 0;
+        JsonObject grp          = m0["group"].isNull() ? m0["Group"] : m0["group"];
+        int        groupOrderID = grp["groupOrderID"] | grp["GroupOrderID"] | 0;
+
+        if (season <= 0 || groupOrderID <= 0) {
+            Serial.println("[collector] Fallback: season/groupOrderID im Match0 nicht gefunden");
+            return false;
+        }
+
+        char url[160];
+        snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/bl1/%d/%d", season, groupOrderID);
+        Serial.printf("[collector] GET (Fallback) %s\n", url);
+        if (!httpGetJson(url, outDoc)) {
+            Serial.println("[collector] Fallback: getmatchdata/<season>/<group> erneut fehlgeschlagen");
+            return false;
+        }
+        if (outSeason)
+            *outSeason = season;
+        if (outGroupOrderId)
+            *outGroupOrderId = groupOrderID;
+        return true;
+    }
+}
+
+size_t LigaTable::collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
     size_t outN = 0;
 
     JsonDocument doc;
-    if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", doc))
+    int          season = 0, groupOrderID = 0;
+    if (!loadCurrentBL1Matchday(doc, &season, &groupOrderID)) {
+        Serial.println("[collector] Spieltag konnte nicht geladen werden");
         return 0;
-
+    }
     JsonArray matches = doc.as<JsonArray>();
-    if (matches.isNull() || matches.size() == 0)
+    if (matches.isNull() || matches.size() == 0) {
+        Serial.println("[FLAP  -  LIGA  ] keine Spiele im aktuellen Spieltag");
         return 0;
+    }
 
     const time_t nowT = toUtcTimeT(nowUTC_ISO());
 
     for (JsonObject m : matches) {
-        // a) nur laufende Spiele
-        bool finished = m["matchIsFinished"] | m["MatchIsFinished"] | false;
-        if (finished)
-            continue;
+        // Teams für Logs
+        JsonObject  t1    = m["team1"].isNull() ? m["Team1"] : m["team1"];
+        JsonObject  t2    = m["team2"].isNull() ? m["Team2"] : m["team2"];
+        const char* name1 = strOr(t1, "Team1", "teamName", "TeamName");
+        const char* name2 = strOr(t2, "Team2", "teamName", "TeamName");
 
-        const char* kickC = m["matchDateTimeUTC"] | m["MatchDateTimeUTC"] | m["matchDateTime"] | "";
+        // Status/Zeit
+        bool        finished = boolOr(m, false, "matchIsFinished", "MatchIsFinished");
+        const char* kickC    = strOr(m, "", "matchDateTimeUTC", "MatchDateTimeUTC", "matchDateTime");
         if (!*kickC)
             continue;
         time_t kickT = toUtcTimeT(kickC);
         if (kickT == 0)
             continue;
 
-        if (nowT < kickT)
-            continue;                                                           // noch nicht angepfiffen
-        if (nowT > kickT + 3 * 3600)
-            continue;                                                           // sehr alt -> ignorieren
+        if (nowT < kickT) {
+            Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> Spiel noch nicht live: goals[] und results[] leer\n", name1, name2);
+            continue;
+        }
 
-        // b) Goals auswerten
-        int mid = m["matchID"] | 0;
+        int mid = intOr(m, 0, "matchID", "MatchID");
         if (mid <= 0)
             continue;
 
@@ -170,48 +264,78 @@ size_t collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
 
         int maxSeen = st->lastGoalID;
 
-        JsonArray goals = m["goals"].as<JsonArray>();
-        if (!goals.isNull()) {
-            JsonObject  t1      = m["team1"].isNull() ? m["Team1"] : m["team1"];
-            JsonObject  t2      = m["team2"].isNull() ? m["Team2"] : m["team2"];
-            const char* name1   = t1["teamName"] | t1["TeamName"] | "";
-            const char* name2   = t2["teamName"] | t2["TeamName"] | "";
-            const char* lastUpd = m["lastUpdateDateTime"] | "";
+        // --- Live-Goals einsammeln ---
+        bool        anyNewGoalsForThisMatch = false;
+        JsonArray   goals                   = !m["goals"].isNull() ? m["goals"].as<JsonArray>() : m["Goals"].as<JsonArray>();
+        const char* lastUpd                 = strOr(m, "", "lastUpdateDateTime", "LastUpdateDateTime");
 
+        if (!goals.isNull() && goals.size() > 0) {
             for (JsonObject g : goals) {
-                int gid = g["goalID"] | 0;
+                int gid = intOr(g, 0, "goalID", "GoalID");
                 if (gid <= st->lastGoalID)
                     continue;
                 if (outN >= maxOut)
                     break;
 
-                // --- in-place befüllen (keine extra Kopie der Strings) ---
+                int         minute   = intOr(g, -1, "matchMinute", "MatchMinute");
+                bool        penalty  = boolOr(g, false, "isPenalty", "IsPenalty");
+                bool        owngoal  = boolOr(g, false, "isOwnGoal", "IsOwnGoal");
+                bool        overtime = boolOr(g, false, "isOvertime", "IsOvertime", "IsOverTime");
+                int         s1       = intOr(g, 0, "scoreTeam1", "ScoreTeam1");
+                int         s2       = intOr(g, 0, "scoreTeam2", "ScoreTeam2");
+                const char* scorer   = strOr(g, "", "goalGetterName", "GoalGetterName", "goalGetter", "GoalGetter");
+
                 LiveGoalEvent& ev = out[outN++];
                 ev.matchID        = mid;
                 ev.kickOffUTC     = kickC;
-                ev.minute         = g["matchMinute"] | -1;
-                ev.isPenalty      = g["isPenalty"] | false;
-                ev.isOwnGoal      = g["isOwnGoal"] | false;
-                ev.isOvertime     = g["isOvertime"] | false;
-                ev.score1         = g["scoreTeam1"] | 0;
-                ev.score2         = g["scoreTeam2"] | 0;
-                ev.scorer         = (const char*)(g["goalGetterName"] | "");
+                ev.minute         = minute;
+                ev.isPenalty      = penalty;
+                ev.isOwnGoal      = owngoal;
+                ev.isOvertime     = overtime;
+                ev.score1         = s1;
+                ev.score2         = s2;
+                ev.scorer         = scorer;
                 ev.goalTimeUTC    = lastUpd;
                 ev.team1          = name1;
                 ev.team2          = name2;
 
                 if (gid > maxSeen)
                     maxSeen = gid;
+                anyNewGoalsForThisMatch = true;
+            }
+        } else if (!finished) {
+            Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> Live, aber noch keine Goals gemeldet\n", name1, name2);
+        }
+
+        // --- Fallback: Spiel beendet, aber keine Goals -> Endstand loggen ---
+        if (finished && !anyNewGoalsForThisMatch) {
+            JsonArray results = !m["matchResults"].isNull() ? m["matchResults"].as<JsonArray>() : m["MatchResults"].as<JsonArray>();
+            int       endS1 = -1, endS2 = -1;
+            if (!results.isNull()) {
+                for (JsonObject r : results) {
+                    int typeId = intOr(r, 0, "resultTypeID", "ResultTypeID");
+                    if (typeId == 2) {                                          // Endstand
+                        endS1 = intOr(r, -1, "pointsTeam1", "PointsTeam1");
+                        endS2 = intOr(r, -1, "pointsTeam2", "PointsTeam2");
+                        break;
+                    }
+                }
+            }
+            if (endS1 >= 0 && endS2 >= 0) {
+                Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> beendet: (%d:%d), keine Goals im Feed\n", name1, name2, endS1, endS2);
+            } else {
+                Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> beendet, aber weder Goals noch Endstand vorhanden\n", name1, name2);
             }
         }
 
-        // c) höchsten gesehenen goalID-Stand merken
+        // höchsten gesehenen goalID-Stand merken
         if (maxSeen > st->lastGoalID)
             st->lastGoalID = maxSeen;
 
         if (outN >= maxOut)
             break;                                                              // Ausgabepuffer voll
     }
+
     return outN;
 }
 
