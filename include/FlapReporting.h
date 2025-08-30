@@ -11,10 +11,7 @@
 // https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=Task%20Reporting
 //
 /*
-
-
-*/
-
+ */
 #include <Arduino.h>
 #include <vector>
 #include "SlaveTwin.h"
@@ -60,15 +57,13 @@ class FlapReporting {
     // ----------------------------
     uint32_t maxValueFromHistory(uint32_t* history);                            // get maximum value from history
 
-    void        reportTaskStatus();                                             // show Task status report
-    void        reportMemory();                                                 // show memory usage
-    void        reportRtosTasks();                                              // show Tasklist with remaining stack size
-    void        reportAllTwinStepsByFlap(int wrapWidth = 20);                   // show steps per flap for all Twins
-    void        reportSlaveRegistry();                                          // show registry content
-    void        reportI2CStatistic();                                           // show I2C usage history
-    void        reportLigaTable();
-    static void printTableRow(const LigaRow& r);
-    static void renderLigaTable(const LigaSnapshot& s);
+    void reportTaskStatus();                                                    // show Task status report
+    void reportMemory();                                                        // show memory usage
+    void reportRtosTasks();                                                     // show Tasklist with remaining stack size
+    void reportAllTwinStepsByFlap(int wrapWidth = 20);                          // show steps per flap for all Twins
+    void reportSlaveRegistry();                                                 // show registry content
+    void reportI2CStatistic();                                                  // show I2C usage history
+    void reportLigaTable();                                                     // show Bundesliga table
 
    private:
     static const char    BLOCK_LIGHT[];                                         // bar pattern for Access
@@ -82,8 +77,8 @@ class FlapReporting {
     void        printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength); // print bar with value
     void        printI2CHistory();                                              // print I2C history
     void        printUptime();                                                  // Helper to report up time
-    void        printTableRow(LigaRow& r);
-    void        renderLigaTabelle(LigaSnapshot& s);
+    static void printTableRow(const LigaRow& r);                                // Bundesliga table row
+    static void renderLigaTable(const LigaSnapshot& s);                         // build Bundesliga tabel trace
 
     // box drawing helpers for steps by flap report
     String repeatChar(const String& symbol, int count);                         // Helper for unicode
