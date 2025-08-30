@@ -80,10 +80,15 @@ extern LigaTable*      Liga;                                                    
 // Global count down Timer-Handles
 extern TimerHandle_t regiScanTimer;                                             // registry ic2 scan
 extern TimerHandle_t availCheckTimer;                                           // device availability check
+extern TimerHandle_t ligaScanTimer;                                             // openLigaDB scan
+
+// Global Task-Handles
+extern TaskHandle_t ligaTaskHandle;                                             // task handle for liga scanner
 
 // Global Timer-Callbacks
 extern void regiScanCallback(TimerHandle_t xTimer);                             // execute short Time i2c bus scan
 extern void availCheckCallback(TimerHandle_t xTimer);                           // execute Availability Check
+extern void ligaScanCallback(TimerHandle_t xTimer);                             // notify liga scan check
 
 // Global Scan modes
 enum scanModes { SCAN_FAST, SCAN_SHORT, SCAN_LONG, NO_SCAN };

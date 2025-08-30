@@ -187,7 +187,7 @@ void FlapReporting::printTableRow(const LigaRow& r) {
     Serial.println(" │");
 }
 
-// Beispiel-Verwendung mit deinen Header/Footer (unverändert):
+// render Bundesliga table:
 void FlapReporting::renderLigaTable(const LigaSnapshot& s) {
     if (s.teamCount == 0) {
         Serial.println(F("(Liga) No data available."));
@@ -506,6 +506,20 @@ void FlapReporting::reportTaskStatus() {
         }
         printKV(" Next device check in:", val);
     }
+
+    // next Liga scan
+    {
+        uint32_t ls = getNextLigaScanRemainingMs();
+        char     val[32];
+        if (ls == 0) {
+            strcpy(val, "inactive");
+        } else {
+            uint32_t m = ls / 60000;
+            uint32_t s = (ls % 60000) / 1000;
+            snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
+        }
+        printKV(" Next liga scan in  :", val);
+    }
     printBottom();
 }
 
@@ -538,6 +552,22 @@ uint32_t FlapReporting::getNextAvailabilityRemainingMs() {
     TickType_t now = xTaskGetTickCount();
     if (availCheckTimer && xTimerIsTimerActive(availCheckTimer)) {
         TickType_t expiry = xTimerGetExpiryTime(availCheckTimer);
+        return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
+    }
+    return 0;
+}
+
+// ----------------------------
+
+/**
+ * @brief get remaining time for next Liga scan
+ *
+ * @return uint32_t
+ */
+uint32_t FlapReporting::getNextLigaScanRemainingMs() {
+    TickType_t now = xTaskGetTickCount();
+    if (ligaScanTimer && xTimerIsTimerActive(ligaScanTimer)) {
+        TickType_t expiry = xTimerGetExpiryTime(ligaScanTimer);
         return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
     }
     return 0;

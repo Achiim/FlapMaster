@@ -21,6 +21,7 @@
 */
 #include "FlapStatistics.h"
 #include "FlapTasks.h"
+#include "Liga.h"
 #include "FlapRegistry.h"
 #include "MasterPrint.h"
 
@@ -32,6 +33,8 @@ TaskHandle_t g_registryHandle      = nullptr;
 TaskHandle_t g_reportHandle        = nullptr;
 TaskHandle_t g_statisticHandle     = nullptr;
 TaskHandle_t g_twinHandle[numberOfTwins];
+
+TaskHandle_t ligaTaskHandle = nullptr;
 
 // Global defines for RTOS Queue handles
 QueueHandle_t g_reportQueue = nullptr;
@@ -48,6 +51,7 @@ FlapTask*       Master         = nullptr;
 // Global Timer-Handles
 TimerHandle_t regiScanTimer   = nullptr;
 TimerHandle_t availCheckTimer = nullptr;
+TimerHandle_t ligaScanTimer   = nullptr;
 
 // Global registry scan mode
 scanModes g_scanMode = NO_SCAN;                                                 // registry scan mode
@@ -94,6 +98,16 @@ void FlapTask::systemHalt(const char* reason, int blinkCode) {
         vTaskDelay(pdMS_TO_TICKS(5000));                                        // Delay for 5s
     }
 }
+
+// ----------------------------------
+
+/**
+ * @brief  liga Scan (dynamic countdown),
+ * scans openLigaDB for changes
+ *
+ * @param xTimer associated timer
+ */
+void ligaScanCallback(TimerHandle_t xTimer) {}
 
 // ----------------------------------
 

@@ -26,6 +26,9 @@
 
 // --- Configuration -----------------------------------------------------------
 #define LIGA_MAX_TEAMS 18
+#define POLL_10MIN_BEFORE_KICKOFF 60 * 1000                                     // 60 seconds
+#define POLL_DURING_GAME 20 * 1000                                              // 20 seconds
+#define POLL_NORMAL 15 * 60 * 1000                                              // 15 minutes
 
 struct DfbMap {
     const char* key;                                                            // team name

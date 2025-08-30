@@ -133,91 +133,163 @@ static bool boolOr(JsonObjectConst o, bool def, const char* k1, const char* k2 =
     return def;
 }
 
+static WiFiClientSecure makeSecureClient() {
+    WiFiClientSecure c;
+    c.setCACert(OPENLIGA_CA);                                                   // certificat
+    return c;
+}
+
+static bool waitForTime(uint32_t maxMs = 15000) {
+    time_t   t  = time(nullptr);
+    uint32_t t0 = millis();
+    while (t < 1700000000 && (millis() - t0) < maxMs) {                         // ~2023-11-14
+        delay(200);
+        t = time(nullptr);
+    }
+    return t >= 1700000000;
+}
+
+static bool httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc) {
+    (void)waitForTime();
+
+    http.setReuse(true);
+    http.setConnectTimeout(8000);
+    http.setTimeout(8000);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.useHTTP10(true);                                                       // WICHTIG: 1.0 erzwingen -> kein chunked
+    http.addHeader("Connection", "close");                                      // optional, macht’s explizit:
+    http.setUserAgent("ESP32-Flap/1.0");
+    http.addHeader("Accept", "application/json");
+    http.addHeader("Accept-Encoding", "identity");
+    const char* hdrs[] = {"Content-Type", "Content-Encoding", "Transfer-Encoding"};
+    http.collectHeaders(hdrs, 3);
+
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (!http.begin(client, url)) {
+            Serial.printf("HTTP begin failed: %s  (freeHeap=%u)\n", url, (unsigned)ESP.getFreeHeap());
+            http.end();
+            delay(150);
+            continue;
+        }
+
+        int code = http.GET();
+        if (code != HTTP_CODE_OK) {
+            Serial.printf("GET %s -> %d (%s)\n", url, code, http.errorToString(code).c_str());
+            http.end();
+            if (code < 0)
+                delay(150);                                                     // bei Transportfehler kurz retry
+            continue;
+        }
+
+        Stream* s = http.getStreamPtr();
+        if (s && s->peek() == 0xEF) {
+            uint8_t bom[3];
+            s->readBytes(bom, 3);
+        }
+
+        DeserializationError err = deserializeJson(doc, *s);
+        http.end();
+        if (err) {
+            Serial.printf("JSON parse error @ %s: %s\n", url, err.c_str());
+
+            const String ct = http.header("Content-Type");
+            const String ce = http.header("Content-Encoding");
+            const String te = http.header("Transfer-Encoding");
+            const int    cl = http.header("Content-Length").toInt();
+            Serial.printf("Bad JSON. CT=%s CE=%s TE=%s CL=%d\n", ct.c_str(), ce.c_str(), te.c_str(), cl);
+
+            // Vorsichtig ersten Teil lesen (diagnostisch)
+            WiFiClient* s = (WiFiClient*)http.getStreamPtr();
+            char        peekBuf[96]{};
+            size_t      n = s ? s->readBytes(peekBuf, sizeof(peekBuf) - 1) : 0;
+            if (n) {
+                Serial.print("Body[0..n]: ");
+                for (size_t i = 0; i < n; i++)
+                    Serial.write(isprint((unsigned char)peekBuf[i]) ? peekBuf[i] : '.');
+                Serial.println();
+            }
+
+            return false;
+        }
+        return true;
+    }
+    return false;
+}
+
 // ----- Kernfunktion -----
-// foreward declaration
-static bool httpGetJson(const char* url, JsonDocument& doc);
 
 // ---- Robuster Loader: ermittelt Season & Group und lädt den Spieltag ----
 static bool loadCurrentBL1Matchday(JsonDocument& outDoc, int* outSeason, int* outGroupOrderId) {
-    // 1) Primär: getcurrentgroup/bl1
+    WiFiClientSecure client = makeSecureClient();
+    HTTPClient       http;
+
+    int season       = 0;
+    int groupOrderID = 0;
+
+    // --- 1) aktuelle Gruppe holen (kann Zahl/Strings oder Objekt/Array sein) ---
     {
         JsonDocument gdoc;
-        if (httpGetJson("https://api.openligadb.de/getcurrentgroup/bl1", gdoc)) {
-            // Manche Instanzen liefern ein Objekt, andere (selten) ein Array mit einem Eintrag
-            int season = 0, groupOrderID = 0;
+        if (httpGetJsonWith(http, client, "https://api.openligadb.de/getcurrentgroup/bl1", gdoc)) {
             if (gdoc.is<JsonObject>()) {
-                JsonObject g = gdoc.as<JsonObject>();
+                auto g       = gdoc.as<JsonObject>();
                 season       = g["leagueSeason"] | g["LeagueSeason"] | 0;
                 groupOrderID = g["groupOrderID"] | g["GroupOrderID"] | 0;
-            } else if (gdoc.is<JsonArray>()) {
-                JsonArray arr = gdoc.as<JsonArray>();
-                if (arr.size() > 0 && arr[0].is<JsonObject>()) {
-                    JsonObject g = arr[0].as<JsonObject>();
-                    season       = g["leagueSeason"] | g["LeagueSeason"] | 0;
-                    groupOrderID = g["groupOrderID"] | g["GroupOrderID"] | 0;
-                }
-            }
-            if (season > 0 && groupOrderID > 0) {
-                char url[160];
-                snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/bl1/%d/%d", season, groupOrderID);
-                Serial.printf("[collector] GET %s\n", url);
-                if (httpGetJson(url, outDoc)) {
-                    if (outSeason)
-                        *outSeason = season;
-                    if (outGroupOrderId)
-                        *outGroupOrderId = groupOrderID;
-                    return true;
-                } else {
-                    Serial.println("[collector] getmatchdata/<season>/<group> fehlgeschlagen (Primärpfad)");
-                }
+            } else if (gdoc.is<JsonArray>() && gdoc.as<JsonArray>().size() > 0 && gdoc.as<JsonArray>()[0].is<JsonObject>()) {
+                auto g       = gdoc.as<JsonArray>()[0].as<JsonObject>();
+                season       = g["leagueSeason"] | g["LeagueSeason"] | 0;
+                groupOrderID = g["groupOrderID"] | g["GroupOrderID"] | 0;
+            } else if (gdoc.is<int>()) {
+                groupOrderID = gdoc.as<int>();
+            } else if (gdoc.is<const char*>()) {
+                groupOrderID = atoi(gdoc.as<const char*>());
             } else {
-                Serial.println("[collector] getcurrentgroup: season/groupOrderID nicht gefunden");
+                Serial.println("[collector] getcurrentgroup: unbekanntes Format");
             }
         } else {
             Serial.println("[collector] getcurrentgroup fehlgeschlagen");
         }
     }
 
-    // 2) Fallback: grober Endpoint -> Season & Group aus erstem Match extrahieren
-    {
+    // --- 2) falls Season fehlt, aus grobem Endpoint bestimmen ---
+    if (groupOrderID > 0 && season == 0) {
         JsonDocument tmp;
-        if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", tmp)) {
-            Serial.println("[collector] Fallback: getmatchdata/bl1 fehlgeschlagen");
-            return false;
+        if (httpGetJsonWith(http, client, "https://api.openligadb.de/getmatchdata/bl1", tmp)) {
+            JsonArray matches = tmp.as<JsonArray>();
+            if (!matches.isNull() && matches.size() > 0) {
+                season = matches[0]["leagueSeason"] | matches[0]["LeagueSeason"] | 0;
+            }
         }
-        JsonArray matches = tmp.as<JsonArray>();
-        if (matches.isNull() || matches.size() == 0) {
-            Serial.println("[collector] Fallback: keine Matches im groben Endpoint");
-            return false;
-        }
-        // Nimm das erste Match und lies Season/Group robust
-        JsonObject m0           = matches[0].as<JsonObject>();
-        int        season       = m0["leagueSeason"] | m0["LeagueSeason"] | 0;
-        JsonObject grp          = m0["group"].isNull() ? m0["Group"] : m0["group"];
-        int        groupOrderID = grp["groupOrderID"] | grp["GroupOrderID"] | 0;
+    }
 
-        if (season <= 0 || groupOrderID <= 0) {
-            Serial.println("[collector] Fallback: season/groupOrderID im Match0 nicht gefunden");
-            return false;
-        }
-
+    // --- 3) exakten Spieltag laden ---
+    if (groupOrderID > 0 && season > 0) {
         char url[160];
         snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/bl1/%d/%d", season, groupOrderID);
-        Serial.printf("[collector] GET (Fallback) %s\n", url);
-        if (!httpGetJson(url, outDoc)) {
-            Serial.println("[collector] Fallback: getmatchdata/<season>/<group> erneut fehlgeschlagen");
-            return false;
+        Serial.printf("[collector] GET %s\n", url);
+        if (httpGetJsonWith(http, client, url, outDoc)) {
+            if (outSeason)
+                *outSeason = season;
+            if (outGroupOrderId)
+                *outGroupOrderId = groupOrderID;
+            return true;
         }
-        if (outSeason)
-            *outSeason = season;
-        if (outGroupOrderId)
-            *outGroupOrderId = groupOrderID;
-        return true;
+        Serial.println("[collector] getmatchdata/<season>/<group> fehlgeschlagen (Primärpfad)");
+    } else {
+        Serial.println("[collector] getcurrentgroup: season/groupOrderID nicht bestimmbar");
     }
+
+    // Optional: dein vorhandener Fallback kann hier bleiben
+    return false;
 }
 
 size_t LigaTable::collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
     size_t outN = 0;
+
+    if (WiFi.status() != WL_CONNECTED && !connect()) {
+        Serial.println("[collector] WLAN down");
+        return 0;
+    }
+    (void)waitForTime();
 
     JsonDocument doc;
     int          season = 0, groupOrderID = 0;
@@ -341,11 +413,13 @@ size_t LigaTable::collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut
 
 // Holt LastChange für eine (Saison, Gruppe)
 static bool getLastChange(int season, int group, String& out) {
-    char url[128];
+    char             url[128];
+    WiFiClientSecure client = makeSecureClient();                               // eine TLS-Session
+    HTTPClient       http;                                                      // ein HTTPClient
     snprintf(url, sizeof(url), "https://api.openligadb.de/getlastchangedate/bl1/%d/%d", season, group);
 
     JsonDocument ldc;
-    if (!httpGetJson(url, ldc))
+    if (!httpGetJsonWith(http, client, url, ldc))
         return false;
 
     // Entweder reiner String oder { "lastChangeDate": "..." }
@@ -356,8 +430,11 @@ static bool getLastChange(int season, int group, String& out) {
 
 // Holt Season & aktuellen Spieltag aus dem "aktueller Spieltag"-Endpoint
 bool LigaTable::getSeasonAndGroup(int& season, int& group) {
-    JsonDocument doc;
-    if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", doc))
+    JsonDocument     doc;
+    WiFiClientSecure client = makeSecureClient();                               // eine TLS-Session
+    HTTPClient       http;                                                      // ein HTTPClient
+
+    if (!httpGetJsonWith(http, client, "https://api.openligadb.de/getmatchdata/bl1", doc))
         return false;
     JsonArray arr = doc.as<JsonArray>();
     if (arr.isNull() || arr.size() == 0)
@@ -395,10 +472,22 @@ bool LigaTable::pollLastChange(int* seasonOut, int* matchdayOut) {
     time_t tPrev  = lcPrev.isEmpty() ? 0 : toUtcTimeT(lcPrev);
     String latest = (tPrev > tCur) ? lcPrev : lcCur;
 
-    if (latest.isEmpty() || latest == s_lastChange)
+    if (latest.isEmpty() || latest == s_lastChange) {
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope trace;
+            ligaPrintln("LigaTable changed at %s, nothing new", latest.c_str());
+            }
+        #endif
         return false;
+    }
 
-    ligaPrintln("LigaTable changed at %s please actualize", latest.c_str());
+    #ifdef LIGAVERBOSE
+        {
+        TraceScope trace;
+        ligaPrintln("LigaTable changed at %s please actualize", latest.c_str());
+        }
+    #endif
 
     time_t t = toUtcTimeT(latest);
     if (t > 0)
@@ -407,22 +496,6 @@ bool LigaTable::pollLastChange(int* seasonOut, int* matchdayOut) {
     s_lastChange = latest;                                                      // letzter Zeitpunkt des normalen poll (wenn kein Spiel läuft)
 
     return true;
-}
-
-static WiFiClientSecure makeSecureClient() {
-    WiFiClientSecure c;
-    c.setCACert(OPENLIGA_CA);                                                   // certificat
-    return c;
-}
-
-static bool waitForTime(uint32_t maxMs = 15000) {
-    time_t   t  = time(nullptr);
-    uint32_t t0 = millis();
-    while (t < 1700000000 && (millis() - t0) < maxMs) {                         // ~2023-11-14
-        delay(200);
-        t = time(nullptr);
-    }
-    return t >= 1700000000;
 }
 
 static String dfbCodeForTeamStrict(const String& teamName) {
@@ -502,33 +575,16 @@ static bool pickNextFromArray(JsonArray arr, const String& nowIso, NextMatch& ou
     return have;
 }
 
-static bool httpGetJson(const char* url, JsonDocument& doc) {
-    WiFiClientSecure client = makeSecureClient();
-    HTTPClient       http;
-    http.setConnectTimeout(8000);
-    if (!http.begin(client, url))
-        return false;
-    int code = http.GET();
-    if (code != 200) {
-        http.end();
-        Serial.printf("GET -> %d (%s)\n", code, http.errorToString(code).c_str());
-        return false;
-    }
-    String body = http.getString();
-    http.end();
-    body.trim();
-    DeserializationError err = deserializeJson(doc, body);
-    return !err;
-}
-
 // Hauptroutine: ermittelt Season & aktuellen Spieltag aus getmatchdata/bl1,
 // sucht dort das nächste Spiel; wenn keins: lädt den nächsten Spieltag.
 bool getNextUpcomingBL1(NextMatch& out) {
-    const String nowIso = nowUTC_ISO();
+    const String     nowIso = nowUTC_ISO();
+    WiFiClientSecure client = makeSecureClient();                               // eine TLS-Session
+    HTTPClient       http;                                                      // ein HTTPClient
 
     // 1) Aktuellen Spieltag samt Season holen
     JsonDocument curDoc;
-    if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", curDoc))
+    if (!httpGetJsonWith(http, client, "https://api.openligadb.de/getmatchdata/bl1", curDoc))
         return false;
     JsonArray curArr = curDoc.as<JsonArray>();
     if (curArr.isNull() || curArr.size() == 0)
@@ -550,7 +606,7 @@ bool getNextUpcomingBL1(NextMatch& out) {
     char url[96];
     snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/bl1/%d/%d", season, curGroup + 1);
     JsonDocument nextDoc;
-    if (!httpGetJson(url, nextDoc))
+    if (!httpGetJsonWith(http, client, url, nextDoc))
         return false;
     JsonArray nextArr = nextDoc.as<JsonArray>();
     if (nextArr.isNull() || nextArr.size() == 0)
@@ -699,10 +755,12 @@ static void printFooter() {
 static void refreshNextKickoffEpoch() {
     if (millis() - s_lastKickoffRefreshMs < KICKOFF_REFRESH_MS)
         return;
-    s_lastKickoffRefreshMs = millis();
+    s_lastKickoffRefreshMs  = millis();
+    WiFiClientSecure client = makeSecureClient();                               // eine TLS-Session
+    HTTPClient       http;                                                      // ein HTTPClient
 
     JsonDocument doc;                                                           // klein halten, kein Riesenfilter nötig
-    if (!httpGetJson("https://api.openligadb.de/getmatchdata/bl1", doc))
+    if (!httpGetJsonWith(http, client, "https://api.openligadb.de/getmatchdata/bl1", doc))
         return;
     JsonArray arr = doc.as<JsonArray>();
     if (arr.isNull() || arr.size() == 0)
@@ -728,14 +786,14 @@ uint32_t LigaTable::decidePollMs() {
 
     // 10 min vor Anstoß: schneller
     if (s_nextKickoffEpoch && (s_nextKickoffEpoch - nowT) <= 10 * 60) {
-        return 5000;                                                            // 5 s
+        return POLL_10MIN_BEFORE_KICKOFF;                                       // 5 s
     }
     // Während Live-Phase: in den letzten 15 min gab es Änderungen
     if (s_lastChangeEpoch && (nowT - s_lastChangeEpoch) <= 15 * 60) {
-        return 3000;                                                            // 3 s
+        return POLL_DURING_GAME;                                                // 3 s
     }
     // Sonst gemütlich
-    return 60000;                                                               // 60 s
+    return POLL_NORMAL;                                                         // 15 min
 }
 
 // ===== LigaTable: Constructor =====
@@ -804,6 +862,7 @@ bool LigaTable::connect() {
     if (WiFi.status() == WL_CONNECTED)
         return true;
     WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);                                                       // vermeidet sporadische TLS-Fehler beim Aufwachen
     ligaPrint("Verbinde mit WLAN");
     WiFi.begin(ssid, password);
     uint32_t t0 = millis();
@@ -836,7 +895,8 @@ bool LigaTable::fetchTable(LigaSnapshot& out) {
     http.setConnectTimeout(8000);
     http.setTimeout(8000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.useHTTP10(true);                                                       // avoid chunked if possible
+    http.useHTTP10(true);                                                       // WICHTIG: 1.0 erzwingen -> kein chunked
+    http.addHeader("Connection", "close");                                      // optional, macht’s explizit:
     http.setUserAgent("ESP32-Flap/1.0");
     http.addHeader("Accept", "application/json");
     http.addHeader("Accept-Encoding", "identity");
@@ -952,8 +1012,8 @@ bool LigaTable::fetchTable(LigaSnapshot& out) {
 }
 
 void LigaTable::getGoal() {
-    LiveGoalEvent evs[12];
-    size_t        n = collectNewGoalsAcrossLiveBL1(evs, 12);
+    static LiveGoalEvent evs[12];
+    size_t               n = collectNewGoalsAcrossLiveBL1(evs, 12);
     if (n > 0) {
         // Mindestens ein Tor in laufenden Spielen!
         for (size_t i = 0; i < n; i++) {

@@ -92,6 +92,7 @@ class FlapReporting {
 
     uint32_t getNextScanRemainingMs();                                          // next i2c scan time
     uint32_t getNextAvailabilityRemainingMs();                                  // next availability checl time
+    uint32_t getNextLigaScanRemainingMs();                                      // next liga scan time
 
 #endif                                                                          // FlapReporting_h
 };

@@ -1,3 +1,17 @@
+// #################################################################################################################
+//
+//  ██████  ████████  ██████  ███████     ████████  █████  ███████ ██   ██
+//  ██   ██    ██    ██    ██ ██             ██    ██   ██ ██      ██  ██
+//  ██████     ██    ██    ██ ███████        ██    ███████ ███████ █████
+//  ██   ██    ██    ██    ██      ██        ██    ██   ██      ██ ██  ██
+//  ██   ██    ██     ██████  ███████        ██    ██   ██ ███████ ██   ██
+//
+//
+// ################################################################################################## by Achim ####
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=RTOS%20TASK
+//
+
 #include <freertos/FreeRTOS.h>                                                  // Real Time OS
 #include <freertos/task.h>
 #include <FlapGlobal.h>
@@ -26,12 +40,24 @@ void ligaTask(void* pvParameters) {
     int           matchday = 0;
     ReportCommand repCmd;
 
+    static LigaSnapshot snap;                                                   // snapshot of table
     Liga = new LigaTable();
     Liga->connect();                                                            // connect to openLigaDB
 
+    uint32_t periodMs = Liga->decidePollMs();                                   // Auto-Reload-Timer
+    ligaScanTimer     = xTimerCreate("LigaScan", pdMS_TO_TICKS(periodMs),
+                                     /*auto-reload*/ pdTRUE, nullptr, ligaScanCallback);
+    xTimerStart(ligaScanTimer, 0);                                              // start countdown
+
     while (true) {
         if (Liga->pollLastChange(&season, &matchday)) {
-            LigaSnapshot snap;                                                  // snapshot of table
+            #ifdef LIGAVERBOSE
+                {
+                TraceScope trace;
+                masterPrintln("========== Liga Scan ============== ");
+                }
+            #endif
+
             snap.clear();                                                       // clear snapshot
             Liga->fetchTable(snap);                                             // fill snapshot
             Liga->commit(snap);                                                 // Commit snapshot LigaTable (double-buffer flip)
@@ -44,7 +70,12 @@ void ligaTask(void* pvParameters) {
             Liga->getNextMatch();                                               // get next match
             Liga->getGoal();                                                    // get goal event
         }
-        vTaskDelay(pdMS_TO_TICKS(Liga->decidePollMs()));                        // dynamic Delay depending on current game or not
+
+        int32_t nextMs = Liga->decidePollMs();
+        if (nextMs == 0)
+            nextMs = 1;
+        vTaskDelay(pdMS_TO_TICKS(nextMs));                                      // Delay dynamic
+        xTimerChangePeriod(ligaScanTimer, pdMS_TO_TICKS(nextMs), pdMS_TO_TICKS(2));
     }
 }
 
