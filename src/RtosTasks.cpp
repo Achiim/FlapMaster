@@ -31,25 +31,44 @@
 // ----------------------------
 
 /**
- * @brief freeRTOS task Liga
+ * @brief Liga FreeRTOS task: fetch/commit table, goals, next match; then wait.
  *
- * @param pvParameters
+ * Core idea:
+ *  1) Do the work (HTTP/JSON/etc.) first.
+ *  2) Compute the dynamic period from Liga->decidePollMs().
+ *  3) Subtract the work time to get the "remaining wait".
+ *  4) Set the one-shot timer to that remaining wait (for countdown visibility).
+ *  5) vTaskDelay() for exactly the same ticks (perfectly in sync with the timer).
+ *
+ * @param pvParameters Unused.
  */
 void ligaTask(void* pvParameters) {
     int           season   = 0;
     int           matchday = 0;
     ReportCommand repCmd;
 
-    static LigaSnapshot snap;                                                   // snapshot of table
-    Liga = new LigaTable();
-    Liga->connect();                                                            // connect to openLigaDB
+    static LigaSnapshot snap;                                                   // keep off the task stack growth per loop
 
-    uint32_t periodMs = Liga->decidePollMs();                                   // Auto-Reload-Timer
-    ligaScanTimer     = xTimerCreate("LigaScan", pdMS_TO_TICKS(periodMs),
-                                     /*auto-reload*/ pdTRUE, nullptr, ligaScanCallback);
-    xTimerStart(ligaScanTimer, 0);                                              // start countdown
+    // Construct the LigaTable and connect once.
+    Liga = new LigaTable();
+    Liga->connect();
+
+    // Create a one-shot timer. Period will be set per-iteration to the *remaining* time.
+    // Using one-shot avoids repeated callbacks while the task is asleep.
+    ligaScanTimer = xTimerCreate("LigaScan",
+                                 /*initial period*/ 1,                          // will be changed before each wait
+                                 /*autoReload*/ pdFALSE,
+                                 /*timerID*/ nullptr,
+                                 /*callback*/ ligaScanCallback);
+    configASSERT(ligaScanTimer != nullptr);
+
+    // Start it with a dummy short period so getNextLigaScanRemainingMs() is valid immediately.
+    xTimerStart(ligaScanTimer, pdMS_TO_TICKS(2));
 
     while (true) {
+        // ---- 1) Work phase starts: measure start tick to compute remaining wait later
+        TickType_t t0 = xTaskGetTickCount();
+
         if (Liga->pollLastChange(&season, &matchday)) {
             #ifdef LIGAVERBOSE
                 {
@@ -57,25 +76,41 @@ void ligaTask(void* pvParameters) {
                 masterPrintln("========== Liga Scan ============== ");
                 }
             #endif
+            snap.clear();                                                       // reset snapshot buffer
+            Liga->fetchTable(snap);                                             // pull latest table data (HTTP/JSON)
+            Liga->commit(snap);                                                 // atomic flip to front buffer
 
-            snap.clear();                                                       // clear snapshot
-            Liga->fetchTable(snap);                                             // fill snapshot
-            Liga->commit(snap);                                                 // Commit snapshot LigaTable (double-buffer flip)
+            // Kick a report if desired
             repCmd.repCommand   = REPORT_LIGA_TABLE;
             repCmd.responsQueue = nullptr;
-            if (g_reportQueue)                                                  // Trigger trace snapshot
+            if (g_reportQueue)
                 xQueueOverwrite(g_reportQueue, &repCmd);
 
-            Liga->openLigaDBHealth();                                           // check if openLigaDB is online
-            Liga->getNextMatch();                                               // get next match
-            Liga->getGoal();                                                    // get goal event
+            // Side queries (keep lightweight/frequent, heavier/rare ones less often)
+            Liga->openLigaDBHealth();
+            Liga->getNextMatch();
+            Liga->getGoal();
         }
 
-        int32_t nextMs = Liga->decidePollMs();
-        if (nextMs == 0)
+        // ---- 2) Decide the *nominal* period in ms for the next scan
+        uint32_t nextMs = Liga->decidePollMs();
+        if (nextMs < 1)
             nextMs = 1;
-        vTaskDelay(pdMS_TO_TICKS(nextMs));                                      // Delay dynamic
-        xTimerChangePeriod(ligaScanTimer, pdMS_TO_TICKS(nextMs), pdMS_TO_TICKS(2));
+
+        // ---- 3) Convert to ticks and compute the *remaining* wait (period - work time)
+        TickType_t period = pdMS_TO_TICKS(nextMs);
+        if (period == 0)
+            period = 1;                                                         // ensure at least 1 tick
+
+        TickType_t elapsed = xTaskGetTickCount() - t0;                          // work duration in ticks
+        TickType_t wait    = (elapsed < period) ? (period - elapsed) : 1;
+
+        // ---- 4) Program the countdown timer to the *remaining* wait (relative to now)
+        // xTimerChangePeriod() resets the one-shot timer to expire after 'wait' ticks.
+        configASSERT(xTimerChangePeriod(ligaScanTimer, wait, pdMS_TO_TICKS(2)) == pdPASS);
+
+        // ---- 5) Sleep for exactly the same remaining ticks (perfect sync with timer)
+        vTaskDelay(wait);
     }
 }
 

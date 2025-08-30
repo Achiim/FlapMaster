@@ -559,18 +559,28 @@ uint32_t FlapReporting::getNextAvailabilityRemainingMs() {
 
 // ----------------------------
 
+// ----------------------------------
+
 /**
- * @brief get remaining time for next Liga scan
+ * @brief Milliseconds remaining until the next scheduled Liga scan.
  *
- * @return uint32_t
+ * Uses the timer's absolute expiry tick and a signed delta to be safe across
+ * tick wraparound. Returns 0 if the timer is inactive or overdue.
+ *
+ * @return uint32_t  Remaining time in milliseconds (0 if none).
  */
 uint32_t FlapReporting::getNextLigaScanRemainingMs() {
-    TickType_t now = xTaskGetTickCount();
-    if (ligaScanTimer && xTimerIsTimerActive(ligaScanTimer)) {
-        TickType_t expiry = xTimerGetExpiryTime(ligaScanTimer);
-        return (expiry > now) ? (expiry - now) * portTICK_PERIOD_MS : 0;
+    // Quick outs: no timer or not active → no countdown
+    if (!ligaScanTimer || xTimerIsTimerActive(ligaScanTimer) != pdTRUE) {
+        return 0u;
     }
-    return 0;
+
+    const TickType_t now    = xTaskGetTickCount();
+    const TickType_t expiry = xTimerGetExpiryTime(ligaScanTimer);
+
+    // Signed subtraction is rollover-safe in FreeRTOS tick math
+    const int32_t diff = (int32_t)(expiry - now);
+    return (diff > 0) ? pdTICKS_TO_MS((TickType_t)diff) : 0u;
 }
 
 // ----------------------------
