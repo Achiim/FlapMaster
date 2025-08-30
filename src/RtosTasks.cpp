@@ -29,7 +29,13 @@
 #include "RtosTasks.h"
 
 // ----------------------------
-
+//      _    _
+//     | |  (_)__ _ __ _
+//     | |__| / _` / _` |
+//     |____|_\__, \__,_|
+//            |___/
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=Liga
 /**
  * @brief Liga FreeRTOS task: fetch/commit table, goals, next match; then wait.
  *
@@ -115,7 +121,13 @@ void ligaTask(void* pvParameters) {
 }
 
 // ----------------------------
-
+//      ___               _        ___         _           _
+//     | _ \___ _ __  ___| |_ ___ / __|___ _ _| |_ _ _ ___| |
+//     |   / -_) '  \/ _ \  _/ -_) (__/ _ \ ' \  _| '_/ _ \ |
+//     |_|_\___|_|_|_\___/\__\___|\___\___/_||_\__|_| \___/_|
+//
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=RemoteControl
 /**
  * @brief freeRTOS Task Remote Control
  *
@@ -130,7 +142,13 @@ void remoteControl(void* pvParameters) {
 }
 
 // ----------------------------
+//      ___
+//     | _ \__ _ _ _ ___ ___ _ _
+//     |  _/ _` | '_(_-</ -_) '_|
+//     |_| \__,_|_| /__/\___|_|
 
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=Parser
 /**
  * @brief freeRTOS Task Parser
  *
@@ -161,7 +179,14 @@ void parserTask(void* pvParameters) {
 }
 
 // ----------------------------
+//      ___          _    _
+//     | _ \___ __ _(_)__| |_ _ _ _  _
+//     |   / -_) _` | (_-<  _| '_| || |
+//     |_|_\___\__, |_/__/\__|_|  \_, |
+//             |___/              |__/
 
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=Registry
 /**
  * @brief freeRTOS Task Registry
  *
@@ -244,7 +269,13 @@ void twinRegister(void* pvParameters) {
 }
 
 // ----------------------------
+//      _____        _
+//     |_   _|_ __ _(_)_ _
+//       | | \ V  V / | ' \ 
+//       |_|  \_/\_/|_|_||_|
 
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=Twin
 /**
  * @brief freeRTOS Task Twin[index]
  *
@@ -260,7 +291,14 @@ void slaveTwinTask(void* pvParameters) {
 }
 
 // ----------------------------
+//      ___ _        _   _    _   _
+//     / __| |_ __ _| |_(_)__| |_(_)__
+//     \__ \  _/ _` |  _| (_-<  _| / _|
+//     |___/\__\__,_|\__|_/__/\__|_\__|
+//
 
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=Statistic
 /**
  * @brief freeRTOS Task Statistic
  *
@@ -286,7 +324,13 @@ void statisticTask(void* param) {
 }
 
 // ----------------------------
-
+//      ___                   _   _
+//     | _ \___ _ __  ___ _ _| |_(_)_ _  __ _
+//     |   / -_) '_ \/ _ \ '_|  _| | ' \/ _` |
+//     |_|_\___| .__/\___/_|  \__|_|_||_\__, |
+//             |_|                      |___/
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=Reporting
 /**
  * @brief freeRTOS Task Reporting
  *

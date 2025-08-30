@@ -518,7 +518,7 @@ void FlapReporting::reportTaskStatus() {
             uint32_t s = (ls % 60000) / 1000;
             snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
         }
-        printKV(" Next liga scan in  :", val);
+        printKV(" Next liga scan in   :", val);
     }
     printBottom();
 }
