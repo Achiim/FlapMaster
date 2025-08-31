@@ -19,6 +19,9 @@
 #define Liga_h
 
 #include <Arduino.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>                                                        // v7 (JsonDocument)
 #include <atomic>
 #include <stdint.h>
 #include <string.h>
@@ -30,30 +33,33 @@
 #define POLL_DURING_GAME 20 * 1000                                              // 20 seconds
 #define POLL_NORMAL 15 * 60 * 1000                                              // 15 minutes
 
+// --- Chooseable league -------------------------------------------------------
+enum class League : uint8_t { BL1 = 1, BL2 = 2 };
+extern League activeLeague;
+
+/** @brief Return OpenLigaDB league shortcut string for the given enum. */
+static inline const char* leagueShortcut(League lg) {
+    return (lg == League::BL2) ? "bl2" : "bl1";
+}
+
+// ----- Datatyps -----
 struct DfbMap {
     const char* key;                                                            // team name
     const char* code;                                                           // 3-char DFB abbriviation
     const int   flap;                                                           // falp number
 };
 
-// ----- Datentypen -----
 struct LiveGoalEvent {
     int    matchID = 0;
     String kickOffUTC;                                                          // kick-off time (UTC)
     String goalTimeUTC;                                                         // time of Goals (aus lastUpdate / Konstrukt)
-    int    minute = -1;
-    int    score1 = 0, score2 = 0;
-    String team1, team2, scorer;
-    bool   isPenalty = false, isOwnGoal = false, isOvertime = false;
+    int    minute = -1;                                                         // goal scored in minute
+    int    score1 = 0, score2 = 0;                                              // result (1:0)
+    String team1, team2, scorer;                                                // match partner and goal scorer
+    bool   isPenalty = false, isOwnGoal = false, isOvertime = false;            // special situation of goal
 };
 
-// Merker pro Spiel (höchste gesehene goalID)
-struct MatchState {
-    int matchID;
-    int lastGoalID;
-};
-
-// ---------- DATA (ASCII-only snapshot) ----------
+// ---------- Liga Table row (ASCII-only snapshot) ----------
 struct LigaRow {
     uint8_t pos;                                                                // 1..18
     uint8_t sp;                                                                 // matches played
@@ -71,14 +77,14 @@ struct LigaSnapshot {
     uint32_t nextKickoffUTC;                                                    // 0 if unknown
     uint32_t fetchedAtUTC;                                                      // epoch-ish
     uint8_t  teamCount;                                                         // <= 18
-    LigaRow  rows[18];
-    void     clear() {
+    LigaRow  rows[LIGA_MAX_TEAMS];
+    void     clear() {                                                          // clear snapshot
         season         = 0;
         matchday       = 0;
         nextKickoffUTC = 0;
         fetchedAtUTC   = 0;
         teamCount      = 0;
-        for (uint8_t i = 0; i < 18; i++) {
+        for (uint8_t i = 0; i < LIGA_MAX_TEAMS; i++) {
             rows[i].pos = rows[i].sp = rows[i].pkt = 0;
             rows[i].diff                           = 0;
             rows[i].team[0] = rows[i].shortName[0] = rows[i].dfb[0] = '\0';
@@ -86,8 +92,28 @@ struct LigaSnapshot {
     }
 };
 
+struct NextMatch {
+    int    season  = 0;
+    int    group   = 0;
+    int    matchID = 0;
+    String dateUTC;
+    String team1, team1Short;
+    String team2, team2Short;
+};
+
+struct ApiHealth {
+    bool   ok;
+    int    httpCode;
+    int    elapsedMs;
+    String status;                                                              // "UP", "DNS_ERROR", "TCP/TLS_ERROR", "HTTP_ERROR", "JSON_ERROR", "TIMEOUT"
+    String detail;                                                              // Zusatzinfo
+};
+
 class LigaTable {
    public:
+    // Constructor for LigaTable
+    LigaTable();
+
     bool     connect();                                                         // connect to external data provider for liga data
     bool     fetchTable(LigaSnapshot& out);                                     // get data from external provider
     bool     disconnect();                                                      // disconnect from external data provider for liga data
@@ -100,16 +126,20 @@ class LigaTable {
     void     get(LigaSnapshot& out) const;                                      // get snapshot from openLigaDB
     void     commit(const LigaSnapshot& s);                                     // release snahpshot to be accessed by reporting
     uint32_t decidePollMs();                                                    // get time to wait until poll openLigaDB again
-    size_t   collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut);
-
-    // Constructor for LigaTable
-    LigaTable();
+    size_t   collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut);
+    bool     getLastChange(int season, int group, String& out);
 
    private:
     LigaSnapshot         buf_[2];                                               // two buffer to bw switched
     std::atomic<uint8_t> active_;                                               // signalize writing  to snapshot
-    int                  _currentSeason   = 0;
-    int                  _currentMatchDay = 0;                                  // Matchday
+    int                  currentSeason_   = 0;                                  // Season 2025
+    int                  currentMatchDay_ = 0;                                  // Matchday 1...34
+
+    // private member functions
+    bool httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
+    bool loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
+    bool getNextUpcomingBL1(NextMatch& out);
+    void refreshNextKickoffEpoch();
 
     // Liga trace
     template <typename... Args>

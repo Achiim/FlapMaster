@@ -1,13 +1,30 @@
+// ###################################################################################################
+//
+//    ██      ██  ██████   █████
+//    ██      ██ ██       ██   ██
+//    ██      ██ ██   ███ ███████
+//    ██      ██ ██    ██ ██   ██
+//    ███████ ██  ██████  ██   ██
+//
+////
+// ################################################################################################## by Achim ####
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=LIGA
+/*
+
+
+
+*/
 #include <Arduino.h>
 #include <time.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>                                                        // v7 (JsonDocument)
 #include "FlapTasks.h"
 #include "Liga.h"
+#include "LigaHelper.h"
 #include "secret.h"                                                             // const char* ssid, const char* password
 #include "cert.all"                                                             // certificate for https with OpenLigaDB
+
+League activeLeague = League::BL1;
 
 // 1. Bundesliga
 static const DfbMap DFB1[] = {{"FC Bayern München", "FCB", 1},     {"Borussia Dortmund", "BVB", 7}, {"RB Leipzig", "RBL", 13},
@@ -18,155 +35,65 @@ static const DfbMap DFB1[] = {{"FC Bayern München", "FCB", 1},     {"Borussia D
                               {"1. FC Heidenheim 1846", "HDH", 6}, {"Hamburger SV", "HSV", 12},     {"FC St. Pauli", "STP", 18}};
 
 // 2. Bundesliga (ergänzbar – strikt nach Namen)
-static const DfbMap DFB2[] = {{"Hertha BSC", "BSC", 19},           {"VfL Bochum 1848", "BOC", 25},    {"Eintracht Braunschweig", "EBS", 30},
+static const DfbMap DFB2[] = {{"Hertha BSC", "BSC", 19},           {"VfL Bochum", "BOC", 25},         {"Eintracht Braunschweig", "EBS", 30},
                               {"SV Darmstadt 98", "SVD", 20},      {"Fortuna Düsseldorf", "F95", 26}, {"SV 07 Elversberg", "ELV", 31},
                               {"SpVgg Greuther Fürth", "SGF", 21}, {"Hannover 96", "H96", 27},        {"1. FC Kaiserslautern", "FCK", 32},
                               {"Karlsruher SC", "KSC", 22},        {"1. FC Magdeburg", "FCM", 28},    {"1. FC Nürnberg", "FCN", 33},
                               {"SC Paderborn 07", "SCP", 23},      {"Holstein Kiel", "KSV", 29},      {"FC Schalke 04", "S04", 34},
-                              {"SC Preußen Münster", "PRM", 24},   {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
+                              {"Preußen Münster", "PRM", 24},      {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
 
-// Merker für adaptives Polling
+// to be used for dynamic polling
 static String         s_lastChange;                                             // dein vorhandener ISO-String
 static time_t         s_lastChangeEpoch      = 0;                               // Epoch zum schnellen Vergleich
 static time_t         s_nextKickoffEpoch     = 0;                               // nächster Anstoß (Epoch UTC)
 static uint32_t       s_lastKickoffRefreshMs = 0;                               // wann zuletzt berechnet
 static const uint32_t KICKOFF_REFRESH_MS     = 300000;                          // 5 min
 
-static MatchState s_state[40];                                                  // reicht für einen Spieltag
-static size_t     s_stateN = 0;
+/**
+ * @brief Perform an HTTPS GET request and parse the response as JSON.
+ *
+ * This helper wraps an HTTPClient with a WiFiClientSecure to fetch
+ * JSON data from a given URL. It ensures time is synchronized (for TLS),
+ * configures the HTTP client for non-chunked responses, and retries once
+ * on error. If the response code is 200 (OK), it deserializes the JSON
+ * into the provided ArduinoJson `JsonDocument`.
+ *
+ * Diagnostic logging is printed via Serial on connection failures,
+ * HTTP errors, or JSON parse errors.
+ *
+ * @param http   Reference to an HTTPClient instance (reused across calls).
+ * @param client Reference to a WiFiClientSecure (TLS) instance.
+ * @param url    Target URL (HTTPS).
+ * @param doc    Reference to an ArduinoJson document to populate.
+ * @return       True on success (valid JSON parsed), false otherwise.
+ */
+bool LigaTable::httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc) {
+    // ensure NTP time is valid before TLS handshake
+    waitForTime();                                                              // wait for time to be synchronized
 
-// ----- Hilfen -----
-static MatchState* stateFor(int id) {
-    for (size_t i = 0; i < s_stateN; i++)
-        if (s_state[i].matchID == id)
-            return &s_state[i];
-    if (s_stateN < 40) {
-        s_state[s_stateN] = {id, 0};
-        return &s_state[s_stateN++];
-    }
-    return nullptr;
-}
-
-static bool parseIsoZ(const String& s, struct tm& out) {                        // "YYYY-MM-DDTHH:MM:SSZ" (oder +00:00)
-    if (s.length() < 19)
-        return false;
-    memset(&out, 0, sizeof(out));
-    out.tm_year = s.substring(0, 4).toInt() - 1900;
-    out.tm_mon  = s.substring(5, 7).toInt() - 1;
-    out.tm_mday = s.substring(8, 10).toInt();
-    out.tm_hour = s.substring(11, 13).toInt();
-    out.tm_min  = s.substring(14, 16).toInt();
-    out.tm_sec  = s.substring(17, 19).toInt();
-    return true;
-}
-
-// Portable Ersatz für timegm(): interpretiert struct tm als **UTC**.
-static time_t timegm_portable(struct tm* tm_utc) {
-    // mktime() interpretiert tm als **lokale** Zeit → erst lokales time_t bilden
-    time_t t_local = mktime(tm_utc);
-
-    // Jetzt den aktuellen TZ-Offset (inkl. DST) bestimmen:
-    struct tm lt, gt;
-    localtime_r(&t_local, &lt);                                                 // gleiche Sekunde als lokale Kalenderzeit
-    gmtime_r(&t_local, &gt);                                                    // gleiche Sekunde als UTC-Kalenderzeit
-
-    // mktime(localtime(t)) == t_local; mktime(gmtime(t)) == t_local - offset
-    time_t t_again_local = mktime(&lt);
-    time_t t_again_utc   = mktime(&gt);
-    time_t offset        = t_again_local - t_again_utc;                         // Sekunden Ost von UTC (z. B. +3600 in CET)
-
-    // „UTC-Interpretation“ = lokales Ergebnis MINUS Offset
-    return t_local - offset;
-}
-
-static time_t toUtcTimeT(const String& iso) {
-    String t = iso;
-    if (t.endsWith("+00:00"))
-        t = t.substring(0, 19) + "Z";
-    if (t.length() >= 19 && t[19] != 'Z')
-        t = t.substring(0, 19) + "Z";
-    struct tm tm;
-    if (!parseIsoZ(t, tm))
-        return 0;
-    // mktime erwartet lokale Zeit; wir wollen UTC: nutze timegm-Äquivalent
-    return timegm_portable(&tm);
-}
-
-static String nowUTC_ISO() {
-    time_t    t = time(nullptr);
-    struct tm tm;
-    gmtime_r(&t, &tm);
-    char buf[25];
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
-    return String(buf);
-}
-
-// Kleine Helper, um Keys case-robust zu lesen
-static const char* strOr(JsonObjectConst o, const char* def, const char* k1, const char* k2 = nullptr, const char* k3 = nullptr,
-                         const char* k4 = nullptr) {
-    if (k1 && !o[k1].isNull())
-        return o[k1];
-    if (k2 && !o[k2].isNull())
-        return o[k2];
-    if (k3 && !o[k3].isNull())
-        return o[k3];
-    if (k4 && !o[k4].isNull())
-        return o[k4];
-    return def;
-}
-static int intOr(JsonObjectConst o, int def, const char* k1, const char* k2 = nullptr, const char* k3 = nullptr) {
-    if (k1 && !o[k1].isNull())
-        return o[k1].as<int>();
-    if (k2 && !o[k2].isNull())
-        return o[k2].as<int>();
-    if (k3 && !o[k3].isNull())
-        return o[k3].as<int>();
-    return def;
-}
-static bool boolOr(JsonObjectConst o, bool def, const char* k1, const char* k2 = nullptr, const char* k3 = nullptr) {
-    if (k1 && !o[k1].isNull())
-        return o[k1].as<bool>();
-    if (k2 && !o[k2].isNull())
-        return o[k2].as<bool>();
-    if (k3 && !o[k3].isNull())
-        return o[k3].as<bool>();
-    return def;
-}
-
-static WiFiClientSecure makeSecureClient() {
-    WiFiClientSecure c;
-    c.setCACert(OPENLIGA_CA);                                                   // certificat
-    return c;
-}
-
-static bool waitForTime(uint32_t maxMs = 15000) {
-    time_t   t  = time(nullptr);
-    uint32_t t0 = millis();
-    while (t < 1700000000 && (millis() - t0) < maxMs) {                         // ~2023-11-14
-        delay(200);
-        t = time(nullptr);
-    }
-    return t >= 1700000000;
-}
-
-static bool httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc) {
-    (void)waitForTime();
-
+    // configure HTTP client
     http.setReuse(true);
     http.setConnectTimeout(8000);
     http.setTimeout(8000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.useHTTP10(true);                                                       // WICHTIG: 1.0 erzwingen -> kein chunked
-    http.addHeader("Connection", "close");                                      // optional, macht’s explizit:
+    http.useHTTP10(true);                                                       // enforce HTTP/1.0 → no chunked transfer
+    http.addHeader("Connection", "close");                                      // explicit close header
     http.setUserAgent("ESP32-Flap/1.0");
     http.addHeader("Accept", "application/json");
     http.addHeader("Accept-Encoding", "identity");
+
     const char* hdrs[] = {"Content-Type", "Content-Encoding", "Transfer-Encoding"};
     http.collectHeaders(hdrs, 3);
 
+    // allow up to 2 attempts
     for (int attempt = 0; attempt < 2; ++attempt) {
         if (!http.begin(client, url)) {
-            Serial.printf("HTTP begin failed: %s  (freeHeap=%u)\n", url, (unsigned)ESP.getFreeHeap());
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                ligaPrintln("HTTP begin failed: %s  (freeHeap=%u)\n", url, (unsigned)ESP.getFreeHeap());
+                }
+            #endif
             http.end();
             delay(150);
             continue;
@@ -174,68 +101,98 @@ static bool httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const ch
 
         int code = http.GET();
         if (code != HTTP_CODE_OK) {
-            Serial.printf("GET %s -> %d (%s)\n", url, code, http.errorToString(code).c_str());
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                ligaPrintln("GET %s -> %d (%s)\n", url, code, http.errorToString(code).c_str());
+                }
+            #endif
             http.end();
             if (code < 0)
-                delay(150);                                                     // bei Transportfehler kurz retry
+                delay(150);                                                     // short retry delay on transport error
             continue;
         }
 
+        // get response stream
         Stream* s = http.getStreamPtr();
+        // skip BOM if present
         if (s && s->peek() == 0xEF) {
             uint8_t bom[3];
             s->readBytes(bom, 3);
         }
 
+        // parse JSON
         DeserializationError err = deserializeJson(doc, *s);
         http.end();
+
         if (err) {
             Serial.printf("JSON parse error @ %s: %s\n", url, err.c_str());
 
+            // log diagnostic response headers
             const String ct = http.header("Content-Type");
             const String ce = http.header("Content-Encoding");
             const String te = http.header("Transfer-Encoding");
             const int    cl = http.header("Content-Length").toInt();
-            Serial.printf("Bad JSON. CT=%s CE=%s TE=%s CL=%d\n", ct.c_str(), ce.c_str(), te.c_str(), cl);
-
-            // Vorsichtig ersten Teil lesen (diagnostisch)
-            WiFiClient* s = (WiFiClient*)http.getStreamPtr();
-            char        peekBuf[96]{};
-            size_t      n = s ? s->readBytes(peekBuf, sizeof(peekBuf) - 1) : 0;
-            if (n) {
-                Serial.print("Body[0..n]: ");
-                for (size_t i = 0; i < n; i++)
-                    Serial.write(isprint((unsigned char)peekBuf[i]) ? peekBuf[i] : '.');
-                Serial.println();
-            }
-
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                ligaPrintln("Bad JSON. CT=%s CE=%s TE=%s CL=%d\n", ct.c_str(), ce.c_str(), te.c_str(), cl);
+                }
+            #endif
             return false;
         }
+
+        // success
         return true;
     }
+
+    // all attempts failed
     return false;
 }
 
-// ----- Kernfunktion -----
+// ----- Kernfunktionen -----
 
-// ---- Robuster Loader: ermittelt Season & Group und lädt den Spieltag ----
-static bool loadCurrentBL1Matchday(JsonDocument& outDoc, int* outSeason, int* outGroupOrderId) {
+/**
+ * @brief Load the current matchday JSON for the selected league (BL1/BL2).
+ *
+ * Strategy:
+ *  1) Try GET /getcurrentgroup/<lg> (where <lg> is "bl1" or "bl2"):
+ *     - Accepts object, 1-element array, integer or string formats.
+ *     - Extracts groupOrderID and (if present) leagueSeason.
+ *  2) If season is still unknown, infer it via GET /getmatchdata/<lg>.
+ *  3) Finally fetch the exact matchday via GET /getmatchdata/<lg>/<season>/<group>.
+ *
+ * Notes:
+ *  - Uses HTTPS with your httpGetJsonWith(), which already handles TLS setup.
+ *  - Builds URLs with snprintf to avoid String temporaries where not needed.
+ *
+ * @param outDoc            Destination JsonDocument with the matchday data.
+ * @param league            League selector (e.g., League::BL1 or League::BL2).
+ * @param outSeason         Optional: receives resolved season (if non-null).
+ * @param outGroupOrderId   Optional: receives resolved groupOrderID (if non-null).
+ * @return true on success, false otherwise.
+ */
+bool LigaTable::loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId) {
+    const char*      lg     = leagueShortcut(league);                           // "bl1" or "bl2"
     WiFiClientSecure client = makeSecureClient();
     HTTPClient       http;
 
     int season       = 0;
     int groupOrderID = 0;
 
-    // --- 1) aktuelle Gruppe holen (kann Zahl/Strings oder Objekt/Array sein) ---
+    // --- 1) Fetch current group (object, array, integer or string) ---
     {
         JsonDocument gdoc;
-        if (httpGetJsonWith(http, client, "https://api.openligadb.de/getcurrentgroup/bl1", gdoc)) {
+        char         url[96];
+        snprintf(url, sizeof(url), "https://api.openligadb.de/getcurrentgroup/%s", lg);
+
+        if (httpGetJsonWith(http, client, url, gdoc)) {
             if (gdoc.is<JsonObject>()) {
-                auto g       = gdoc.as<JsonObject>();
+                JsonObject g = gdoc.as<JsonObject>();
                 season       = g["leagueSeason"] | g["LeagueSeason"] | 0;
                 groupOrderID = g["groupOrderID"] | g["GroupOrderID"] | 0;
             } else if (gdoc.is<JsonArray>() && gdoc.as<JsonArray>().size() > 0 && gdoc.as<JsonArray>()[0].is<JsonObject>()) {
-                auto g       = gdoc.as<JsonArray>()[0].as<JsonObject>();
+                JsonObject g = gdoc.as<JsonArray>()[0].as<JsonObject>();
                 season       = g["leagueSeason"] | g["LeagueSeason"] | 0;
                 groupOrderID = g["groupOrderID"] | g["GroupOrderID"] | 0;
             } else if (gdoc.is<int>()) {
@@ -243,17 +200,20 @@ static bool loadCurrentBL1Matchday(JsonDocument& outDoc, int* outSeason, int* ou
             } else if (gdoc.is<const char*>()) {
                 groupOrderID = atoi(gdoc.as<const char*>());
             } else {
-                Serial.println("[collector] getcurrentgroup: unbekanntes Format");
+                Serial.println("[collector] getcurrentgroup: unknown format");
             }
         } else {
-            Serial.println("[collector] getcurrentgroup fehlgeschlagen");
+            Serial.println("[collector] getcurrentgroup failed");
         }
     }
 
-    // --- 2) falls Season fehlt, aus grobem Endpoint bestimmen ---
+    // --- 2) If season is missing, infer it from the rolling endpoint of this league ---
     if (groupOrderID > 0 && season == 0) {
         JsonDocument tmp;
-        if (httpGetJsonWith(http, client, "https://api.openligadb.de/getmatchdata/bl1", tmp)) {
+        char         url[96];
+        snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/%s", lg);
+
+        if (httpGetJsonWith(http, client, url, tmp)) {
             JsonArray matches = tmp.as<JsonArray>();
             if (!matches.isNull() && matches.size() > 0) {
                 season = matches[0]["leagueSeason"] | matches[0]["LeagueSeason"] | 0;
@@ -261,11 +221,12 @@ static bool loadCurrentBL1Matchday(JsonDocument& outDoc, int* outSeason, int* ou
         }
     }
 
-    // --- 3) exakten Spieltag laden ---
+    // --- 3) Load the exact matchday for this league ---
     if (groupOrderID > 0 && season > 0) {
         char url[160];
-        snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/bl1/%d/%d", season, groupOrderID);
+        snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/%s/%d/%d", lg, season, groupOrderID);
         Serial.printf("[collector] GET %s\n", url);
+
         if (httpGetJsonWith(http, client, url, outDoc)) {
             if (outSeason)
                 *outSeason = season;
@@ -273,75 +234,70 @@ static bool loadCurrentBL1Matchday(JsonDocument& outDoc, int* outSeason, int* ou
                 *outGroupOrderId = groupOrderID;
             return true;
         }
-        Serial.println("[collector] getmatchdata/<season>/<group> fehlgeschlagen (Primärpfad)");
+        Serial.println("[collector] getmatchdata/<lg>/<season>/<group> failed (primary path)");
     } else {
-        Serial.println("[collector] getcurrentgroup: season/groupOrderID nicht bestimmbar");
+        Serial.println("[collector] getcurrentgroup: season/groupOrderID unresolved");
     }
 
-    // Optional: dein vorhandener Fallback kann hier bleiben
+    // Optional: your additional fallback logic could go here, if desired.
     return false;
 }
 
-size_t LigaTable::collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut) {
+/**
+ * @brief Collect new goals for the given league (BL1/BL2).
+ *
+ * @param league Which league to poll (BL1 or BL2).
+ * @param out    Output array of LiveGoalEvent.
+ * @param maxOut Capacity of output array.
+ * @return       Number of new events written to out[].
+ */
+size_t LigaTable::collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut) {
     size_t outN = 0;
 
-    if (WiFi.status() != WL_CONNECTED && !connect()) {
-        Serial.println("[collector] WLAN down");
-        return 0;
-    }
-    (void)waitForTime();
-
     JsonDocument doc;
-    int          season = 0, groupOrderID = 0;
-    if (!loadCurrentBL1Matchday(doc, &season, &groupOrderID)) {
-        Serial.println("[collector] Spieltag konnte nicht geladen werden");
+    int          season = 0, group = 0;
+    if (!loadCurrentMatchday(doc, league, &season, &group))
         return 0;
-    }
+
     JsonArray matches = doc.as<JsonArray>();
-    if (matches.isNull() || matches.size() == 0) {
-        Serial.println("[FLAP  -  LIGA  ] keine Spiele im aktuellen Spieltag");
+    if (matches.isNull() || matches.size() == 0)
         return 0;
-    }
 
     const time_t nowT = toUtcTimeT(nowUTC_ISO());
 
     for (JsonObject m : matches) {
-        // Teams für Logs
         JsonObject  t1    = m["team1"].isNull() ? m["Team1"] : m["team1"];
         JsonObject  t2    = m["team2"].isNull() ? m["Team2"] : m["team2"];
         const char* name1 = strOr(t1, "Team1", "teamName", "TeamName");
         const char* name2 = strOr(t2, "Team2", "teamName", "TeamName");
 
-        // Status/Zeit
         bool        finished = boolOr(m, false, "matchIsFinished", "MatchIsFinished");
         const char* kickC    = strOr(m, "", "matchDateTimeUTC", "MatchDateTimeUTC", "matchDateTime");
         if (!*kickC)
             continue;
+
         time_t kickT = toUtcTimeT(kickC);
         if (kickT == 0)
             continue;
-
-        if (nowT < kickT) {
-            Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> Spiel noch nicht live: goals[] und results[] leer\n", name1, name2);
+        if (nowT < kickT)
             continue;
-        }
 
         int mid = intOr(m, 0, "matchID", "MatchID");
         if (mid <= 0)
             continue;
 
-        MatchState* st = stateFor(mid);
+        // use per-(league, match) state
+        MatchState* st = stateFor(static_cast<uint8_t>(league), mid);
         if (!st)
             continue;
 
         int maxSeen = st->lastGoalID;
 
-        // --- Live-Goals einsammeln ---
-        bool        anyNewGoalsForThisMatch = false;
-        JsonArray   goals                   = !m["goals"].isNull() ? m["goals"].as<JsonArray>() : m["Goals"].as<JsonArray>();
-        const char* lastUpd                 = strOr(m, "", "lastUpdateDateTime", "LastUpdateDateTime");
+        JsonArray   goals   = !m["goals"].isNull() ? m["goals"].as<JsonArray>() : m["Goals"].as<JsonArray>();
+        const char* lastUpd = strOr(m, "", "lastUpdateDateTime", "LastUpdateDateTime");
 
-        if (!goals.isNull() && goals.size() > 0) {
+        bool anyNew = false;
+        if (!goals.isNull()) {
             for (JsonObject g : goals) {
                 int gid = intOr(g, 0, "goalID", "GoalID");
                 if (gid <= st->lastGoalID)
@@ -373,46 +329,21 @@ size_t LigaTable::collectNewGoalsAcrossLiveBL1(LiveGoalEvent* out, size_t maxOut
 
                 if (gid > maxSeen)
                     maxSeen = gid;
-                anyNewGoalsForThisMatch = true;
-            }
-        } else if (!finished) {
-            Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> Live, aber noch keine Goals gemeldet\n", name1, name2);
-        }
-
-        // --- Fallback: Spiel beendet, aber keine Goals -> Endstand loggen ---
-        if (finished && !anyNewGoalsForThisMatch) {
-            JsonArray results = !m["matchResults"].isNull() ? m["matchResults"].as<JsonArray>() : m["MatchResults"].as<JsonArray>();
-            int       endS1 = -1, endS2 = -1;
-            if (!results.isNull()) {
-                for (JsonObject r : results) {
-                    int typeId = intOr(r, 0, "resultTypeID", "ResultTypeID");
-                    if (typeId == 2) {                                          // Endstand
-                        endS1 = intOr(r, -1, "pointsTeam1", "PointsTeam1");
-                        endS2 = intOr(r, -1, "pointsTeam2", "PointsTeam2");
-                        break;
-                    }
-                }
-            }
-            if (endS1 >= 0 && endS2 >= 0) {
-                Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> beendet: (%d:%d), keine Goals im Feed\n", name1, name2, endS1, endS2);
-            } else {
-                Serial.printf("[FLAP  -  LIGA  ] %s vs %s -> beendet, aber weder Goals noch Endstand vorhanden\n", name1, name2);
+                anyNew = true;
             }
         }
 
-        // höchsten gesehenen goalID-Stand merken
         if (maxSeen > st->lastGoalID)
             st->lastGoalID = maxSeen;
-
         if (outN >= maxOut)
-            break;                                                              // Ausgabepuffer voll
+            break;
     }
 
     return outN;
 }
 
 // Holt LastChange für eine (Saison, Gruppe)
-static bool getLastChange(int season, int group, String& out) {
+bool LigaTable::getLastChange(int season, int group, String& out) {
     char             url[128];
     WiFiClientSecure client = makeSecureClient();                               // eine TLS-Session
     HTTPClient       http;                                                      // ein HTTPClient
@@ -455,8 +386,8 @@ bool LigaTable::pollLastChange(int* seasonOut, int* matchdayOut) {
         *seasonOut = season;
     if (matchdayOut)
         *matchdayOut = group;
-    _currentSeason   = season;                                                  // Saison
-    _currentMatchDay = group;                                                   // match day
+    currentSeason_   = season;                                                  // Saison
+    currentMatchDay_ = group;                                                   // match day
 
     String lcCur, lcPrev;
     if (!getLastChange(season, group, lcCur))                                   // last change of current matchday
@@ -520,23 +451,6 @@ static int flapForTeamStrict(const String& teamName) {
     return -1;                                                                  // strikt: kein Treffer => -1
 }
 
-struct NextMatch {
-    int    season  = 0;
-    int    group   = 0;
-    int    matchID = 0;
-    String dateUTC;
-    String team1, team1Short;
-    String team2, team2Short;
-};
-
-struct ApiHealth {
-    bool   ok;
-    int    httpCode;
-    int    elapsedMs;
-    String status;                                                              // "UP", "DNS_ERROR", "TCP/TLS_ERROR", "HTTP_ERROR", "JSON_ERROR", "TIMEOUT"
-    String detail;                                                              // Zusatzinfo
-};
-
 // Datumsfeld aus Match holen und in „…Z“-Form bringen
 static String matchUtc(const JsonObject& m) {
     String dt = m["matchDateTimeUTC"] | m["MatchDateTimeUTC"] | m["matchDateTime"] | "";
@@ -577,7 +491,7 @@ static bool pickNextFromArray(JsonArray arr, const String& nowIso, NextMatch& ou
 
 // Hauptroutine: ermittelt Season & aktuellen Spieltag aus getmatchdata/bl1,
 // sucht dort das nächste Spiel; wenn keins: lädt den nächsten Spieltag.
-bool getNextUpcomingBL1(NextMatch& out) {
+bool LigaTable::getNextUpcomingBL1(NextMatch& out) {
     const String     nowIso = nowUTC_ISO();
     WiFiClientSecure client = makeSecureClient();                               // eine TLS-Session
     HTTPClient       http;                                                      // ein HTTPClient
@@ -742,17 +656,7 @@ static void printUtf8PaddedBounded(const char* s, size_t maxBytes, size_t cols) 
         Serial.write(' ');
 }
 
-static void printHeader() {
-    Serial.println("┌─────┬──────────────────────────┬────────────┬─────┬────┬────────────┐");
-    Serial.println("│ Pos │ Mannschaft               │ Name       │ DFB │ Sp │ Diff │ Pkt │");
-    Serial.println("├─────┼──────────────────────────┼────────────┼─────┼────┼────────────┤");
-}
-
-static void printFooter() {
-    Serial.println("└─────┴──────────────────────────┴────────────┴─────┴────┴────────────┘");
-}
-
-static void refreshNextKickoffEpoch() {
+void LigaTable::refreshNextKickoffEpoch() {
     if (millis() - s_lastKickoffRefreshMs < KICKOFF_REFRESH_MS)
         return;
     s_lastKickoffRefreshMs  = millis();
@@ -879,13 +783,12 @@ bool LigaTable::connect() {
 
 // --- Implementation: LigaTable::fetchTable (builds the snapshot) -------------
 bool LigaTable::fetchTable(LigaSnapshot& out) {
-    // Ensure WiFi is up (reuse your existing helpers)
-    if (WiFi.status() != WL_CONNECTED && !connect()) {
+    if (WiFi.status() != WL_CONNECTED && !connect()) {                          // Ensure WiFi is up (reuse your existing helpers)
         ligaPrintln("OpenLigaDB WLAN down");
         return false;
     }
-    if (!waitForTime()) {
-        // TLS may fail without a correct clock, but we try anyway
+    if (!waitForTime()) {                                                       // TLS may fail without a correct clock, but we try anyway
+
         ligaPrintln("OpenLigaDB time not synced - TLS may fail");
     }
 
@@ -959,8 +862,8 @@ bool LigaTable::fetchTable(LigaSnapshot& out) {
     snap.fetchedAtUTC = (uint32_t)(millis() / 1000);
 
     // Take over season and matchday from poll
-    snap.season   = Liga->_currentSeason;
-    snap.matchday = Liga->_currentMatchDay;
+    snap.season   = Liga->currentSeason_;
+    snap.matchday = Liga->currentMatchDay_;
 
     uint16_t rank = 1;
     for (JsonObject team : arr) {
@@ -1012,8 +915,8 @@ bool LigaTable::fetchTable(LigaSnapshot& out) {
 }
 
 void LigaTable::getGoal() {
-    static LiveGoalEvent evs[12];
-    size_t               n = collectNewGoalsAcrossLiveBL1(evs, 12);
+    LiveGoalEvent evs[12];
+    size_t        n = collectNewGoalsAcrossLive(activeLeague, evs, 12);
     if (n > 0) {
         // Mindestens ein Tor in laufenden Spielen!
         for (size_t i = 0; i < n; i++) {
