@@ -1,0 +1,322 @@
+// ###################################################################################################
+//
+//    ██      ██  ██████   █████      ██   ██ ███████ ██      ██████  ███████ ██████
+//    ██      ██ ██       ██   ██     ██   ██ ██      ██      ██   ██ ██      ██   ██
+//    ██      ██ ██   ███ ███████     ███████ █████   ██      ██████  █████   ██████
+//    ██      ██ ██    ██ ██   ██     ██   ██ ██      ██      ██      ██      ██   ██
+//    ███████ ██  ██████  ██   ██     ██   ██ ███████ ███████ ██      ███████ ██   ██
+//
+//
+// ################################################################################################## by Achim ####
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=ANSI%20Regular&t=LIGA%20HELPER
+/*
+
+    diverse helper for liga task
+
+*/
+#include <Arduino.h>
+#include <time.h>
+#include <WiFi.h>
+#include "FlapTasks.h"
+#include "secret.h"                                                             // const char* ssid, const char* password
+#include "cert.all"                                                             // certificate for https with OpenLigaDB
+#include "Liga.h"
+#include "LigaHelper.h"
+
+static MatchState s_state[maxGoalsPerMatchday];                                 // enough for one match day
+static size_t     s_stateN = 0;
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Get or create a per-(league, matchID) state entry.
+ *
+ * Searches the internal state array for an entry matching the given league
+ * and matchID. If found, returns it; otherwise creates a new zero - initialized
+ * entry(if capacity allows) and returns it.Returns nullptr on overflow.
+ * @param league League identifier(1 = BL1, 2 = BL2).
+ * @param matchID Unique match identifier.
+ * @return Pointer to the state entry or nullptr if no space is left.
+ */
+MatchState* stateFor(uint8_t league, int matchID) {
+    // search for an existing entry
+    for (size_t i = 0; i < s_stateN; ++i) {
+        if (s_state[i].league == league && s_state[i].matchID == matchID) {
+            return &s_state[i];
+        }
+    }
+    // create new entry if capacity allows
+    if (s_stateN < maxGoalsPerMatchday) {
+        // IMPORTANT: initialize all fields in correct order
+        s_state[s_stateN] = MatchState{
+            league,                                                             // league
+            matchID,                                                            // matchID
+            0                                                                   // lastGoalID
+        };
+        return &s_state[s_stateN++];
+    }
+    return nullptr;
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Parse an ISO-8601 UTC timestamp string into a struct tm.
+ *
+ * This function expects an input string in the form:
+ *   "YYYY-MM-DDTHH:MM:SSZ"  or with a trailing "+00:00"
+ * (e.g. "2025-08-29T18:30:00Z").
+ *
+ * It extracts year, month, day, hour, minute and second
+ * and fills the provided `struct tm` accordingly.
+ *
+ * Notes:
+ * - The function assumes UTC ("Z" or "+00:00"), no timezone conversion is applied.
+ * - On success, fields in `out` are populated and the function returns true.
+ * - On failure (string too short), the function returns false.
+ *
+ * @param s   Input ISO-8601 string (Arduino String).
+ * @param out Reference to a `struct tm` to fill with parsed values.
+ * @return    True if parsing was successful, false otherwise.
+ */
+bool parseIsoZ(const String& s, struct tm& out) {
+    if (s.length() < 19)                                                        // input must be at least "YYYY-MM-DDTHH:MM:SS"
+        return false;
+
+    // reset struct tm
+    memset(&out, 0, sizeof(out));
+
+    // parse year, month, day
+    out.tm_year = s.substring(0, 4).toInt() - 1900;                             // tm_year = years since 1900
+    out.tm_mon  = s.substring(5, 7).toInt() - 1;                                // tm_mon  = 0-based month
+    out.tm_mday = s.substring(8, 10).toInt();
+
+    // parse hour, minute, second
+    out.tm_hour = s.substring(11, 13).toInt();
+    out.tm_min  = s.substring(14, 16).toInt();
+    out.tm_sec  = s.substring(17, 19).toInt();
+
+    return true;
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Portable implementation of timegm() for systems without it.
+ *
+ * This function converts a broken-down UTC time (`struct tm* tm_utc`)
+ * into a `time_t` value (seconds since epoch, UTC).
+ *
+ * Since the standard `mktime()` interprets the input `struct tm` as a
+ * *local* time, this implementation compensates for the current local
+ * time zone offset (including daylight saving time) to produce the
+ * correct UTC-based timestamp.
+ *
+ * Algorithm:
+ *  - Use mktime() on the input to get a "local" time_t.
+ *  - Compute the offset between local time and UTC using localtime_r()
+ *    and gmtime_r() on the same time_t value.
+ *  - Subtract this offset from the local result to obtain the UTC epoch.
+ *
+ * @param tm_utc Pointer to a `struct tm` representing a UTC calendar time.
+ * @return       The corresponding UTC timestamp as time_t.
+ */
+time_t timegm_portable(struct tm* tm_utc) {
+    // mktime() interprets the input as local time → create local time_t first
+    time_t t_local = mktime(tm_utc);
+
+    // determine the current timezone offset (including DST)
+    struct tm lt, gt;
+    localtime_r(&t_local, &lt);                                                 // same second as local calendar time
+    gmtime_r(&t_local, &gt);                                                    // same second as UTC calendar time
+
+    // mktime(localtime(t)) == t_local
+    // mktime(gmtime(t))    == t_local - offset
+    time_t t_again_local = mktime(&lt);
+    time_t t_again_utc   = mktime(&gt);
+    time_t offset        = t_again_local - t_again_utc;                         // seconds east of UTC (e.g. +3600 in CET)
+
+    // "UTC interpretation" = local result minus offset
+    return t_local - offset;
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Convert an ISO-8601 UTC string into a UTC time_t.
+ *
+ * This function takes an ISO-8601 datetime string (e.g. "2025-08-29T18:30:00Z"
+ * or "...+00:00"), normalizes it to the form "...Z", parses it into a
+ * `struct tm` using parseIsoZ(), and then converts it to a UTC `time_t`
+ * using the portable timegm() implementation.
+ *
+ * @param iso ISO-8601 string, expected in UTC ("...Z" or "...+00:00").
+ * @return    Corresponding UTC timestamp as time_t, or 0 on parse error.
+ */
+time_t toUtcTimeT(const String& iso) {
+    String t = iso;
+
+    // normalize to "YYYY-MM-DDTHH:MM:SSZ"
+    if (t.endsWith("+00:00"))
+        t = t.substring(0, 19) + "Z";
+    if (t.length() >= 19 && t[19] != 'Z')
+        t = t.substring(0, 19) + "Z";
+
+    // parse ISO string into struct tm
+    struct tm tm;
+    if (!parseIsoZ(t, tm))
+        return 0;
+
+    // mktime() assumes local time, we need UTC → use portable timegm()
+    return timegm_portable(&tm);
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Get the current UTC time as ISO-8601 string.
+ *
+ * This function queries the current system time, converts it to UTC using
+ * gmtime_r(), and formats it into the ISO-8601 string form
+ * "YYYY-MM-DDTHH:MM:SSZ".
+ *
+ * @return ISO-8601 UTC string of the current time.
+ */
+String nowUTC_ISO() {
+    time_t    t = time(nullptr);                                                // current epoch time
+    struct tm tm;
+    gmtime_r(&t, &tm);                                                          // convert to UTC broken-down time
+
+    char buf[25];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
+    return String(buf);
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Return a string value from a JSON object by trying multiple keys.
+ *
+ * This helper allows robust access to JSON fields where the same data
+ * may appear with different key casings (e.g. "teamName" vs. "TeamName").
+ * It tries up to four candidate keys and returns the first non-null value.
+ *
+ * @param o   JSON object to read from.
+ * @param def Default string to return if none of the keys exist.
+ * @param k1  Primary key name.
+ * @param k2  Optional secondary key name (default: nullptr).
+ * @param k3  Optional third key name (default: nullptr).
+ * @param k4  Optional fourth key name (default: nullptr).
+ * @return    C-string value from JSON or the default string if not found.
+ */
+const char* strOr(JsonObjectConst o, const char* def, const char* k1, const char* k2, const char* k3, const char* k4) {
+    // try keys in order, return the first found
+    if (k1 && !o[k1].isNull())
+        return o[k1];
+    if (k2 && !o[k2].isNull())
+        return o[k2];
+    if (k3 && !o[k3].isNull())
+        return o[k3];
+    if (k4 && !o[k4].isNull())
+        return o[k4];
+    // nothing found → return default
+    return def;
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Return an integer value from a JSON object by trying multiple keys.
+ *
+ * Similar to strOr(), but casts the first existing key's value to int.
+ *
+ * @param o   JSON object to read from.
+ * @param def Default integer to return if none of the keys exist.
+ * @param k1  Primary key name.
+ * @param k2  Optional secondary key name (default: nullptr).
+ * @param k3  Optional third key name (default: nullptr).
+ * @return    Integer value from JSON or the default if not found.
+ */
+int intOr(JsonObjectConst o, int def, const char* k1, const char* k2, const char* k3) {
+    // try keys in order, return the first found
+    if (k1 && !o[k1].isNull())
+        return o[k1].as<int>();
+    if (k2 && !o[k2].isNull())
+        return o[k2].as<int>();
+    if (k3 && !o[k3].isNull())
+        return o[k3].as<int>();
+    // nothing found → return default
+    return def;
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Return a boolean value from a JSON object by trying multiple keys.
+ *
+ * Similar to strOr() and intOr(), but casts the first existing key's value to bool.
+ *
+ * @param o   JSON object to read from.
+ * @param def Default boolean to return if none of the keys exist.
+ * @param k1  Primary key name.
+ * @param k2  Optional secondary key name (default: nullptr).
+ * @param k3  Optional third key name (default: nullptr).
+ * @return    Boolean value from JSON or the default if not found.
+ */
+bool boolOr(JsonObjectConst o, bool def, const char* k1, const char* k2, const char* k3) {
+    // try keys in order, return the first found
+    if (k1 && !o[k1].isNull())
+        return o[k1].as<bool>();
+    if (k2 && !o[k2].isNull())
+        return o[k2].as<bool>();
+    if (k3 && !o[k3].isNull())
+        return o[k3].as<bool>();
+    // nothing found → return default
+    return def;
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Create and configure a secure WiFi client.
+ *
+ * This helper initializes a `WiFiClientSecure` instance and
+ * installs the CA certificate defined in `OPENLIGA_CA` so that
+ * HTTPS connections to the OpenLigaDB API can be verified.
+ *
+ * @return A configured `WiFiClientSecure` instance.
+ */
+WiFiClientSecure makeSecureClient() {
+    WiFiClientSecure c;
+    c.setCACert(OPENLIGA_CA);                                                   // load root CA certificate for TLS verification
+    return c;
+}
+
+// -------------------------------------------------------------
+
+/**
+ * @brief Wait until system time has been synchronized (NTP).
+ *
+ * This function polls the system time until it reaches a reasonable
+ * value (after epoch ~2023-11-14, i.e. > 1700000000 seconds) or
+ * until the timeout expires.
+ *
+ * It is typically used at startup after WiFi connection to ensure
+ * that NTP synchronization has completed before making HTTPS requests.
+ *
+ * @param maxMs Maximum time to wait in milliseconds (default: 15000 ms).
+ * @return True if time was successfully synchronized before timeout,
+ *         false otherwise.
+ */
+bool waitForTime(uint32_t maxMs) {
+    time_t   t  = time(nullptr);
+    uint32_t t0 = millis();
+
+    // wait until epoch time is valid (>= ~2023-11-14) or timeout reached
+    while (t < 1700000000 && (millis() - t0) < maxMs) {
+        delay(200);
+        t = time(nullptr);
+    }
+    return t >= 1700000000;
+}
