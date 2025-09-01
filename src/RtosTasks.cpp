@@ -27,7 +27,6 @@
 #include "Liga.h"
 #include "RemoteControl.h"
 #include "RtosTasks.h"
-
 // ----------------------------
 //      _    _
 //     | |  (_)__ _ __ _
@@ -75,7 +74,7 @@ void ligaTask(void* pvParameters) {
         // ---- 1) Work phase starts: measure start tick to compute remaining wait later
         TickType_t t0 = xTaskGetTickCount();
 
-        if (Liga->pollLastChange(&season, &matchday)) {
+        if (Liga->pollLastChange(activeLeague, season, matchday)) {
             #ifdef LIGAVERBOSE
                 {
                 TraceScope trace;
@@ -95,7 +94,7 @@ void ligaTask(void* pvParameters) {
             // Side queries (keep lightweight/frequent, heavier/rare ones less often)
             Liga->openLigaDBHealth();
             Liga->getNextMatch();
-            Liga->getGoal();
+            Liga->getGoalsLive();
         }
 
         // ---- 2) Decide the *nominal* period in ms for the next scan

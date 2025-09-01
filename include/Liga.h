@@ -49,14 +49,18 @@ struct DfbMap {
     const int   flap;                                                           // falp number
 };
 
+/// One goal event detected for a live match.
 struct LiveGoalEvent {
     int    matchID = 0;
-    String kickOffUTC;                                                          // kick-off time (UTC)
-    String goalTimeUTC;                                                         // time of Goals (aus lastUpdate / Konstrukt)
-    int    minute = -1;                                                         // goal scored in minute
-    int    score1 = 0, score2 = 0;                                              // result (1:0)
-    String team1, team2, scorer;                                                // match partner and goal scorer
-    bool   isPenalty = false, isOwnGoal = false, isOvertime = false;            // special situation of goal
+    String kickOffUTC;                                                          // kickoff timestamp (UTC)
+    String goalTimeUTC;                                                         // event timestamp (from lastUpdate or similar)
+    int    minute = -1;                                                         // match minute
+    int    score1 = 0, score2 = 0;                                              // score after this goal (team1:team2)
+    String team1, team2, scorer;                                                // home, away, goal scorer name
+    bool   isPenalty  = false;                                                  // true if penalty
+    bool   isOwnGoal  = false;                                                  // true if own goal
+    bool   isOvertime = false;                                                  // true if extra time (n.V.)
+    String scoredFor;                                                           // resolved team name that gets credit for the goal
 };
 
 // ---------- Liga Table row (ASCII-only snapshot) ----------
@@ -117,17 +121,17 @@ class LigaTable {
     bool     connect();                                                         // connect to external data provider for liga data
     bool     fetchTable(LigaSnapshot& out);                                     // get data from external provider
     bool     disconnect();                                                      // disconnect from external data provider for liga data
+    bool     pollLastChange(League league, int& seasonOut, int& matchdayOut);   // get last change date/time of liga
+    bool     getSeasonAndGroup(League league, int& outSeason, int& outGroup);   // get saison and Spieltag
+    bool     getLastChange(League league, int season, int group, String& out);
     void     getNextMatch();                                                    // get next match date, time and opponents
     void     openLigaDBHealth();                                                // health check
-    void     getGoal();                                                         // get goal events
-    bool     pollLastChange(int* seasonOut = nullptr, int* matchdayOut = nullptr); // get last change date/time of liga
-    bool     getSeasonAndGroup(int& season, int& group);                        // get saison and Spieltag
-    bool     hasSnapshot() const;                                               // snapshot of ligaTable is ready
+    void     getGoalsLive();                                                    // get goal events
+    size_t   getGoalsLive(League league, LiveGoalEvent* out, size_t maxOut);    // get goal events
     void     get(LigaSnapshot& out) const;                                      // get snapshot from openLigaDB
     void     commit(const LigaSnapshot& s);                                     // release snahpshot to be accessed by reporting
     uint32_t decidePollMs();                                                    // get time to wait until poll openLigaDB again
     size_t   collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut);
-    bool     getLastChange(int season, int group, String& out);
 
    private:
     LigaSnapshot         buf_[2];                                               // two buffer to bw switched
@@ -136,10 +140,13 @@ class LigaTable {
     int                  currentMatchDay_ = 0;                                  // Matchday 1...34
 
     // private member functions
-    bool httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
-    bool loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
-    bool getNextUpcomingBL1(NextMatch& out);
-    void refreshNextKickoffEpoch();
+    bool      httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
+    bool      httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
+    bool      loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
+    bool      getNextUpcoming(League league, NextMatch& nm);
+    void      refreshNextKickoffEpoch(League league);
+    ApiHealth checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
+    int       currentSeasonFromDate();
 
     // Liga trace
     template <typename... Args>

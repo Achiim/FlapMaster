@@ -24,6 +24,22 @@
 #include "Liga.h"
 #include "LigaHelper.h"
 
+// 1. Bundesliga
+static const DfbMap DFB1[] = {{"FC Bayern München", "FCB", 1},     {"Borussia Dortmund", "BVB", 7}, {"RB Leipzig", "RBL", 13},
+                              {"Bayer 04 Leverkusen", "B04", 2},   {"1. FSV Mainz 05", "M05", 8},   {"Borussia Mönchengladbach", "BMG", 14},
+                              {"Eintracht Frankfurt", "SGE", 3},   {"VfL Wolfsburg", "WOB", 9},     {"1. FC Union Berlin", "FCU", 15},
+                              {"SC Freiburg", "SCF", 4},           {"TSG Hoffenheim", "TSG", 10},   {"VfB Stuttgart", "VFB", 16},
+                              {"SV Werder Bremen", "SVW", 5},      {"FC Augsburg", "FCA", 11},      {"1. FC Köln", "KOE", 17},
+                              {"1. FC Heidenheim 1846", "HDH", 6}, {"Hamburger SV", "HSV", 12},     {"FC St. Pauli", "STP", 18}};
+
+// 2. Bundesliga
+static const DfbMap DFB2[] = {{"Hertha BSC", "BSC", 19},           {"VfL Bochum", "BOC", 25},         {"Eintracht Braunschweig", "EBS", 30},
+                              {"SV Darmstadt 98", "SVD", 20},      {"Fortuna Düsseldorf", "F95", 26}, {"SV 07 Elversberg", "ELV", 31},
+                              {"SpVgg Greuther Fürth", "SGF", 21}, {"Hannover 96", "H96", 27},        {"1. FC Kaiserslautern", "FCK", 32},
+                              {"Karlsruher SC", "KSC", 22},        {"1. FC Magdeburg", "FCM", 28},    {"1. FC Nürnberg", "FCN", 33},
+                              {"SC Paderborn 07", "SCP", 23},      {"Holstein Kiel", "KSV", 29},      {"FC Schalke 04", "S04", 34},
+                              {"Preußen Münster", "PRM", 24},      {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
+
 static MatchState s_state[maxGoalsPerMatchday];                                 // enough for one match day
 static size_t     s_stateN = 0;
 
@@ -48,12 +64,7 @@ MatchState* stateFor(uint8_t league, int matchID) {
     }
     // create new entry if capacity allows
     if (s_stateN < maxGoalsPerMatchday) {
-        // IMPORTANT: initialize all fields in correct order
-        s_state[s_stateN] = MatchState{
-            league,                                                             // league
-            matchID,                                                            // matchID
-            0                                                                   // lastGoalID
-        };
+        s_state[s_stateN] = {league, matchID, 0, 0, 0};                         // init with scores
         return &s_state[s_stateN++];
     }
     return nullptr;
@@ -320,3 +331,121 @@ bool waitForTime(uint32_t maxMs) {
     }
     return t >= 1700000000;
 }
+
+/**
+ * @brief Look up the DFB code for a given team name (strict).
+ *
+ * Searches through the team mapping arrays (DFB1 and DFB2) to find a
+ * team with a matching key. If a match is found, its DFB code string
+ * is returned.
+ *
+ * Strict mode: if no team matches, an empty string is returned.
+ *
+ * @param teamName Team name as provided by OpenLigaDB.
+ * @return String containing the DFB code, or empty string if not found.
+ */
+String dfbCodeForTeamStrict(const String& teamName) {
+    String key = teamName;
+    for (auto& e : DFB1)
+        if (key == e.key)
+            return e.code;
+    for (auto& e : DFB2)
+        if (key == e.key)
+            return e.code;
+    return "";                                                                  // strict: no match => return empty string
+}
+
+/**
+ * @brief Look up the flap index for a given team name (strict).
+ *
+ * Searches through the team mapping arrays (DFB1 and DFB2) to find a
+ * team with a matching key. If a match is found, its flap index is
+ * returned.
+ *
+ * Strict mode: if no team matches, -1 is returned.
+ *
+ * @param teamName Team name as provided by OpenLigaDB.
+ * @return Flap index (integer), or -1 if not found.
+ */
+int flapForTeamStrict(const String& teamName) {
+    String key = teamName;
+    for (auto& e : DFB1)
+        if (key == e.key)
+            return e.flap;
+    for (auto& e : DFB2)
+        if (key == e.key)
+            return e.flap;
+    return -1;                                                                  // strict: no match => return -1
+}
+
+/**
+ * @brief Extract and normalize the UTC date string from a match object.
+ *
+ * Reads the date/time fields from the given JSON object and converts them
+ * into a standardized ISO 8601 UTC format ending with "Z".
+ *
+ * - If already ends with 'Z', it is returned unchanged.
+ * - If ends with "+00:00", the suffix is replaced with 'Z'.
+ * - If at least 19 characters, the first 19 chars are kept and 'Z' appended.
+ * - Otherwise, the string is returned as-is.
+ *
+ * @param m JSON object representing a match from OpenLigaDB.
+ * @return Normalized UTC timestamp string (ISO 8601).
+ */
+String matchUtc(const JsonObject& m) {
+    String dt = m["matchDateTimeUTC"] | m["MatchDateTimeUTC"] | m["matchDateTime"] | "";
+    if (!dt.length())
+        return "";
+    if (dt.endsWith("Z"))
+        return dt;
+    if (dt.endsWith("+00:00"))
+        return dt.substring(0, 19) + "Z";
+    if (dt.length() >= 19)
+        return dt.substring(0, 19) + "Z";
+    return dt;                                                                  // fallback if format not recognized
+}
+
+/**
+ * @brief Find the next scheduled match in a match array.
+ *
+ * Iterates through all matches in the given JSON array and selects the match
+ * with the earliest kickoff time that is strictly later than the provided
+ * reference timestamp (nowIso).
+ *
+ * @param arr     JSON array of matches as returned by OpenLigaDB.
+ * @param nowIso  Current time in ISO 8601 UTC format (e.g. "2025-08-31T13:30:00Z").
+ * @param out     Reference to NextMatch struct that will be filled with
+ *                details of the next match (date, ID, teams).
+ * @return true if a next match was found, false otherwise.
+ */
+bool pickNextFromArray(JsonArray arr, const String& nowIso, NextMatch& out) {
+    bool   have = false;                                                        // flag: found a candidate
+    String best;                                                                // best (earliest) datetime candidate
+
+    // iterate through all match objects
+    for (JsonObject m : arr) {
+        String dt = matchUtc(m);                                                // normalize UTC datetime of this match
+        if (!dt.length() || !(dt > nowIso))                                     // skip if empty or not in the future
+            continue;
+
+        // If first candidate OR earlier than current best, update "best"
+        if (!have || dt < best) {
+            have        = true;
+            best        = dt;
+            out.dateUTC = dt;
+            out.matchID = m["matchID"] | 0;
+
+            // Extract team info (case-insensitive keys)
+            JsonObject t1  = m["team1"].isNull() ? m["Team1"] : m["team1"];
+            JsonObject t2  = m["team2"].isNull() ? m["Team2"] : m["team2"];
+            out.team1      = (const char*)(t1["teamName"] | t1["TeamName"] | "");
+            out.team1Short = (const char*)(t1["shortName"] | t1["ShortName"] | "");
+            out.team2      = (const char*)(t2["teamName"] | t2["TeamName"] | "");
+            out.team2Short = (const char*)(t2["shortName"] | t2["ShortName"] | "");
+        }
+    }
+    return have;                                                                // true if at least one future match was found
+}
+
+// -------------------- Helpers (safe strings) --------------------
+// sichere NUL-terminierende Kopie (falls du sie im Fetch nutzt)
