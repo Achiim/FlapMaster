@@ -112,6 +112,8 @@ bool LigaTable::httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, co
  * @param doc    Reference to an ArduinoJson document to populate.
  * @return       True on success (valid JSON parsed), false otherwise.
  */
+
+/*
 bool LigaTable::httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc) {
     // ensure NTP time is valid before TLS handshake
     waitForTime();                                                              // wait for time to be synchronized
@@ -247,7 +249,7 @@ bool LigaTable::httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, cons
     // all attempts failed
     return false;
 }
-
+*/
 // ----- Kernfunktionen -----
 
 /**
@@ -270,6 +272,7 @@ bool LigaTable::httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, cons
  * @param outGroupOrderId   Optional: receives resolved groupOrderID (if non-null).
  * @return true on success, false otherwise.
  */
+/*
 bool LigaTable::loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId) {
     const char*      lg     = leagueShortcut(league);                           // "bl1" or "bl2"
     WiFiClientSecure client = makeSecureClient();
@@ -349,7 +352,7 @@ bool LigaTable::loadCurrentMatchday(JsonDocument& outDoc, League league, int* ou
 
     return false;
 }
-
+*/
 /**
  * @brief Collect new goal events from live matches of a given league.
  *
@@ -364,6 +367,8 @@ bool LigaTable::loadCurrentMatchday(JsonDocument& outDoc, League league, int* ou
  *
  * @note Uses per-match MatchState objects to avoid reporting the same goal twice.
  */
+
+/*
 size_t LigaTable::collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut) {
     size_t outN = 0;
 
@@ -479,7 +484,7 @@ size_t LigaTable::collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, s
 
     return outN;
 }
-
+*/
 /**
  * @brief Retrieve the "last change" timestamp for a given season and group.
  *
@@ -499,6 +504,7 @@ size_t LigaTable::collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, s
  * @param out     Reference to a String that will receive the timestamp in ISO format.
  * @return true if a non-empty timestamp was successfully extracted, false otherwise.
  */
+/*
 bool LigaTable::getLastChange(League league, int season, int group, String& out) {
     const char*      lg     = leagueShortcut(league);
     WiFiClientSecure client = makeSecureClient();
@@ -528,6 +534,7 @@ bool LigaTable::getLastChange(League league, int season, int group, String& out)
     out.trim();
     return !out.isEmpty();
 }
+*/
 
 /**
  * @brief Retrieve the current season and group (matchday) for a given league.
@@ -724,7 +731,7 @@ bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) 
     s_lastChangeEpoch = toUtcTimeT(latest);
     return true;
 }
-
+/*
 int LigaTable::currentSeasonFromDate() {
     struct tm t;
     getLocalTime(&t);                                                           // setzt t mit aktueller Uhrzeit (RTC/NTP muss laufen)
@@ -738,7 +745,8 @@ int LigaTable::currentSeasonFromDate() {
         return year - 1;                                                        // bis Juni gilt noch die Vorjahres-Saison
     }
 }
-
+*/
+/*
 void LigaTable::getGoalsLive() {
     LiveGoalEvent evs[maxGoalsPerMatchday];
     size_t        n = getGoalsLive(activeLeague, evs, maxGoalsPerMatchday);
@@ -752,7 +760,8 @@ void LigaTable::getGoalsLive() {
         }
     }
 }
-
+*/
+/*
 size_t LigaTable::getGoalsLive(League league, LiveGoalEvent* out, size_t maxOut) {
     size_t outN = 0;
 
@@ -858,7 +867,7 @@ size_t LigaTable::getGoalsLive(League league, LiveGoalEvent* out, size_t maxOut)
 
     return outN;
 }
-
+*/
 /**
  * @brief Check the availability and health of the OpenLigaDB API for a given league.
  *
@@ -1219,7 +1228,7 @@ void LigaTable::openLigaDBHealth() {
     ApiHealth h = checkOpenLigaDB(activeLeague, 50000);
     ligaPrintln("openLigaDB - Status: %s (http=%d, %d ms) %s", h.status.c_str(), h.httpCode, h.elapsedMs, h.detail.c_str());
 }
-
+/*
 void LigaTable::getNextMatch() {
     NextMatch nm;
 
@@ -1240,7 +1249,7 @@ void LigaTable::getNextMatch() {
         ligaPrintln("(getNextMatch) Kein zukünftiges Spiel gefunden (Saison evtl. vorbei oder API down).");
     }
 }
-
+*/
 /**
  * @brief Establish a WiFi connection for LigaTable.
  *
@@ -1455,6 +1464,8 @@ void LigaTable::getGoal() {
  * @return true  If a next upcoming match was found.
  * @return false If no upcoming match was found or on error.
  */
+
+/*
 bool LigaTable::getNextUpcoming(League league, NextMatch& out) {
     char url[128];
     snprintf(url, sizeof(url), "https://api.openligadb.de/getnextmatchbyleagueshortcut/%s", leagueShortcut(league));
@@ -1491,7 +1502,7 @@ bool LigaTable::getNextUpcoming(League league, NextMatch& out) {
 
     return true;
 }
-
+*/
 bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) {
     if (!waitForTime()) {
         #ifdef ERRORVERBOSE

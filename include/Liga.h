@@ -132,22 +132,22 @@ class LigaTable {
     // Constructor for LigaTable
     LigaTable();
 
-    bool     connect();                                                         // connect to external data provider for liga data
-    bool     fetchTable(LigaSnapshot& out);                                     // get data from external provider
-    bool     disconnect();                                                      // disconnect from external data provider for liga data
-    bool     pollLastChange(League league, int& seasonOut, int& matchdayOut);   // get last change date/time of liga
-    bool     getSeasonAndGroup(League league, int& outSeason, int& outGroup);   // get saison and Spieltag
-    bool     getLastChange(League league, int season, int group, String& out);
-    void     getNextMatch();                                                    // get next match date, time and opponents
-    void     openLigaDBHealth();                                                // health check
-    void     getGoalsLive();                                                    // get goal events
-    size_t   getGoalsLive(League league, LiveGoalEvent* out, size_t maxOut);    // get goal events
+    bool connect();                                                             // connect to external data provider for liga data
+    bool fetchTable(LigaSnapshot& out);                                         // get data from external provider
+    bool disconnect();                                                          // disconnect from external data provider for liga data
+    bool pollLastChange(League league, int& seasonOut, int& matchdayOut);       // get last change date/time of liga
+    bool getSeasonAndGroup(League league, int& outSeason, int& outGroup);       // get saison and Spieltag
+    // bool     getLastChange(League league, int season, int group, String& out);
+    // void     getNextMatch();                                                    // get next match date, time and opponents
+    void openLigaDBHealth();                                                    // health check
+    // void     getGoalsLive();                                                    // get goal events
+    // size_t   getGoalsLive(League league, LiveGoalEvent* out, size_t maxOut);    // get goal events
     void     get(LigaSnapshot& out) const;                                      // get snapshot from openLigaDB
     void     commit(const LigaSnapshot& s);                                     // release snahpshot to be accessed by reporting
     uint32_t decidePollMs();                                                    // get time to wait until poll openLigaDB again
-    size_t   collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut);
-    int      collectLiveMatches(League league, LiveGoalEvent* out, size_t maxCount);
-    int      fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveGoalEvent* out, size_t maxCount);
+    // size_t   collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut);
+    int collectLiveMatches(League league, LiveGoalEvent* out, size_t maxCount);
+    int fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveGoalEvent* out, size_t maxCount);
 
    private:
     LigaSnapshot         buf_[2];                                               // two buffer to bw switched
@@ -157,13 +157,13 @@ class LigaTable {
     int                  currentMatchDay_ = 0;                                  // Matchday 1...34
 
     // private member functions
-    bool        httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
-    bool        httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
-    bool        loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
-    bool        getNextUpcoming(League league, NextMatch& nm);
-    void        refreshNextKickoffEpoch(League league);
-    ApiHealth   checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
-    int         currentSeasonFromDate();
+    // bool        httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
+    bool httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
+    // bool        loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
+    // bool      getNextUpcoming(League league, NextMatch& nm);
+    void      refreshNextKickoffEpoch(League league);
+    ApiHealth checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
+    // int         currentSeasonFromDate();
     SeasonGroup lastSeasonGroup() const;
     time_t      bestFutureKickoffInGroup(League league, int season, int group);
 
