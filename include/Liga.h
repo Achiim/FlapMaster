@@ -42,6 +42,13 @@ static inline const char* leagueShortcut(League lg) {
     return (lg == League::BL2) ? "bl2" : "bl1";
 }
 
+// to be used for dynamic polling
+static String         s_lastChange;                                             // dein vorhandener ISO-String
+static time_t         s_lastChangeEpoch      = 0;                               // Epoch zum schnellen Vergleich
+static time_t         s_nextKickoffEpoch     = 0;                               // nächster Anstoß (Epoch UTC)
+static const uint32_t KICKOFF_REFRESH_MS     = 30000;                           // 30 Seconds
+static uint32_t       s_lastKickoffRefreshMs = KICKOFF_REFRESH_MS;              // wann zuletzt berechnet
+
 // ----- Datatyps -----
 struct DfbMap {
     const char* key;                                                            // team name
@@ -113,6 +120,13 @@ struct ApiHealth {
     String detail;                                                              // Zusatzinfo
 };
 
+struct SeasonGroup {
+    int      season      = -1;
+    int      group       = -1;
+    bool     valid       = false;
+    uint32_t fetchedAtMs = 0;
+};
+
 class LigaTable {
    public:
     // Constructor for LigaTable
@@ -132,21 +146,26 @@ class LigaTable {
     void     commit(const LigaSnapshot& s);                                     // release snahpshot to be accessed by reporting
     uint32_t decidePollMs();                                                    // get time to wait until poll openLigaDB again
     size_t   collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut);
+    int      collectLiveMatches(League league, LiveGoalEvent* out, size_t maxCount);
+    int      fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveGoalEvent* out, size_t maxCount);
 
    private:
     LigaSnapshot         buf_[2];                                               // two buffer to bw switched
     std::atomic<uint8_t> active_;                                               // signalize writing  to snapshot
+    SeasonGroup          _lastSG;                                               // last fetched season and group
     int                  currentSeason_   = 0;                                  // Season 2025
     int                  currentMatchDay_ = 0;                                  // Matchday 1...34
 
     // private member functions
-    bool      httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
-    bool      httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
-    bool      loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
-    bool      getNextUpcoming(League league, NextMatch& nm);
-    void      refreshNextKickoffEpoch(League league);
-    ApiHealth checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
-    int       currentSeasonFromDate();
+    bool        httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
+    bool        httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
+    bool        loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
+    bool        getNextUpcoming(League league, NextMatch& nm);
+    void        refreshNextKickoffEpoch(League league);
+    ApiHealth   checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
+    int         currentSeasonFromDate();
+    SeasonGroup lastSeasonGroup() const;
+    time_t      bestFutureKickoffInGroup(League league, int season, int group);
 
     // Liga trace
     template <typename... Args>

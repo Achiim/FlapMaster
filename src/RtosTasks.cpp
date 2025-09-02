@@ -25,6 +25,7 @@
 #include "FlapStatistics.h"
 #include "Parser.h"
 #include "Liga.h"
+#include "LigaHelper.h"
 #include "RemoteControl.h"
 #include "RtosTasks.h"
 // ----------------------------
@@ -52,6 +53,7 @@ void ligaTask(void* pvParameters) {
     int           matchday = 0;
     ReportCommand repCmd;
 
+    LiveGoalEvent       evs[maxGoalsPerMatchday];
     static LigaSnapshot snap;                                                   // keep off the task stack growth per loop
 
     // Construct the LigaTable and connect once.
@@ -81,20 +83,37 @@ void ligaTask(void* pvParameters) {
                 masterPrintln("========== Liga Scan ============== ");
                 }
             #endif
+            Liga->openLigaDBHealth();                                           // health check openLigaDB
             snap.clear();                                                       // reset snapshot buffer
             Liga->fetchTable(snap);                                             // pull latest table data (HTTP/JSON)
             Liga->commit(snap);                                                 // atomic flip to front buffer
 
-            // Kick a report if desired
+            // Kick a report of actual table
             repCmd.repCommand   = REPORT_LIGA_TABLE;
             repCmd.responsQueue = nullptr;
             if (g_reportQueue)
                 xQueueOverwrite(g_reportQueue, &repCmd);
 
-            // Side queries (keep lightweight/frequent, heavier/rare ones less often)
-            Liga->openLigaDBHealth();
-            Liga->getNextMatch();
-            Liga->getGoalsLive();
+            // 1) Live-Gate
+            LiveGoalEvent liveBuf[12];
+            int           liveN = Liga->collectLiveMatches(activeLeague, liveBuf, 12); // are there some live matches
+            if (liveN != 0) {
+                for (int i = 0; i < liveN; ++i) {
+                    LiveGoalEvent evBuf[8];                                     // expect less many new goals per live game
+                    int           evN = Liga->fetchGoalsForLiveMatch(liveBuf[i].matchID, s_lastChange, evBuf, 8);
+                    for (int j = 0; j < evN; ++j) {
+                        const auto& e = evBuf[j];
+                        // Visualisierung / Team-Credit / Ticker
+                        // flapAnimateForTeam(e.scoredFor); ...
+                    }
+                }
+            }
+            /*
+                        // if there is a match live show it and refresh goals
+                        Liga->collectLiveMatches(activeLeague, evs, maxGoalsPerMatchday);
+                        Liga->getNextMatch();
+                        Liga->getGoalsLive();
+            */
         }
 
         // ---- 2) Decide the *nominal* period in ms for the next scan
