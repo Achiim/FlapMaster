@@ -490,7 +490,7 @@ void FlapReporting::reportTaskStatus() {
             uint32_t s = (ms % 60000) / 1000;
             snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
         }
-        printKV(" Next I2C bus scan in:", val);
+        printKV(" Next I2C bus scan in :", val);
     }
 
     // Next availability check
@@ -504,7 +504,7 @@ void FlapReporting::reportTaskStatus() {
             uint32_t s = (ms % 60000) / 1000;
             snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
         }
-        printKV(" Next device check in:", val);
+        printKV(" Next device check in :", val);
     }
 
     // next Liga scan
@@ -518,7 +518,7 @@ void FlapReporting::reportTaskStatus() {
             uint32_t s = (ls % 60000) / 1000;
             snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
         }
-        printKV(" Next liga scan in   :", val);
+        printKV(" Next OpenLiga scan in:", val);
     }
     printBottom();
 }
