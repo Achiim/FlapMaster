@@ -89,10 +89,9 @@ void FlapTask::systemHalt(const char* reason, int blinkCode) {
             vTaskDelay(pdMS_TO_TICKS(5000));
             }
         #endif
+        TraceScope trace;                                                       // use semaphore to protect
         {
-            TraceScope trace;                                                   // use semaphore to protect
-            masterPrint("System halt reason: ");                                // regelmäßige
-                                                  // Konsolenmeldung
+            masterPrint("System halt reason: ");                                // regelmäßige Konsolenmeldung
             Serial.println(reason);
         }
         vTaskDelay(pdMS_TO_TICKS(5000));                                        // Delay for 5s

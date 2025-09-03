@@ -219,7 +219,7 @@ void FlapReporting::reportI2CStatistic() {
     //                                     1                   2                   3                   4
     //              123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
     Serial.println("┌─────────────────────────────────────────────────────────────────────────────┐");
-    Serial.printf("│ FLAP I²C STATISTIC AND HISTORY OF LAST MINUTES     Bus-Frequency: %3dkHz   │\n", I2C_MASTER_FREQ_HZ / 1000);
+    Serial.printf("│ FLAP I²C STATISTIC AND HISTORY OF LAST MINUTES     Bus-Frequency: %3dkHz    │\n", I2C_MASTER_FREQ_HZ / 1000);
 
     printI2CHistory();                                                          // show history of I2C usage
 

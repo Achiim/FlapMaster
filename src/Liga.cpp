@@ -42,198 +42,99 @@ static const DfbMap DFB2[] = {{"Hertha BSC", "BSC", 19},           {"VfL Bochum"
                               {"SC Paderborn 07", "SCP", 23},      {"Holstein Kiel", "KSV", 29},      {"FC Schalke 04", "S04", 34},
                               {"Preußen Münster", "PRM", 24},      {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
 
-/// Robust JSON GET helper: handles CL=0, chunked, retry, auto buffer/stream
+/**
+ * @brief Perform a robust HTTP GET and parse JSON response.
+ *
+ * This helper handles several problematic cases commonly encountered on ESP32:
+ *  - Unknown or zero Content-Length (CL=0 or -1).
+ *  - Chunked transfer encoding.
+ *  - Large vs. small responses (switch between buffer vs. stream).
+ *  - Automatic retries on failure (up to @p maxRetry).
+ *
+ * Behavior:
+ *  - Opens a TLS-secured connection with @p client and performs GET on @p url.
+ *  - If Content-Length is small (<8192 bytes), downloads into a String buffer
+ *    and then deserializes into @p doc.
+ *  - If Content-Length is large or unknown, deserializes directly from the stream.
+ *  - Returns true if JSON parsing succeeds, or if parsing fails only with
+ *    `DeserializationError::IncompleteInput` (treated as usable).
+ *  - On other parse errors or HTTP errors, retries (with 200 ms delay) up to @p maxRetry.
+ *
+ * @param http     Reference to an HTTPClient instance (reused by caller).
+ * @param client   Reference to a WiFiClientSecure (TLS) instance.
+ * @param url      Target URL to fetch JSON from.
+ * @param doc      Destination JsonDocument to populate.
+ * @param maxRetry Maximum retry attempts (default is caller-defined).
+ * @return true    If JSON was successfully parsed or usable despite IncompleteInput.
+ * @return false   If all retries failed or an unrecoverable error occurred.
+ */
 bool LigaTable::httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry) {
     for (int attempt = 0; attempt < maxRetry; attempt++) {
+        // Try to open a secure connection
         if (!http.begin(client, url)) {
-            ligaPrintln("http.begin() failed @ %s", url.c_str());
-            return false;
+            #ifdef ERRORVERBOSE
+                TraceScope trace;
+                {
+                ligaPrintln("http.begin() failed @ %s", url.c_str());
+                }
+            #endif
+            return false;                                                       // unrecoverable, do not retry
         }
-
-        int code = http.GET();
+        int code = http.GET();                                                  // Perform the GET request
         if (code != HTTP_CODE_OK) {
-            ligaPrintln("HTTP GET %s -> %d", url.c_str(), code);
+            #ifdef ERRORVERBOSE
+                TraceScope trace;
+                {
+                ligaPrintln("HTTP GET %s -> %d", url.c_str(), code);            // Server responded with an error → retry
+                }
+            #endif
             http.end();
-            delay(200);
+            delay(200);                                                         // short back-off before retry
             continue;
         }
-
-        // --- Content-Length auswerten ---
-        int                  len = http.getSize();                              // -1 = unbekannt
+        // --- Evaluate Content-Length ---
+        int                  len = http.getSize();                              // -1 = unknown length
         DeserializationError err;
-
-        if (len > 0 && len < 8192) {
-            // Kleine Antwort → in String holen
+        if (len > 0 && len < 8192) {                                            // Small response: safer to buffer into String before parsing
             String payload = http.getString();
             err            = deserializeJson(doc, payload);
         } else {
-            // Große/unbekannte Antwort → direkt streamen
-            Stream* s = http.getStreamPtr();
+            Stream* s = http.getStreamPtr();                                    // Large or unknown size: stream directly into ArduinoJson
             if (!s) {
-                ligaPrintln("HTTP stream null @ %s", url.c_str());
+                #ifdef ERRORVERBOSE
+                    TraceScope trace;
+                    {
+                    ligaPrintln("HTTP stream null @ %s", url.c_str());
+                    }
+                #endif
                 http.end();
-                continue;
+                continue;                                                       // retry with new connection
             }
             err = deserializeJson(doc, *s);
         }
-
-        http.end();
-
+        http.end();                                                             // always free connection after use
         if (!err) {
-            return true;                                                        // ✅ Erfolgreich
+            return true;                                                        // Parsed successfully
         }
-
         if (err == DeserializationError::IncompleteInput) {
-            ligaPrintln("Warnung: JSON unvollständig @ %s, Daten evtl. nutzbar", url.c_str());
-            return true;                                                        // trotzdem OK zurückgeben
-        }
-
-        ligaPrintln("JSON parse error @ %s: %s", url.c_str(), err.c_str());
-        delay(200);
-    }
-    return false;
-}
-
-/**
- * @brief Perform an HTTPS GET request and parse the response as JSON.
- *
- * This helper wraps an HTTPClient with a WiFiClientSecure to fetch
- * JSON data from a given URL. It ensures time is synchronized (for TLS),
- * configures the HTTP client for non-chunked responses, and retries once
- * on error. If the response code is 200 (OK), it deserializes the JSON
- * into the provided ArduinoJson `JsonDocument`.
- *
- * Diagnostic logging is printed via Serial on connection failures,
- * HTTP errors, or JSON parse errors.
- *
- * @param http   Reference to an HTTPClient instance (reused across calls).
- * @param client Reference to a WiFiClientSecure (TLS) instance.
- * @param url    Target URL (HTTPS).
- * @param doc    Reference to an ArduinoJson document to populate.
- * @return       True on success (valid JSON parsed), false otherwise.
- */
-
-// ----- Kernfunktionen -----
-
-/**
- * @brief Collect new goal events from live matches of a given league.
- *
- * This function queries the current matchday from the OpenLigaDB API,
- * iterates through all matches, and extracts all goals that have not yet been seen.
- * Goals are sorted chronologically by the total score (s1+s2 ascending).
- *
- * @param league   The league to query (BL1 or BL2).
- * @param out      Pointer to an array of LiveGoalEvent where results are stored.
- * @param maxOut   Maximum number of goal events to write into @p out.
- * @return Number of new goals written into @p out.
- *
- * @note Uses per-match MatchState objects to avoid reporting the same goal twice.
- */
-
-/**
- * @brief Retrieve the "last change" timestamp for a given season and group.
- *
- * This function queries the OpenLigaDB API endpoint
- *   /getlastchangedate/<league>/<season>/<group>
- * and extracts the last change date string. The API response format may
- * vary: it can be either a raw string or a JSON object containing a field
- * "lastChangeDate".
- *
- * Changes compared to the previous version:
- *  - Added a `League league` parameter to support both BL1 and BL2.
- *  - URL is built dynamically using leagueShortcut(league) instead of hard-coded "bl1".
- *
- * @param league  League selector (e.g., League::BL1 or League::BL2).
- * @param season  League season (e.g., 2025).
- * @param group   Group (matchday) number within the season.
- * @param out     Reference to a String that will receive the timestamp in ISO format.
- * @return true if a non-empty timestamp was successfully extracted, false otherwise.
- */
-/*
-bool LigaTable::getLastChange(League league, int season, int group, String& out) {
-    const char*      lg     = leagueShortcut(league);
-    WiFiClientSecure client = makeSecureClient();
-    HTTPClient       http;
-
-    char url[160];
-    snprintf(url, sizeof(url), "https://api.openligadb.de/getlastchangedate/%s/%d/%d", lg, season, group);
-
-    ligaPrintln("[getLastChange] GET %s", url);
-
-    if (!http.begin(client, url)) {
-        ligaPrintln("http.begin() failed @ %s", url);
-        return false;
-    }
-
-    int code = http.GET();
-    if (code != HTTP_CODE_OK) {
-        ligaPrintln("HTTP GET %s -> %d", url, code);
-        http.end();
-        return false;
-    }
-
-    out = http.getString();
-    http.end();
-
-    // JSON parse ist hier gar nicht nötig, weil out bereits ein ISO-Zeitstempel ist
-    out.trim();
-    return !out.isEmpty();
-}
-*/
-
-/**
- * @brief Retrieve the current season and group (matchday) for a given league.
- *
- * This function queries the rolling endpoint:
- *   /getmatchdata/<league>
- * where <league> is "bl1" or "bl2", and extracts from the first match:
- *   - leagueSeason
- *   - group.groupOrderID (matchday number)
- *
- * @param league League selector (e.g., League::BL1 or League::BL2).
- * @param season Reference to int that will receive the league season (e.g. 2025).
- * @param group  Reference to int that will receive the current matchday number.
- * @return true if both season and group were successfully extracted (>0), false otherwise.
- */
-/**
- * @brief Determine current season and group (matchday) for a given league.
- *
- * Handles multiple possible formats from the API:
- *  - JSON object { "leagueSeason": ..., "groupOrderID": ... }
- *  - JSON array with one or more objects
- *  - Plain integer (groupOrderID only)
- *  - Plain string with a number
- *
- * @param league   League selector (BL1, BL2).
- * @param outSeason Output: season number.
- * @param outGroup  Output: matchday number.
- * @return true on success, false otherwise.
- */
-
-// --- Helper: falls noch nicht vorhanden ---
-static bool httpGetTextRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, String& out, int retries = 3,
-                              uint32_t readTimeoutMs = 12000) {
-    for (int a = 0; a < retries; ++a) {
-        http.setTimeout(readTimeoutMs);
-        http.setConnectTimeout(readTimeoutMs);
-        http.addHeader("Accept", "text/plain");
-        http.addHeader("Accept-Encoding", "identity");
-        // optional: http.useHTTP10(true);
-
-        if (!http.begin(client, url)) {
-            http.end();
-            continue;
-        }
-        int code = http.GET();
-        if (code == HTTP_CODE_OK) {
-            out = http.getString();
-            http.end();
+            #ifdef ERRORVERBOSE                                                 // Sometimes OpenLigaDB cuts JSON → still usable
+                TraceScope trace;
+                {
+                ligaPrintln("Warning: JSON incomplete @ %s, data may still be usable", url.c_str());
+                }
+            #endif
             return true;
         }
-        http.end();
-        delay(150);
+
+        #ifdef ERRORVERBOSE                                                     // Any other parse error: log and retry
+            TraceScope trace;
+            {
+            ligaPrintln("JSON parse error @ %s: %s", url.c_str(), err.c_str());
+            }
+        #endif
+        delay(200);
     }
-    return false;
+    return false;                                                               // all retries failed
 }
 
 /**
@@ -252,7 +153,6 @@ static bool httpGetTextRobust(HTTPClient& http, WiFiClientSecure& client, const 
 bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) {
     int season = 0;
     int group  = 0;
-
     // 1) get season + matchday
     if (!getSeasonAndGroup(league, season, group)) {
         #ifdef ERRORVERBOSE
@@ -324,15 +224,19 @@ bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) 
     if (latest.isEmpty() || latest == s_lastChange)
         return false;
 
-        #ifdef LIGAVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("actual matchday changed at \"%s\" please actualize", latest.c_str());
-            }
-        #endif
-
     s_lastChange      = latest;
     s_lastChangeEpoch = toUtcTimeT(latest);
+
+    #ifdef LIGAVERBOSE
+        struct tm tmLoc;
+        localtime_r(&s_lastChangeEpoch, &tmLoc);                                // convert UTC epoch → local time
+        char buf[32];
+        strftime(buf, sizeof(buf), "%d.%m.%Y %H:%M:%S %Z", &tmLoc);
+        TraceScope trace;
+        {
+        ligaPrintln("actual matchday changed at \"%s\" (local %s)", latest.c_str(), buf);
+        }
+    #endif
     return true;
 }
 
@@ -465,18 +369,20 @@ void LigaTable::refreshNextKickoffEpoch(League league) {
     }
 
     // --- Store result and log ---
+
     if (best) {
         s_nextKickoffEpoch = best;
         #ifdef LIGAVERBOSE
-            struct tm tmUtc;
-            gmtime_r(&best, &tmUtc);
+            struct tm tmLoc;
+            localtime_r(&best, &tmLoc);                                         // convert epoch → local time
             char buf[32];
-            strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S UTC", &tmUtc);
+            strftime(buf, sizeof(buf), "%d.%m.%Y %H:%M:%S %Z", &tmLoc);         // print with TZ name
             TraceScope trace;
             {
             ligaPrintln("next kickoff = %s (epoch=%ld)", buf, (long)best);
             }
         #endif
+
     } else {
         s_nextKickoffEpoch = 0;
         #ifdef LIGAVERBOSE
@@ -1142,8 +1048,8 @@ int LigaTable::collectLiveMatches(League league, LiveGoalEvent* out, size_t maxC
     SeasonGroup sg = lastSeasonGroup();
     if (!sg.valid) {
         #ifdef ERRORVERBOSE
-            {
             TraceScope trace;
+            {
             ligaPrintln("(collectLiveMatches)no stored Season/Group - call getSeasonAndGroup first");
             }
         #endif
@@ -1168,8 +1074,8 @@ int LigaTable::collectLiveMatches(League league, LiveGoalEvent* out, size_t maxC
 
     if (!http.begin(client, url)) {
         #ifdef ERRORVERBOSE
-            {
             TraceScope trace;
+            {
             ligaPrintln("(collectLiveMatches) http.begin failed: %s", url);
             }
         #endif
@@ -1575,8 +1481,8 @@ bool LigaTable::detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapsh
     if (newLeaderOut)
         *newLeaderOut = &newL;
         #ifdef LIGAVERBOSE
-            {
             TraceScope trace;
+            {
             ligaPrintln("leader change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldL.team, newL.team, oldL.pkt, newL.pkt, oldL.diff, newL.diff);
             }
         #endif
