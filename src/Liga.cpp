@@ -234,7 +234,7 @@ bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) 
         strftime(buf, sizeof(buf), "%d.%m.%Y %H:%M:%S %Z", &tmLoc);
         TraceScope trace;
         {
-        ligaPrintln("actual matchday changed at \"%s\" (local %s)", latest.c_str(), buf);
+        ligaPrintln("last change of actual matchday at \"%s\" (local %s)", latest.c_str(), buf);
         }
     #endif
     return true;
@@ -1004,7 +1004,7 @@ bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) 
     #ifdef LIGAVERBOSE
         TraceScope trace;
         {
-        ligaPrintln("actual league=%s season=%d, group=%d (stored)", leagueShortcut(league), season, group);
+        ligaPrintln("actual league=%s season=%d, matchday=%d (stored)", leagueShortcut(league), season, group);
         }
     #endif
     }
