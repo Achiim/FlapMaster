@@ -127,45 +127,40 @@ struct SeasonGroup {
     uint32_t fetchedAtMs = 0;
 };
 
+/// Optional helper struct for reporting a detected leader change.
+struct LeaderChange {
+    bool    changed = false;                                                    // true if the leader changed between snapshots
+    String  oldTeam;                                                            // leader team name in the old snapshot
+    String  newTeam;                                                            // leader team name in the new snapshot
+    String  oldDfb;                                                             // DFB short code of old leader (may be empty)
+    String  newDfb;                                                             // DFB short code of new leader (may be empty)
+    uint8_t oldPoints = 0;                                                      // points of old leader (if available)
+    uint8_t newPoints = 0;                                                      // points of new leader (if available)
+    int8_t  oldDiff   = 0;                                                      // goal diff of old leader (if available)
+    int8_t  newDiff   = 0;                                                      // goal diff of new leader (if available)
+};
+
 class LigaTable {
    public:
     // Constructor for LigaTable
     LigaTable();
 
-    bool connect();                                                             // connect to external data provider for liga data
-    bool fetchTable(LigaSnapshot& out);                                         // get data from external provider
-    bool disconnect();                                                          // disconnect from external data provider for liga data
-    bool pollLastChange(League league, int& seasonOut, int& matchdayOut);       // get last change date/time of liga
-    bool getSeasonAndGroup(League league, int& outSeason, int& outGroup);       // get saison and Spieltag
-    // bool     getLastChange(League league, int season, int group, String& out);
-    // void     getNextMatch();                                                    // get next match date, time and opponents
-    void openLigaDBHealth();                                                    // health check
-    // void     getGoalsLive();                                                    // get goal events
-    // size_t   getGoalsLive(League league, LiveGoalEvent* out, size_t maxOut);    // get goal events
-    void     get(LigaSnapshot& out) const;                                      // get snapshot from openLigaDB
-    void     commit(const LigaSnapshot& s);                                     // release snahpshot to be accessed by reporting
-    uint32_t decidePollMs();                                                    // get time to wait until poll openLigaDB again
-    // size_t   collectNewGoalsAcrossLive(League league, LiveGoalEvent* out, size_t maxOut);
-    int collectLiveMatches(League league, LiveGoalEvent* out, size_t maxCount);
-    int fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveGoalEvent* out, size_t maxCount);
-
-   private:
-    LigaSnapshot         buf_[2];                                               // two buffer to bw switched
-    std::atomic<uint8_t> active_;                                               // signalize writing  to snapshot
-    SeasonGroup          _lastSG;                                               // last fetched season and group
-    int                  currentSeason_   = 0;                                  // Season 2025
-    int                  currentMatchDay_ = 0;                                  // Matchday 1...34
-
-    // private member functions
-    // bool        httpGetJsonWith(HTTPClient& http, WiFiClientSecure& client, const char* url, JsonDocument& doc);
-    bool httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
-    // bool        loadCurrentMatchday(JsonDocument& outDoc, League league, int* outSeason, int* outGroupOrderId);
-    // bool      getNextUpcoming(League league, NextMatch& nm);
-    void      refreshNextKickoffEpoch(League league);
-    ApiHealth checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
-    // int         currentSeasonFromDate();
-    SeasonGroup lastSeasonGroup() const;
-    time_t      bestFutureKickoffInGroup(League league, int season, int group);
+    // public member functions
+    bool          connect();                                                    // connect to external data provider for liga data
+    bool          fetchTable(LigaSnapshot& out);                                // get data from external provider
+    bool          disconnect();                                                 // disconnect from external data provider for liga data
+    bool          pollLastChange(League league, int& seasonOut, int& matchdayOut); // get last change date/time of liga
+    bool          getSeasonAndGroup(League league, int& outSeason, int& outGroup); // get saison and Spieltag
+    void          openLigaDBHealth();                                           // health check
+    void          get(LigaSnapshot& out) const;                                 // get snapshot from openLigaDB
+    void          commit(const LigaSnapshot& s);                                // release snahpshot to be accessed by reporting
+    uint32_t      decidePollMs();                                               // get time to wait until poll openLigaDB again
+    int           collectLiveMatches(League league, LiveGoalEvent* out, size_t maxCount);
+    int           fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveGoalEvent* out, size_t maxCount);
+    bool          detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut = nullptr,
+                                     const LigaRow** newLeaderOut = nullptr);
+    LigaSnapshot& activeSnapshot();                                             // Get the currently active snapshot (front buffer)
+    LigaSnapshot& previousSnapshot();                                           /// Get the snapshot that was active before the last commit
 
     // Liga trace
     template <typename... Args>
@@ -177,6 +172,21 @@ class LigaTable {
     void ligaPrintln(const Args&... args) {                                     // standard parserPrint with new line
         tracePrintln("[FLAP  -  LIGA  ] ", args...);
     }
+
+   private:
+    LigaSnapshot         buf_[2];                                               // two buffer to be switched
+    std::atomic<uint8_t> active_{0};                                            // Indice to active buffer
+    std::atomic<uint8_t> previous_{0};                                          // Indice to previous buffer
+    SeasonGroup          _lastSG;                                               // last fetched season and group
+    int                  currentSeason_   = 0;                                  // Season 2025
+    int                  currentMatchDay_ = 0;                                  // Matchday 1...34
+
+    // private member functions
+    bool        httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
+    void        refreshNextKickoffEpoch(League league);
+    ApiHealth   checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
+    SeasonGroup lastSeasonGroup() const;
+    time_t      bestFutureKickoffInGroup(League league, int season, int group);
 };
 
 #endif                                                                          // Liga_h

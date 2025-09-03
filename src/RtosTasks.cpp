@@ -49,52 +49,57 @@
  * @param pvParameters Unused.
  */
 void ligaTask(void* pvParameters) {
-    int           season   = 0;
-    int           matchday = 0;
-    ReportCommand repCmd;
+    int season   = 0;                                                           // actual season will be determined
+    int matchday = 0;                                                           // actual matchday will be determined
 
-    LiveGoalEvent       evs[maxGoalsPerMatchday];
-    static LigaSnapshot snap;                                                   // keep off the task stack growth per loop
+    ReportCommand repCmd;                                                       // command to b e send to reporting task
+    repCmd.repCommand   = REPORT_LIGA_TABLE;
+    repCmd.responsQueue = nullptr;
 
-    // Construct the LigaTable and connect once.
-    Liga = new LigaTable();
-    Liga->connect();
+    LiveGoalEvent       evs[maxGoalsPerMatchday];                               // bubber for live goals
+    static LigaSnapshot snap;                                                   // snapshot off bundesliga table
+    Liga = new LigaTable();                                                     // Construct the LigaTable object
+    Liga->connect();                                                            // connect to openLigaDb
 
-    // Create a one-shot timer. Period will be set per-iteration to the *remaining* time.
-    // Using one-shot avoids repeated callbacks while the task is asleep.
-    ligaScanTimer = xTimerCreate("LigaScan",
+    ligaScanTimer = xTimerCreate("LigaScan",                                    // Using one-shot avoids repeated callbacks while the task is asleep.
                                  /*initial period*/ 1,                          // will be changed before each wait
                                  /*autoReload*/ pdFALSE,
                                  /*timerID*/ nullptr,
                                  /*callback*/ ligaScanCallback);
     configASSERT(ligaScanTimer != nullptr);
-
-    // Start it with a dummy short period so getNextLigaScanRemainingMs() is valid immediately.
-    xTimerStart(ligaScanTimer, pdMS_TO_TICKS(2));
+    xTimerStart(ligaScanTimer, pdMS_TO_TICKS(2));                               // Start it with a dummy short period so getNextLigaScanRemainingMs() is valid immediately.
 
     while (true) {
-        // ---- 1) Work phase starts: measure start tick to compute remaining wait later
-        TickType_t t0 = xTaskGetTickCount();
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope trace;
+            Liga->ligaPrintln("========== Liga Scan ============== ");
+            }
+        #endif
+        TickType_t t0 = xTaskGetTickCount();                                    // Work phase starts: remember start tick to compute remaining wait later
 
-        if (Liga->pollLastChange(activeLeague, season, matchday)) {
-            #ifdef LIGAVERBOSE
-                {
-                TraceScope trace;
-                masterPrintln("========== Liga Scan ============== ");
-                }
-            #endif
+        if (Liga->pollLastChange(activeLeague, season, matchday)) {             // are there changes at openLigaDb??
             Liga->openLigaDBHealth();                                           // health check openLigaDB
             snap.clear();                                                       // reset snapshot buffer
             Liga->fetchTable(snap);                                             // pull latest table data (HTTP/JSON)
             Liga->commit(snap);                                                 // atomic flip to front buffer
 
-            // Kick a report of actual table
-            repCmd.repCommand   = REPORT_LIGA_TABLE;
-            repCmd.responsQueue = nullptr;
-            if (g_reportQueue)
+            // TODO: Visualisierung / Animation neue Tabelle
+
+            if (g_reportQueue)                                                  // Trigger a report of actual table
                 xQueueOverwrite(g_reportQueue, &repCmd);
 
-            // 1) Live-Gate
+            // save snapshots for compare
+            const LigaSnapshot& oldSnap = Liga->previousSnapshot();
+            const LigaSnapshot& newSnap = Liga->activeSnapshot();
+            const LigaRow*      oldL    = nullptr;
+            const LigaRow*      newL    = nullptr;
+
+            if (Liga->detectLeaderChange(oldSnap, newSnap, &oldL, &newL)) {
+                // TODO: Visualisierung / Animation neuer Spitzenreiter auslösen
+            }
+
+            // Live-Gate detection
             LiveGoalEvent liveBuf[12];
             int           liveN = Liga->collectLiveMatches(activeLeague, liveBuf, 12); // are there some live matches
             if (liveN != 0) {
@@ -103,38 +108,35 @@ void ligaTask(void* pvParameters) {
                     int           evN = Liga->fetchGoalsForLiveMatch(liveBuf[i].matchID, s_lastChange, evBuf, 8);
                     for (int j = 0; j < evN; ++j) {
                         const auto& e = evBuf[j];
-                        // Visualisierung / Team-Credit / Ticker
+
+                        // TODO: Visualisierung neue Treffer
                         // flapAnimateForTeam(e.scoredFor); ...
                     }
                 }
             }
-            /*
-                        // if there is a match live show it and refresh goals
-                        Liga->collectLiveMatches(activeLeague, evs, maxGoalsPerMatchday);
-                        Liga->getNextMatch();
-                        Liga->getGoalsLive();
-            */
         }
-
-        // ---- 2) Decide the *nominal* period in ms for the next scan
-        uint32_t nextMs = Liga->decidePollMs();
+        uint32_t nextMs = Liga->decidePollMs();                                 // Decide the *nominal* period in ms for the next scan
         if (nextMs < 1)
             nextMs = 1;
 
-        // ---- 3) Convert to ticks and compute the *remaining* wait (period - work time)
-        TickType_t period = pdMS_TO_TICKS(nextMs);
+            #ifdef LIGAVERBOSE
+                {
+                TraceScope trace;
+                Liga->ligaPrintln("========== Liga Scan End ========== ");
+                }
+            #endif
+
+        TickType_t period = pdMS_TO_TICKS(nextMs);                              // Convert to ticks and compute the *remaining* wait (period - work time)
         if (period == 0)
             period = 1;                                                         // ensure at least 1 tick
 
         TickType_t elapsed = xTaskGetTickCount() - t0;                          // work duration in ticks
         TickType_t wait    = (elapsed < period) ? (period - elapsed) : 1;
 
-        // ---- 4) Program the countdown timer to the *remaining* wait (relative to now)
-        // xTimerChangePeriod() resets the one-shot timer to expire after 'wait' ticks.
-        configASSERT(xTimerChangePeriod(ligaScanTimer, wait, pdMS_TO_TICKS(2)) == pdPASS);
+        configASSERT(xTimerChangePeriod(ligaScanTimer, wait, pdMS_TO_TICKS(2)) ==
+                     pdPASS);                                                   // xTimerChangePeriod() resets the one-shot timer to expire after 'wait' ticks.
 
-        // ---- 5) Sleep for exactly the same remaining ticks (perfect sync with timer)
-        vTaskDelay(wait);
+        vTaskDelay(wait);                                                       // Sleep for exactly the same remaining ticks (perfect sync with timer)
     }
 }
 
