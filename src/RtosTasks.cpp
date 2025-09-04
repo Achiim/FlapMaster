@@ -73,8 +73,8 @@ void ligaTask(void* pvParameters) {
                                  1,                                             // Initial period (dummy, replaced later)
                                  pdFALSE,                                       // Auto-reload disabled (one-shot)
                                  nullptr,                                       // Timer ID
-                                 ligaScanCallback                               // Callback function
-    );
+                                 ligaScanCallback);                             // Callback function
+
     configASSERT(ligaScanTimer != nullptr);
 
     // Start with a short dummy period so getNextLigaScanRemainingMs() is valid
@@ -114,6 +114,25 @@ void ligaTask(void* pvParameters) {
                 // TODO: Visualization / animation of new leader
             }
 
+            if (Liga->detectRedLanternChange(oldSnap, newSnap, &oldL, &newL)) {
+                // TODO: Visualization / animation of red lantern
+            }
+
+            std::vector<const LigaRow*> oldZone;
+            std::vector<const LigaRow*> newZone;
+            if (Liga->detectRelegationGhostChange(oldSnap, newSnap, &oldZone, &newZone)) {
+                // TODO: Visualization / animation of relegation ghost
+                /*
+                                for (auto* row : oldZone) {
+                                    Liga->ligaPrintln("old zone: %s (pts %u, diff %d)", row->team, row->pkt, row->diff);
+                                }
+                                for (auto* row : newZone) {
+                                    Liga->ligaPrintln("new zone: %s (pts %u, diff %d)", row->team, row->pkt, row->diff);
+                                }
+
+                */
+            }
+
             // --- Phase 2: Live gate detection ---
             LiveGoalEvent liveBuf[12];
             int           liveN = Liga->collectLiveMatches(activeLeague, liveBuf, 12);
@@ -124,8 +143,10 @@ void ligaTask(void* pvParameters) {
 
                     for (int j = 0; j < evN; ++j) {
                         const auto& e = evBuf[j];
-                        // TODO: Visualization for new goals
-                        // flapAnimateForTeam(e.scoredFor);
+                        Liga->ligaPrintln("[goal] %s vs %s | Minute %d | %s | Spielstand %d:%d | Für: %s", e.team1.c_str(), e.team2.c_str(), e.minute,
+                                          e.scorer.c_str(), e.score1, e.score2,
+                                          e.scoredFor.c_str());                 // TODO: Visualization for new goals
+                                                                 // flapAnimateForTeam(e.scoredFor);
                     }
                 }
             }
@@ -382,22 +403,29 @@ void reportTask(void* pvParameters) {
 
     while (true) {
         if (xQueueReceive(g_reportQueue, &receivedCmd, portMAX_DELAY)) {        // wait for Queue message
-            Reports->reportPrintln("======== Flap Master Report ========");     // Report Header
-            if (receivedCmd == REPORT_TASKS_STATUS)
-                Reports->reportTaskStatus();                                    // uptime and scheduled scans
-            if (receivedCmd == REPORT_MEMORY)
-                Reports->reportMemory();                                        // ESP32 (RAM status)
-            if (receivedCmd == REPORT_RTOS_TASKS)
-                Reports->reportRtosTasks();                                     // show Task List
-            if (receivedCmd == REPORT_STEPS_BY_FLAP)
-                Reports->reportAllTwinStepsByFlap();                            // show Slave steps prt Flap
-            if (receivedCmd == REPORT_REGISTRY)
-                Reports->reportSlaveRegistry();                                 // show registry
-            if (receivedCmd == REPORT_I2C_STATISTIC)
-                Reports->reportI2CStatistic();                                  // show I2C usage
-            if (receivedCmd == REPORT_LIGA_TABLE)
-                Reports->reportLigaTable();                                     // show liga tabelle
-            Reports->reportPrintln("======== Flap Master Report End ====");
+            {
+                TraceScope trace;                                               // protect report by semaphore
+
+                Reports->reportPrintln("======== Flap Master Report ========"); // Report Header
+
+                if (receivedCmd == REPORT_TASKS_STATUS)
+                    Reports->reportTaskStatus();                                // uptime and scheduled scans
+                if (receivedCmd == REPORT_MEMORY)
+                    Reports->reportMemory();                                    // ESP32 (RAM status)
+                if (receivedCmd == REPORT_RTOS_TASKS)
+                    Reports->reportRtosTasks();                                 // show Task List
+                if (receivedCmd == REPORT_STEPS_BY_FLAP)
+                    Reports->reportAllTwinStepsByFlap();                        // show Slave steps prt Flap
+                if (receivedCmd == REPORT_REGISTRY)
+                    Reports->reportSlaveRegistry();                             // show registry
+                if (receivedCmd == REPORT_I2C_STATISTIC)
+                    Reports->reportI2CStatistic();                              // show I2C usage
+                if (receivedCmd == REPORT_LIGA_TABLE)
+                    Reports->reportLigaTable();                                 // show liga tabelle
+
+                Reports->reportPrintln("====== Flap Master Report End ======"); // Report Footer
+
+            }                                                                   // release semaphore protection
         }
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }

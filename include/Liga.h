@@ -43,11 +43,11 @@ static inline const char* leagueShortcut(League lg) {
 }
 
 // to be used for dynamic polling
-static String         s_lastChange;                                             // dein vorhandener ISO-String
-static time_t         s_lastChangeEpoch      = 0;                               // Epoch zum schnellen Vergleich
-static time_t         s_nextKickoffEpoch     = 0;                               // nächster Anstoß (Epoch UTC)
-static const uint32_t KICKOFF_REFRESH_MS     = 30000;                           // 30 Seconds
-static uint32_t       s_lastKickoffRefreshMs = KICKOFF_REFRESH_MS;              // wann zuletzt berechnet
+static String s_lastChange;                                                     // dein vorhandener ISO-String
+static time_t s_lastChangeEpoch  = 0;                                           // Epoch zum schnellen Vergleich
+static time_t s_nextKickoffEpoch = 0;                                           // nächster Anstoß (Epoch UTC)
+// static const uint32_t KICKOFF_REFRESH_MS     = 30000;                           // 30 Seconds
+// static uint32_t       s_lastKickoffRefreshMs = KICKOFF_REFRESH_MS;              // wann zuletzt berechnet
 
 // ----- Datatyps -----
 struct DfbMap {
@@ -127,38 +127,30 @@ struct SeasonGroup {
     uint32_t fetchedAtMs = 0;
 };
 
-/// Optional helper struct for reporting a detected leader change.
-struct LeaderChange {
-    bool    changed = false;                                                    // true if the leader changed between snapshots
-    String  oldTeam;                                                            // leader team name in the old snapshot
-    String  newTeam;                                                            // leader team name in the new snapshot
-    String  oldDfb;                                                             // DFB short code of old leader (may be empty)
-    String  newDfb;                                                             // DFB short code of new leader (may be empty)
-    uint8_t oldPoints = 0;                                                      // points of old leader (if available)
-    uint8_t newPoints = 0;                                                      // points of new leader (if available)
-    int8_t  oldDiff   = 0;                                                      // goal diff of old leader (if available)
-    int8_t  newDiff   = 0;                                                      // goal diff of new leader (if available)
-};
-
 class LigaTable {
    public:
     // Constructor for LigaTable
     LigaTable();
 
     // public member functions
-    bool          connect();                                                    // connect to external data provider for liga data
-    bool          fetchTable(LigaSnapshot& out);                                // get data from external provider
-    bool          disconnect();                                                 // disconnect from external data provider for liga data
-    bool          pollLastChange(League league, int& seasonOut, int& matchdayOut); // get last change date/time of liga
-    bool          getSeasonAndGroup(League league, int& outSeason, int& outGroup); // get saison and Spieltag
-    void          openLigaDBHealth();                                           // health check
-    void          get(LigaSnapshot& out) const;                                 // get snapshot from openLigaDB
-    void          commit(const LigaSnapshot& s);                                // release snahpshot to be accessed by reporting
-    uint32_t      decidePollMs();                                               // get time to wait until poll openLigaDB again
-    int           collectLiveMatches(League league, LiveGoalEvent* out, size_t maxCount);
-    int           fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveGoalEvent* out, size_t maxCount);
-    bool          detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut = nullptr,
-                                     const LigaRow** newLeaderOut = nullptr);
+    bool     connect();                                                         // connect to external data provider for liga data
+    bool     fetchTable(LigaSnapshot& out);                                     // get data from external provider
+    bool     disconnect();                                                      // disconnect from external data provider for liga data
+    bool     pollLastChange(League league, int& seasonOut, int& matchdayOut);   // get last change date/time of liga
+    bool     getSeasonAndGroup(League league, int& outSeason, int& outGroup);   // get saison and Spieltag
+    void     openLigaDBHealth();                                                // health check
+    void     get(LigaSnapshot& out) const;                                      // get snapshot from openLigaDB
+    void     commit(const LigaSnapshot& s);                                     // release snahpshot to be accessed by reporting
+    uint32_t decidePollMs();                                                    // get time to wait until poll openLigaDB again
+    int      collectLiveMatches(League league, LiveGoalEvent* out, size_t maxCount);
+    int      fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveGoalEvent* out, size_t maxCount);
+    bool     detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut = nullptr,
+                                const LigaRow** newLeaderOut = nullptr);
+    bool     detectRedLanternChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLanternOut,
+                                    const LigaRow** newLanternOut);
+    bool     detectRelegationGhostChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, std::vector<const LigaRow*>* oldZoneOut,
+                                         std::vector<const LigaRow*>* newZoneOut);
+
     LigaSnapshot& activeSnapshot();                                             // Get the currently active snapshot (front buffer)
     LigaSnapshot& previousSnapshot();                                           /// Get the snapshot that was active before the last commit
 

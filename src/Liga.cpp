@@ -335,18 +335,6 @@ ApiHealth LigaTable::checkOpenLigaDB(League league, unsigned timeoutMs) {
  */
 void LigaTable::refreshNextKickoffEpoch(League league) {
     // --- Rate limiting ---
-    uint32_t nowMs = millis();
-    if (nowMs - s_lastKickoffRefreshMs < KICKOFF_REFRESH_MS) {
-        #ifdef LIGAVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("[kickoff] throttled, next in %u ms", (unsigned)(KICKOFF_REFRESH_MS - (nowMs - s_lastKickoffRefreshMs)));
-            }
-        #endif
-        return;
-    }
-    s_lastKickoffRefreshMs = nowMs;
-
     // --- Require valid season/group ---
     SeasonGroup sg = lastSeasonGroup();
     if (!sg.valid) {
@@ -1248,29 +1236,48 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
         ligaPrintln("[goals] http.begin failed: %s", url);
         return 0;
     }
+
     int code = http.GET();
     if (code != HTTP_CODE_OK) {
-        ligaPrintln("[goals] GET %s -> %d", url, code);
+        #ifdef ERRORVERBOSE
+            {
+            TraceScope trace;
+            ligaPrintln("[goals] GET %s -> %d", url, code);
+            }
+        #endif
         http.end();
         return 0;
     }
 
-    // ---- Filter NUR die benötigten Felder (Object-Root) ----
+    int expected = http.getSize();                                              // -1 wenn unbekannt
+    // ligaPrintln("(fetchGoals) HTTP %d, Content-Length=%d", code, expected);
+
+    WiFiClient& stream = http.getStream();
+
+    // Warte bis erste Daten anliegen (oder Timeout erreicht)
+    uint32_t       t0          = millis();
+    const uint32_t waitTimeout = 8000;                                          // ms, muss zu http.setTimeout passen
+    while (stream.connected() && !stream.available() && (millis() - t0) < waitTimeout) {
+        delay(1);
+    }
+
+    int avail = stream.available();
+    // ligaPrintln("(fetchGoals) stream.available()=%d", avail);
+
+    // ---- Filter definieren ----
     StaticJsonDocument<256> filter;
-    // Teams (beide Schemata)
     filter["Team1"]["TeamName"] = true;
     filter["team1"]["teamName"] = true;
     filter["Team2"]["TeamName"] = true;
     filter["team2"]["teamName"] = true;
-    // IDs & Kickoff
-    filter["MatchID"]          = true;
-    filter["matchID"]          = true;
-    filter["MatchDateTimeUTC"] = true;
-    filter["matchDateTimeUTC"] = true;
-    filter["MatchDateTime"]    = true;
-    filter["matchDateTime"]    = true;
+    filter["MatchID"]           = true;
+    filter["matchID"]           = true;
+    filter["MatchDateTimeUTC"]  = true;
+    filter["matchDateTimeUTC"]  = true;
+    filter["MatchDateTime"]     = true;
+    filter["matchDateTime"]     = true;
 
-    // Goals-Subschema einmal definieren, unter beiden Keys setzen
+    // Goals-Subschema
     StaticJsonDocument<192> goalSchema;
     goalSchema["GoalGetterName"]     = true;
     goalSchema["goalGetterName"]     = true;
@@ -1293,17 +1300,18 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
     goalSchema["CreatedAt"]          = true;
     goalSchema["createdAt"]          = true;
 
-    filter["Goals"].set(goalSchema.as<JsonObject>());
-    filter["goals"].set(goalSchema.as<JsonObject>());
+    // Wichtig: als Array-Schema anlegen
+    JsonArray goalsArr = filter.createNestedArray("Goals");
+    goalsArr.add(goalSchema.as<JsonObject>());
 
-    // ---- Body vollständig lesen (NUL-sicher), dann mit Filter parsen ----
-    String body = http.getString();
+    JsonArray goalsArr2 = filter.createNestedArray("goals");
+    goalsArr2.add(goalSchema.as<JsonObject>());
+
+    // ---- JSON direkt aus Stream parsen ----
+    DynamicJsonDocument  doc(12288);                                            // 8–12 KB wie gehabt
+    DeserializationError err = deserializeJson(doc, stream, DeserializationOption::Filter(filter));
     http.end();
-    if (body.length() == 0 || body == "null")
-        return 0;
 
-    DynamicJsonDocument  doc(12288);                                            // 8–12 KB reichen i.d.R. mit Filter
-    DeserializationError err = deserializeJson(doc, body.c_str(), body.length(), DeserializationOption::Filter(filter));
     if (err) {
         ligaPrintln("[goals] JSON error (id=%d): %s", matchId, err.c_str());
         return 0;
@@ -1313,7 +1321,7 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
 
     JsonObject m = doc.as<JsonObject>();
 
-    // Teams & Kickoff (beide Schreibweisen berücksichtigen)
+    // Teams & Kickoff
     const char* t1 = m["Team1"]["TeamName"] | m["team1"]["teamName"] | "";
     const char* t2 = m["Team2"]["TeamName"] | m["team2"]["teamName"] | "";
     const char* ko = m["MatchDateTimeUTC"] | m["matchDateTimeUTC"] | m["MatchDateTime"] | m["matchDateTime"] | "";
@@ -1333,20 +1341,19 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
         return 0;
 
     size_t filled = 0;
-    time_t prevS1 = 0, prevS2 = 0;                                              // optional für exaktere scoredFor-Logik (siehe Kommentar)
+    time_t prevS1 = 0, prevS2 = 0;
 
     for (JsonObject g : gArr) {
         if (filled >= maxCount)
             break;
 
-        // Ereignis-Zeitstempel (UTC bevorzugt; sonst was da ist)
         const char* goalUtc =
             g["GoalDateTime"] | g["goalDateTime"] | g["LastUpdateDateTime"] | g["lastUpdateDateTime"] | g["CreatedAt"] | g["createdAt"] | ko;
 
         if (useCutoff) {
             time_t ts = goalUtc ? toUtcTimeT(String(goalUtc)) : 0;
             if (ts == 0 || ts < cutoff)
-                continue;
+                continue;                                                       // no new goals
         }
 
         LiveGoalEvent& e = out[filled++];
@@ -1365,15 +1372,14 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
         e.score1     = g["ScoreTeam1"] | g["scoreTeam1"] | 0;
         e.score2     = g["ScoreTeam2"] | g["scoreTeam2"] | 0;
 
-        // Credit – quick & safe:
         if (e.isOwnGoal) {
             e.scoredFor = (e.score1 >= e.score2) ? e.team1 : e.team2;
         } else {
             e.scoredFor = (e.score1 > e.score2) ? e.team1 : (e.score2 > e.score1 ? e.team2 : String(""));
         }
 
-        // // Optional exakter: vorherigen Score pro Match verfolgen
-        // if (filled == 1) { prevS1 = 0; prevS2 = 0; } // init
+        // Optional exakter:
+        // if (filled == 1) { prevS1 = 0; prevS2 = 0; }
         // if (!e.isOwnGoal) {
         //   if (e.score1 == prevS1 + 1) e.scoredFor = e.team1;
         //   else if (e.score2 == prevS2 + 1) e.scoredFor = e.team2;
@@ -1382,38 +1388,6 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
     }
 
     return (int)filled;
-}
-
-/**
- * @brief Detect whether the table leader (row 0) changed between two snapshots.
- *
- * Compares team name (and, as a fallback, DFB short code) at position 0.
- *
- * @param oldSnap Previous snapshot.
- * @param newSnap New snapshot (about to become active).
- * @param out     Filled with change details when a change is detected.
- * @return true if the leader changed, false otherwise.
- */
-static bool detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, LeaderChange& out) {
-    if (oldSnap.teamCount == 0 || newSnap.teamCount == 0)
-        return false;
-
-    const LigaRow& oldL = oldSnap.rows[0];
-    const LigaRow& newL = newSnap.rows[0];
-
-    // Compare by team string first
-    if (strcmp(oldL.team, newL.team) == 0) {
-        // Optional secondary check by DFB code (guards against spelling variants)
-        if (strlen(oldL.dfb) == 0 || strlen(newL.dfb) == 0)
-            return false;
-        if (strcmp(oldL.dfb, newL.dfb) == 0)
-            return false;
-    }
-
-    out.changed = true;
-    out.oldTeam = String(oldL.team);
-    out.newTeam = String(newL.team);
-    return true;
 }
 
 /**
@@ -1428,14 +1402,15 @@ static bool detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& 
  * @param oldLeaderOut (optional) Receives the previous leader row (row 0).
  * @param newLeaderOut (optional) Receives the new leader row (row 0).
  * @return true if the leader team changed; false otherwise.
- */
+ *         Note: Returns false if either snapshot is empty (e.g. on first call). */
 bool LigaTable::detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut,
                                    const LigaRow** newLeaderOut) {
     if (oldSnap.teamCount == 0 || newSnap.teamCount == 0) {
         #ifdef LIGAVERBOSE
             {
-            TraceScope trace;
-            ligaPrintln("no leader change: '%s' -> '%s'", newSnap.rows[0].team, newSnap.rows[0].team);
+            TraceScope  trace;
+            const char* leaderTeam = (newSnap.teamCount > 0) ? newSnap.rows[0].team : "(none)";
+            ligaPrintln("no leader change: '%s' -> '%s'", leaderTeam, leaderTeam);
             }
         #endif
         return false;
@@ -1488,4 +1463,178 @@ bool LigaTable::detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapsh
         #endif
 
     return true;
+}
+/**
+ * @brief Detect whether the "red lantern" (last place) team changed between two snapshots.
+ *
+ * Compares the last row of both snapshots. If either snapshot has no
+ * rows, this returns false. Identity check prefers the DFB short code when
+ * both are present; otherwise falls back to an exact team-name comparison.
+ *
+ * @param oldSnap Previously active snapshot.
+ * @param newSnap Newly active snapshot.
+ * @param oldLanternOut (optional) Receives the previous last-place row.
+ * @param newLanternOut (optional) Receives the new last-place row.
+ * @return true if the last-place team changed; false otherwise.
+ *         Note: Returns false if either snapshot is empty (e.g. on first call).
+ */
+bool LigaTable::detectRedLanternChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLanternOut,
+                                       const LigaRow** newLanternOut) {
+    if (oldSnap.teamCount == 0 || newSnap.teamCount == 0) {
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope  trace;
+            const char* redLantern = (newSnap.teamCount > 0) ? newSnap.rows[newSnap.teamCount - 1].team : "(none)";
+            ligaPrintln("no red lantern change: '%s' -> '%s'", redLantern, redLantern);
+            }
+        #endif
+        return false;
+    }
+
+    const LigaRow& oldB = oldSnap.rows[oldSnap.teamCount - 1];
+    const LigaRow& newB = newSnap.rows[newSnap.teamCount - 1];
+
+    // Prefer DFB code if both present
+    if (oldB.dfb[0] != '\0' && newB.dfb[0] != '\0') {
+        if (strcmp(oldB.dfb, newB.dfb) == 0) {
+            if (oldLanternOut)
+                *oldLanternOut = &oldB;
+            if (newLanternOut)
+                *newLanternOut = &newB;
+                #ifdef LIGAVERBOSE
+                    {
+                    TraceScope trace;
+                    ligaPrintln("no red lantern change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldB.team, newB.team, oldB.pkt, newB.pkt, oldB.diff,
+                    newB.diff);
+                    }
+                #endif
+            return false;                                                       // same last-place team
+        }
+    } else {
+        // Fallback: exact team name compare
+        if (strcmp(oldB.team, newB.team) == 0) {
+            if (oldLanternOut)
+                *oldLanternOut = &oldB;
+            if (newLanternOut)
+                *newLanternOut = &newB;
+                #ifdef LIGAVERBOSE
+                    {
+                    TraceScope trace;
+                    ligaPrintln("no red lantern change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldB.team, newB.team, oldB.pkt, newB.pkt, oldB.diff,
+                    newB.diff);
+                    }
+                #endif
+            return false;                                                       // same last-place team
+        }
+    }
+
+    // Red lantern changed
+    if (oldLanternOut)
+        *oldLanternOut = &oldB;
+    if (newLanternOut)
+        *newLanternOut = &newB;
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope trace;
+            ligaPrintln("red lantern change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldB.team, newB.team, oldB.pkt, newB.pkt, oldB.diff, newB.diff);
+            }
+        #endif
+
+    return true;
+}
+
+/**
+ * @brief Detect whether the "relegation ghost" (ranks 16 & 17) changed between two snapshots.
+ *
+ * Compares ranks 16 and 17 of both snapshots. If either snapshot has no rows,
+ * this returns false but logs the current teams as "no change".
+ * Note: Rank 18 ("red lantern") is handled separately.
+ *
+ * @param oldSnap Previously active snapshot.
+ * @param newSnap Newly active snapshot.
+ * @param oldZoneOut (optional) Receives the previous rows for ranks 16 & 17.
+ * @param newZoneOut (optional) Receives the new rows for ranks 16 & 17.
+ * @return true if the set of relegation-zone teams changed; false otherwise.
+ */
+bool LigaTable::detectRelegationGhostChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, std::vector<const LigaRow*>* oldZoneOut,
+                                            std::vector<const LigaRow*>* newZoneOut) {
+    if (oldSnap.teamCount == 0 || newSnap.teamCount == 0) {
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope trace;
+            if (newSnap.teamCount >= 17) {
+            const char* t16 = newSnap.rows[15].team;
+            const char* t17 = newSnap.rows[16].team;
+            ligaPrintln("no relegation ghost change: '%s' -> '%s'", t16, t16);
+            ligaPrintln("no relegation ghost change: '%s' -> '%s'", t17, t17);
+            } else {
+            ligaPrintln("no relegation ghost change: insufficient teams");
+            }
+            }
+        #endif
+        return false;
+    }
+
+    // Collect zone (16 & 17 only)
+    auto getZone = [](const LigaSnapshot& snap) {
+        std::vector<const LigaRow*> zone;
+        if (snap.teamCount >= 17) {
+            zone.push_back(&snap.rows[15]);                                     // rank 16
+            zone.push_back(&snap.rows[16]);                                     // rank 17
+        }
+        return zone;
+    };
+
+    auto oldZone = getZone(oldSnap);
+    auto newZone = getZone(newSnap);
+
+    if (oldZoneOut)
+        *oldZoneOut = oldZone;
+    if (newZoneOut)
+        *newZoneOut = newZone;
+
+    // Identity comparison helper
+    auto sameTeam = [](const LigaRow* a, const LigaRow* b) {
+        if (a->dfb[0] != '\0' && b->dfb[0] != '\0')
+            return strcmp(a->dfb, b->dfb) == 0;
+        return strcmp(a->team, b->team) == 0;
+    };
+
+    bool changed = false;
+
+    // Check entrants
+    for (auto* n : newZone) {
+        bool found = false;
+        for (auto* o : oldZone) {
+            if (sameTeam(o, n)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            #ifdef LIGAVERBOSE
+                ligaPrintln("relegation ghost: new entrant '%s'", n->team);
+            #endif
+            changed = true;
+        }
+    }
+
+    // Check exits
+    for (auto* o : oldZone) {
+        bool found = false;
+        for (auto* n : newZone) {
+            if (sameTeam(o, n)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            #ifdef LIGAVERBOSE
+                ligaPrintln("relegation ghost: team left '%s'", o->team);
+            #endif
+            changed = true;
+        }
+    }
+
+    return changed;
 }
