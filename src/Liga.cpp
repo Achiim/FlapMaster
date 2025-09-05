@@ -24,7 +24,8 @@
 #include "secret.h"                                                             // const char* ssid, const char* password
 #include "cert.all"                                                             // certificate for https with OpenLigaDB
 
-League activeLeague = League::BL1;
+League              activeLeague = League::BL1;
+DynamicJsonDocument GlobalJsonDoc(6 * 1024);                                    // define instance 6kB
 
 // 1. Bundesliga
 static const DfbMap DFB1[] = {{"FC Bayern München", "FCB", 1},     {"Borussia Dortmund", "BVB", 7}, {"RB Leipzig", "RBL", 13},
@@ -69,72 +70,67 @@ static const DfbMap DFB2[] = {{"Hertha BSC", "BSC", 19},           {"VfL Bochum"
  * @return false   If all retries failed or an unrecoverable error occurred.
  */
 bool LigaTable::httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry) {
+    ligaApiThrottle();                                                          // general throttle to avoid spam openLigaDB serever
     for (int attempt = 0; attempt < maxRetry; attempt++) {
-        // Try to open a secure connection
         if (!http.begin(client, url)) {
-            #ifdef ERRORVERBOSE
-                TraceScope trace;
-                {
-                ligaPrintln("http.begin() failed @ %s", url.c_str());
-                }
-            #endif
-            return false;                                                       // unrecoverable, do not retry
+            ligaPrintln("http.begin() failed @ %s", url.c_str());
+            return false;                                                       // unrecoverable
         }
-        int code = http.GET();                                                  // Perform the GET request
-        if (code != HTTP_CODE_OK) {
-            #ifdef ERRORVERBOSE
-                TraceScope trace;
-                {
-                ligaPrintln("HTTP GET %s -> %d", url.c_str(), code);            // Server responded with an error → retry
-                }
-            #endif
+
+        int code = http.GET();
+
+        // --- Rate limit (HTTP 29) ---
+        if (code == 29) {
+            ligaPrintln("Rate limit hit @ %s, backing off %u ms (attempt %d/%d)", url.c_str(), HTTP_PAUSE_RATELIMIT, attempt + 1, maxRetry);
             http.end();
-            delay(200);                                                         // short back-off before retry
+            vTaskDelay(pdMS_TO_TICKS(HTTP_PAUSE_RATELIMIT));
             continue;
         }
-        // --- Evaluate Content-Length ---
-        int                  len = http.getSize();                              // -1 = unknown length
+
+        // --- Non-200 errors ---
+        if (code != HTTP_CODE_OK) {
+            ligaPrintln("HTTP GET %s -> %d (attempt %d/%d)", url.c_str(), code, attempt + 1, maxRetry);
+            http.end();
+            vTaskDelay(pdMS_TO_TICKS(HTTP_PAUSE_ERR));
+            continue;
+        }
+
+        // --- Deserialize JSON ---
         DeserializationError err;
-        if (len > 0 && len < 8192) {                                            // Small response: safer to buffer into String before parsing
+        int                  len = http.getSize();
+        if (len > 0 && len < 8192) {
             String payload = http.getString();
             err            = deserializeJson(doc, payload);
         } else {
-            Stream* s = http.getStreamPtr();                                    // Large or unknown size: stream directly into ArduinoJson
+            Stream* s = http.getStreamPtr();
             if (!s) {
-                #ifdef ERRORVERBOSE
-                    TraceScope trace;
-                    {
-                    ligaPrintln("HTTP stream null @ %s", url.c_str());
-                    }
-                #endif
+                ligaPrintln("HTTP stream null @ %s", url.c_str());
                 http.end();
-                continue;                                                       // retry with new connection
+                vTaskDelay(pdMS_TO_TICKS(HTTP_PAUSE_ERR));
+                continue;
             }
             err = deserializeJson(doc, *s);
         }
-        http.end();                                                             // always free connection after use
+
+        http.end();
+
         if (!err) {
-            return true;                                                        // Parsed successfully
-        }
-        if (err == DeserializationError::IncompleteInput) {
-            #ifdef ERRORVERBOSE                                                 // Sometimes OpenLigaDB cuts JSON → still usable
-                TraceScope trace;
-                {
-                ligaPrintln("Warning: JSON incomplete @ %s, data may still be usable", url.c_str());
-                }
-            #endif
+            vTaskDelay(pdMS_TO_TICKS(HTTP_PAUSE_OK));                           // success pause
             return true;
         }
 
-        #ifdef ERRORVERBOSE                                                     // Any other parse error: log and retry
-            TraceScope trace;
-            {
-            ligaPrintln("JSON parse error @ %s: %s", url.c_str(), err.c_str());
-            }
-        #endif
-        delay(200);
+        if (err == DeserializationError::IncompleteInput) {
+            ligaPrintln("Warning: JSON incomplete @ %s (still usable)", url.c_str());
+            vTaskDelay(pdMS_TO_TICKS(HTTP_PAUSE_OK));                           // treat as success
+            return true;
+        }
+
+        ligaPrintln("JSON parse error @ %s: %s (attempt %d/%d)", url.c_str(), err.c_str(), attempt + 1, maxRetry);
+        vTaskDelay(pdMS_TO_TICKS(HTTP_PAUSE_ERR));
     }
-    return false;                                                               // all retries failed
+
+    ligaPrintln("httpGetJsonRobust FAILED after %d attempts: %s", maxRetry, url.c_str());
+    return false;
 }
 
 /**
@@ -156,8 +152,8 @@ bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) 
     // 1) get season + matchday
     if (!getSeasonAndGroup(league, season, group)) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("(pollLastChange) getSeasonAndGroup failed");
             }
         #endif
@@ -181,8 +177,8 @@ bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) 
 
         if (!http.begin(client, url)) {
             #ifdef ERRORVERBOSE
-                TraceScope trace;
                 {
+                TraceScope trace;
                 ligaPrintln("(pollLastChange) http.begin failed: %s", url);
                 }
             #endif
@@ -192,8 +188,8 @@ bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) 
         int code = http.GET();
         if (code != HTTP_CODE_OK) {
             #ifdef ERRORVERBOSE
-                TraceScope trace;
                 {
+                TraceScope trace;
                 ligaPrintln("(pollLastChange) GET %s -> %d", url, code);
                 }
             #endif
@@ -232,8 +228,8 @@ bool LigaTable::pollLastChange(League league, int& seasonOut, int& matchdayOut) 
         localtime_r(&s_lastChangeEpoch, &tmLoc);                                // convert UTC epoch → local time
         char buf[32];
         strftime(buf, sizeof(buf), "%d.%m.%Y %H:%M:%S %Z", &tmLoc);
-        TraceScope trace;
         {
+        TraceScope trace;
         ligaPrintln("last change of actual matchday at \"%s\" (local %s)", latest.c_str(), buf);
         }
     #endif
@@ -333,55 +329,65 @@ ApiHealth LigaTable::checkOpenLigaDB(League league, unsigned timeoutMs) {
  *
  * @param league League selector (e.g. BL1, BL2).
  */
-void LigaTable::refreshNextKickoffEpoch(League league) {
-    // --- Rate limiting ---
-    // --- Require valid season/group ---
-    SeasonGroup sg = lastSeasonGroup();
-    if (!sg.valid) {
-        #ifdef ERRORVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("[kickoff] invalid season/group %d/%d", sg.season, sg.group);
-            }
-        #endif
+bool LigaTable::refreshNextKickoffEpoch(League league) {
+    try {
+        // --- Rate limiting ---
+        // --- Require valid season/group ---
+        SeasonGroup sg = lastSeasonGroup();
+        if (!sg.valid) {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                ligaPrintln("[kickoff] invalid season/group %d/%d", sg.season, sg.group);
+                }
+            #endif
+            s_nextKickoffEpoch = 0;
+            return false;
+        }
+
+        // --- Check current group ---
+        time_t best = bestFutureKickoffInGroup(league, sg.season, sg.group);
+
+        // --- If empty and not at last group, check next group ---
+        if (best == 0 && sg.group < 34) {
+            best = bestFutureKickoffInGroup(league, sg.season, sg.group + 1);
+        }
+
+        // --- Store result and log ---
+
+        if (best) {
+            s_nextKickoffEpoch = best;
+            #ifdef LIGAVERBOSE
+                struct tm tmLoc;
+                localtime_r(&best, &tmLoc);                                     // convert epoch → local time
+                char buf[32];
+                strftime(buf, sizeof(buf), "%d.%m.%Y %H:%M:%S %Z", &tmLoc);     // print with TZ name
+                {
+                TraceScope trace;
+                ligaPrintln("next kickoff = %s (epoch=%ld)", buf, (long)best);
+                }
+            #endif
+            return true;                                                        // next kick of found
+        } else {
+            s_nextKickoffEpoch = 0;
+            #ifdef LIGAVERBOSE
+                {
+                TraceScope trace;
+                ligaPrintln("no upcoming kickoff on group %d%s", sg.group, (sg.group < 34 ? " or group+1" : ""));
+                }
+            #endif
+            return false;                                                       // no next kickoff found
+        }
+    } catch (const std::exception& e) {
+        ligaPrintln("Exception in refreshNextKickoffEpoch: %s", e.what());
         s_nextKickoffEpoch = 0;
-        return;
-    }
-
-    // --- Check current group ---
-    time_t best = bestFutureKickoffInGroup(league, sg.season, sg.group);
-
-    // --- If empty and not at last group, check next group ---
-    if (best == 0 && sg.group < 34) {
-        best = bestFutureKickoffInGroup(league, sg.season, sg.group + 1);
-    }
-
-    // --- Store result and log ---
-
-    if (best) {
-        s_nextKickoffEpoch = best;
-        #ifdef LIGAVERBOSE
-            struct tm tmLoc;
-            localtime_r(&best, &tmLoc);                                         // convert epoch → local time
-            char buf[32];
-            strftime(buf, sizeof(buf), "%d.%m.%Y %H:%M:%S %Z", &tmLoc);         // print with TZ name
-            TraceScope trace;
-            {
-            ligaPrintln("next kickoff = %s (epoch=%ld)", buf, (long)best);
-            }
-        #endif
-
-    } else {
+        return false;
+    } catch (...) {
+        ligaPrintln("Unknown exception in refreshNextKickoffEpoch");
         s_nextKickoffEpoch = 0;
-        #ifdef LIGAVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("no upcoming kickoff on group %d%s", sg.group, (sg.group < 34 ? " or group+1" : ""));
-            }
-        #endif
+        return false;
     }
 }
-
 /**
  * @brief Find the earliest future kickoff timestamp within one specific matchday.
  *
@@ -397,7 +403,7 @@ void LigaTable::refreshNextKickoffEpoch(League league) {
  * @return time_t Earliest future kickoff epoch in seconds, or 0 if none found.
  */
 time_t LigaTable::bestFutureKickoffInGroup(League league, int season, int group) {
-    // --- JSON filter: root = array, element schema at [0] ---
+    // --- JSON filter: nur matchDateTime-Felder ---
     StaticJsonDocument<256> filter;
     {
         JsonArray  farr        = filter.to<JsonArray>();
@@ -407,86 +413,95 @@ time_t LigaTable::bestFutureKickoffInGroup(League league, int season, int group)
         el["matchDateTime"]    = true;
         el["MatchDateTime"]    = true;
     }
-
-    // Build URL: /getmatchdata/<league>/<season>/<group>
+    // URL bauen
     char url[160];
     snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/%s/%d/%d", leagueShortcut(league), season, group);
-
-    // HTTP client
     WiFiClientSecure client = makeSecureClient();
     HTTPClient       http;
     http.setReuse(false);
     http.setConnectTimeout(8000);
     http.setTimeout(8000);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.useHTTP10(true);                                                       // avoid chunked encoding
+    http.useHTTP10(true);                                                       // kein chunked encoding
     http.addHeader("Accept", "application/json");
     http.addHeader("Accept-Encoding", "identity");
     http.addHeader("Connection", "close");
     http.setUserAgent("ESP32-Flap/1.0");
-
     if (!http.begin(client, url)) {
-        #ifdef ERRORVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("[kickoff] http.begin failed: %s", url);
-            }
-        #endif
+        ligaPrintln("[kickoff] http.begin failed: %s", url);
         return 0;
     }
     int code = http.GET();
     if (code != HTTP_CODE_OK) {
-        #ifdef ERRORVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("[kickoff] GET %s -> %d", url, code);
-            }
-        #endif
+        ligaPrintln("[kickoff] GET %s -> %d", url, code);
         http.end();
         return 0;
     }
-
-    // Parse with filter
-    DynamicJsonDocument  doc(4096);
-    DeserializationError err = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
+    // JSON parsen
+    GlobalJsonDoc.clear();
+    DeserializationError err = deserializeJson(GlobalJsonDoc, http.getStream(), DeserializationOption::Filter(filter));
     http.end();
-
-    if (err || !doc.is<JsonArray>()) {
-        #ifdef ERRORVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("[kickoff] JSON %s on group %d", err ? err.c_str() : "unexpected shape", group);
-            }
-        #endif
+    if (err) {
+        ligaPrintln("[kickoff] JSON parse error on group %d: %s", group, err.c_str());
         return 0;
     }
-
-    // Iterate matches and find earliest future kickoff
-    const time_t nowT = time(nullptr);
-    time_t       best = 0;
-
-    JsonArray arr = doc.as<JsonArray>();
+    if (!GlobalJsonDoc.is<JsonArray>()) {
+        ligaPrintln("[kickoff] JSON not an array on group %d", group);
+        return 0;
+    }
+    JsonArray arr      = GlobalJsonDoc.as<JsonArray>();
+    size_t    jsonSize = measureJson(GlobalJsonDoc);
+    size_t    capacity = GlobalJsonDoc.capacity();
+    ligaPrintln("[bestkickoff] JSON size for season %d group %d = %u bytes (capacity %u), entries=%u", season, group, (unsigned)jsonSize,
+                (unsigned)capacity, (unsigned)arr.size());
+    if (jsonSize >= capacity) {
+        ligaPrintln("[bestkickoff][WARN] JSON may be truncated! Increase buffer > %u bytes", (unsigned)capacity);
+    }
+    if (arr.size() == 0) {
+        ligaPrintln("[bestkickoff] no matches in array for season %d group %d", season, group);
+        return 0;
+    }
+    // Spiele durchsuchen
+    const time_t nowT    = time(nullptr);
+    time_t       best    = 0;
+    bool         allPast = true;
     for (JsonObject m : arr) {
         const char* raw = m["matchDateTimeUTC"] | m["MatchDateTimeUTC"] | m["matchDateTime"] | m["MatchDateTime"] | "";
         if (!*raw)
             continue;
-
-        // Normalize to "...Z" format
+        // normalize
         String iso = String(raw);
         if (iso.endsWith("+00:00"))
             iso = iso.substring(0, 19) + "Z";
         if (iso.length() >= 19 && iso[19] != 'Z')
             iso = iso.substring(0, 19) + "Z";
-
         time_t t = toUtcTimeT(iso);
-        if (t == 0)
+        if (t == 0) {
+            ligaPrintln("[kickoff] invalid datetime in group %d: %s", group, raw);
             continue;
-        if (t > nowT && (best == 0 || t < best))
-            best = t;
+        }
+        if (t > nowT) {
+            allPast = false;
+            if (best == 0 || t < best) {
+                best = t;
+            }
+        }
+    }
+    if (best == 0) {
+        if (allPast) {
+            ligaPrintln("[kickoff] all matches in the past for group %d", group);
+        } else {
+            ligaPrintln("[kickoff] could not find valid kickoff in group %d", group);
+        }
+    } else {
+        struct tm tmLoc;
+        localtime_r(&best, &tmLoc);
+        char buf[32];
+        strftime(buf, sizeof(buf), "%d.%m.%Y %H:%M:%S %Z", &tmLoc);
+        ligaPrintln("[kickoff] best kickoff for group %d = %s (epoch=%ld)", group, buf, (long)best);
     }
     return best;
 }
-
 /**
  * @brief Decide the polling interval (in milliseconds) depending on game context.
  *
@@ -509,24 +524,22 @@ time_t LigaTable::bestFutureKickoffInGroup(League league, int season, int group)
  */
 uint32_t LigaTable::decidePollMs() {
     // Always refresh knowledge about next kickoff before deciding
-    refreshNextKickoffEpoch(activeLeague);
-
+    if (!refreshNextKickoffEpoch(activeLeague)) {
+        // Fallback-Logik, kein Zugriff auf weitere Felder
+        return POLL_10MIN_BEFORE_KICKOFF;
+    }
     time_t nowT = time(nullptr);
-
     // Case 1: less than 10 minutes until kickoff → fast polling
     if (s_nextKickoffEpoch && (s_nextKickoffEpoch - nowT) <= 10 * 60) {
         return POLL_10MIN_BEFORE_KICKOFF;                                       // e.g. 60 s
     }
-
     // Case 2: match is ongoing (kickoff already happened but <3h ago)
     if (s_nextKickoffEpoch && nowT >= s_nextKickoffEpoch && nowT <= s_nextKickoffEpoch + 3 * 60 * 60) {
         return POLL_DURING_GAME;                                                // e.g. 20 s
     }
-
     // Case 3: no imminent kickoff and no game in progress → relaxed polling
     return POLL_NORMAL;                                                         // e.g. 15 min
 }
-
 /**
  * @brief Constructor for the LigaTable class.
  *
@@ -546,17 +559,10 @@ uint32_t LigaTable::decidePollMs() {
  *       and provides a double-buffer system for safe concurrent access.
  */
 LigaTable::LigaTable() {
-    // Configure time zone: CET with daylight-saving rules (Berlin style)
-    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
-
-    // Clear both internal snapshot buffers
-    buf_[0].clear();
-    buf_[1].clear();
-
-    // Set active buffer index to 0
-    active_.store(0, std::memory_order_relaxed);
+    _buf[0].clear();                                                            // Clear both internal snapshot buffers for liga table
+    _buf[1].clear();
+    active_.store(0, std::memory_order_relaxed);                                // Set active buffer index to 0
 }
-
 /**
  * @brief Atomically publish a new table snapshot (double buffer) and
  *        remember the previously active snapshot.
@@ -571,27 +577,22 @@ LigaTable::LigaTable() {
 void LigaTable::commit(const LigaSnapshot& s) {
     const uint8_t cur  = active_.load(std::memory_order_acquire);               // current active index
     const uint8_t next = 1U - cur;                                              // inactive buffer index
-
-    buf_[next] = s;                                                             // copy into inactive buffer
-
-    // publish ordering: set previous_ to old active, then flip active_ to new
+    _buf[next]         = s;                                                     // copy into inactive buffer
+                                                                   // publish ordering: set previous_ to old active, then flip active_ to new
     previous_.store(cur, std::memory_order_relaxed);
     active_.store(next, std::memory_order_release);
 }
-
 // -----------------------------------------------------------------------------
 // --- Snapshpt helpers ---
 // -----------------------------------------------------------------------------
 /** @brief Get a const reference to the currently active snapshot. */
 LigaSnapshot& LigaTable::activeSnapshot() {
-    return buf_[active_.load(std::memory_order_acquire)];
+    return _buf[active_.load(std::memory_order_acquire)];
 }
-
 /** @brief Get a const reference to the previous snapshot (may equal active at startup). */
 LigaSnapshot& LigaTable::previousSnapshot() {
-    return buf_[previous_.load(std::memory_order_acquire)];
+    return _buf[previous_.load(std::memory_order_acquire)];
 }
-
 /**
  * @brief Get the currently active snapshot from the double-buffer system.
  *
@@ -607,14 +608,13 @@ LigaSnapshot& LigaTable::previousSnapshot() {
  */
 void LigaTable::get(LigaSnapshot& out) const {
     uint8_t idx = active_.load(std::memory_order_acquire);                      // read active buffer index with acquire semantics
-    out         = buf_[idx];                                                    // copy active snapshot to output
+    out         = _buf[idx];                                                    // copy active snapshot to output
 }
-
 void LigaTable::openLigaDBHealth() {
     if (WiFi.status() != WL_CONNECTED && !connect()) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("OpenLigaDB WLAN down");
             }
         #endif
@@ -622,9 +622,17 @@ void LigaTable::openLigaDBHealth() {
     }
     if (!waitForTime()) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
-            ligaPrintln("OpenLigaDB Zeit nicht synchron - TLS kann scheitern");
+            TraceScope trace;
+            ligaPrintln("time not synchronized - TLS may fail");
+            }
+        #endif
+    } else {
+        #ifdef ERRORVERBOSE
+            {
+            TraceScope trace;
+            ligaPrintln("time is successfully snchronized");
+            printTime("waitForTime");
             }
         #endif
     }
@@ -722,24 +730,35 @@ bool LigaTable::fetchTable(LigaSnapshot& out) {
     http.addHeader("Accept", "application/json");
     http.addHeader("Accept-Encoding", "identity");
 
-    DynamicJsonDocument doc(16384);                                             // Tabelle ist kleiner als Matchdaten
-    if (!httpGetJsonRobust(http, client, url, doc)) {
+    GlobalJsonDoc.clear();
+    if (!httpGetJsonRobust(http, client, url, GlobalJsonDoc)) {
         ligaPrintln("Table GET failed: %s", url);
         return false;
     }
 
     // 4) Accept either an array or an object with an array under common keys
     JsonArray arr;
-    if (doc.is<JsonArray>()) {
-        arr = doc.as<JsonArray>();
-    } else if (doc.is<JsonObject>()) {
-        JsonObject obj = doc.as<JsonObject>();
+    if (GlobalJsonDoc.is<JsonArray>()) {
+        arr = GlobalJsonDoc.as<JsonArray>();
+    } else if (GlobalJsonDoc.is<JsonObject>()) {
+        JsonObject obj = GlobalJsonDoc.as<JsonObject>();
         if (obj["table"].is<JsonArray>())
             arr = obj["table"].as<JsonArray>();
         else if (obj["Table"].is<JsonArray>())
             arr = obj["Table"].as<JsonArray>();
         else if (obj["rows"].is<JsonArray>())
             arr = obj["rows"].as<JsonArray>();
+    }
+
+    size_t jsonSize = measureJson(GlobalJsonDoc);
+    size_t capacity = GlobalJsonDoc.capacity();
+    ligaPrintln("[fetchTable] JSON size for season %d = %u bytes (capacity %u), entries=%u", sg.season,
+                (unsigned)jsonSize,                                             // tatsächlich belegte Größe
+                (unsigned)capacity,                                             // maximale Kapazität
+                (unsigned)arr.size());
+
+    if (jsonSize >= capacity) {
+        ligaPrintln("[fetchTable][WARN] JSON may be truncated! Increase buffer > %u bytes", (unsigned)capacity);
     }
 
     if (arr.isNull() || arr.size() == 0) {
@@ -888,8 +907,8 @@ bool LigaTable::getNextUpcoming(League league, NextMatch& out) {
 bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) {
     if (!waitForTime()) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("system time not synchronized, heuristik unsecure!");
             }
         #endif
@@ -907,8 +926,8 @@ bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) 
 
     if (!http.begin(client, url)) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("[getSeasonAndGroup] http.begin failed (league=%s)", leagueShortcut(league));
             }
         #endif
@@ -918,8 +937,8 @@ bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) 
     int code = http.GET();
     if (code != HTTP_CODE_OK) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("[getSeasonAndGroup] GET %s -> %d", url, code);
             }
         #endif
@@ -930,23 +949,34 @@ bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) 
     String body = http.getString();
     http.end();
 
-    DynamicJsonDocument doc(1024);
-    if (deserializeJson(doc, body)) {
+    GlobalJsonDoc.clear();
+    if (deserializeJson(GlobalJsonDoc, body)) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("[getSeasonAndGroup] JSON parse failed");
             }
         #endif
         return false;
     }
 
-    JsonObject obj   = doc.as<JsonObject>();
+    JsonObject obj   = GlobalJsonDoc.as<JsonObject>();
     int        group = obj["groupOrderID"] | 0;
+
+    size_t jsonSize = measureJson(GlobalJsonDoc);
+    size_t capacity = GlobalJsonDoc.capacity();
+    ligaPrintln("[SeasonAndGroup] JSON size for matches = %u bytes (capacity %u), entries=%u", (unsigned)jsonSize, // tatsächlich belegte Größe
+                (unsigned)capacity,                                             // maximale Kapazität
+                (unsigned)obj.size());
+
+    if (jsonSize >= capacity) {
+        ligaPrintln("[SeasonAndGroup][WARN] JSON may be truncated! Increase buffer > %u bytes", (unsigned)capacity);
+    }
+
     if (group <= 0) {
         #ifdef ERRORVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("[getSeasonAndGroup] invalid groupOrderID=%d", group);
             }
         #endif
@@ -973,8 +1003,8 @@ bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) 
                 // maybe trace
             } else {
                 #ifdef LIGAVERBOSE
-                    TraceScope trace;
                     {
+                    TraceScope trace;
                     ligaPrintln("[getSeasonAndGroup]  verification empty for season=%d, trying year-1", season);
                     }
                 #endif
@@ -990,8 +1020,8 @@ bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) 
 
     if (_lastSG.season != season || _lastSG.group != group) {                   // report only change of season and/or group
     #ifdef LIGAVERBOSE
-        TraceScope trace;
         {
+        TraceScope trace;
         ligaPrintln("actual league=%s season=%d, matchday=%d (stored)", leagueShortcut(league), season, group);
         }
     #endif
@@ -1006,7 +1036,12 @@ bool LigaTable::getSeasonAndGroup(League league, int& seasonOut, int& groupOut) 
 }
 
 SeasonGroup LigaTable::lastSeasonGroup() const {
-    return _lastSG;                                                             // gibt eine Kopie zurück
+    if (!_lastSG.valid) {
+        #ifdef LIGAVERBOSE
+            Liga->ligaPrintln("lastSeasonGroup: no valid group yet!");
+        #endif
+    }
+    return _lastSG;
 }
 
 /**
@@ -1035,112 +1070,62 @@ int LigaTable::collectLiveMatches(League league, LiveGoalEvent* out, size_t maxC
 
     SeasonGroup sg = lastSeasonGroup();
     if (!sg.valid) {
-        #ifdef ERRORVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("(collectLiveMatches)no stored Season/Group - call getSeasonAndGroup first");
-            }
-        #endif
+        ligaPrintln("(collectLiveMatches) no stored Season/Group - call getSeasonAndGroup first");
         return 0;
     }
 
-    // --- Build endpoint for current matchday ---
+    // --- URL bauen ---
     char url[160];
     snprintf(url, sizeof(url), "https://api.openligadb.de/getmatchdata/%s/%d/%d", leagueShortcut(league), sg.season, sg.group);
 
     WiFiClientSecure client = makeSecureClient();
     HTTPClient       http;
-    http.setReuse(false);
-    http.setConnectTimeout(8000);
-    http.setTimeout(8000);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.useHTTP10(true);                                                       ///< avoid chunked
-    http.addHeader("Accept", "application/json");
-    http.addHeader("Accept-Encoding", "identity");                              ///< avoid gzip
-    http.addHeader("Connection", "close");
-    http.setUserAgent("ESP32-Flap/1.0");
 
-    if (!http.begin(client, url)) {
-        #ifdef ERRORVERBOSE
-            TraceScope trace;
-            {
-            ligaPrintln("(collectLiveMatches) http.begin failed: %s", url);
-            }
-        #endif
-        return 0;
-    }
-    int code = http.GET();
-    if (code != HTTP_CODE_OK) {
-        #ifdef ERRORVERBOSE
-            {
-            TraceScope trace;
-            ligaPrintln("(collectLiveMatches) GET %s -> %d", url, code);
-            }
-        #endif
-        http.end();
-        return 0;
-    }
-    int expected = http.getSize();                                              // -1 wenn unbekannt
-    // ligaPrintln("(collectLiveMatches) HTTP %d, Content-Length=%d", code, expected);
-
-    // Warte bis Daten anliegen (oder Timeout erreicht)
-    WiFiClient&    stream      = http.getStream();
-    uint32_t       t0          = millis();
-    const uint32_t waitTimeout = 8000;                                          // ms, muss zur setTimeout-Einstellung passen
-    while (stream.connected() && !stream.available() && (millis() - t0) < waitTimeout) {
-        delay(1);
-    }
-    int avail = stream.available();
-    // ligaPrintln("(collectLiveMatches) stream.available()=%d", avail);
-
-    // --- Build a correct FILTER for an array-of-matches ---
-    // Root must be an ARRAY; define element schema at index 0.
+    // --- Filter für Matches ---
     StaticJsonDocument<512> filter;
     JsonArray               farr = filter.to<JsonArray>();
-    JsonObject              el   = farr.createNestedObject();                   // == filter[0]
+    JsonObject              el   = farr.createNestedObject();
 
-    // IDs & flags (support both casings seen in OpenLigaDB)
-    el["matchID"]         = true;
-    el["MatchID"]         = true;
-    el["matchIsLive"]     = true;
-    el["MatchIsLive"]     = true;
-    el["matchIsFinished"] = true;
-    el["MatchIsFinished"] = true;
-
-    // Kickoff (both UTC and local date-time variants)
-    el["matchDateTimeUTC"] = true;
-    el["MatchDateTimeUTC"] = true;
-    el["matchDateTime"]    = true;
-    el["MatchDateTime"]    = true;
-
-    // Teams (both lowercase and PascalCase trees)
+    el["matchID"]           = true;
+    el["MatchID"]           = true;
+    el["matchIsLive"]       = true;
+    el["MatchIsLive"]       = true;
+    el["matchIsFinished"]   = true;
+    el["MatchIsFinished"]   = true;
+    el["matchDateTimeUTC"]  = true;
+    el["MatchDateTimeUTC"]  = true;
+    el["matchDateTime"]     = true;
+    el["MatchDateTime"]     = true;
     el["team1"]["teamName"] = true;
     el["Team1"]["TeamName"] = true;
     el["team2"]["teamName"] = true;
     el["Team2"]["TeamName"] = true;
 
-    // --- Parse with FILTER APPLIED ---
-    DynamicJsonDocument  doc(4096);                                             // mit Filter reichen 4  KB
-    DeserializationError err = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
-    http.end();
-
-    if (err) {
-        #ifdef ERRORVERBOSE
-            {
-            TraceScope trace;
-            ligaPrintln("(collectLiveMatches) JSON parse error: %s", err.c_str());
-            }
-        #endif
+    // --- Robust JSON holen ---
+    GlobalJsonDoc.clear();
+    if (!httpGetJsonRobust(http, client, url, GlobalJsonDoc)) {
+        ligaPrintln("(collectLiveMatches) GET failed: %s", url);
         return 0;
     }
 
-    // --- Iterate over filtered matches and collect live ones ---
-    size_t    count         = 0;
-    JsonArray arr           = doc.as<JsonArray>();
-    int       total         = 0;
-    int       totalLive     = 0;
-    int       totalFinished = 0;
+    if (!GlobalJsonDoc.is<JsonArray>()) {
+        ligaPrintln("(collectLiveMatches) JSON not array");
+        return 0;
+    }
 
+    JsonArray arr = GlobalJsonDoc.as<JsonArray>();
+
+    // --- Debug Info ---
+    size_t jsonSize = measureJson(GlobalJsonDoc);
+    size_t capacity = GlobalJsonDoc.capacity();
+    ligaPrintln("[LiveMatches] JSON size for season %d = %u bytes (capacity %u), entries=%u", sg.season, (unsigned)jsonSize, (unsigned)capacity,
+                (unsigned)arr.size());
+    if (jsonSize >= capacity) {
+        ligaPrintln("[LiveMatches][WARN] JSON may be truncated!");
+    }
+
+    // --- Iteration ---
+    size_t count = 0, total = 0, totalLive = 0, totalFinished = 0;
     for (JsonObject m : arr) {
         total++;
 
@@ -1154,9 +1139,8 @@ int LigaTable::collectLiveMatches(League league, LiveGoalEvent* out, size_t maxC
 
         if (!(live && !finished))
             continue;
-        if (count >= maxCount) { /* optional: Log "buffer full" */
+        if (count >= maxCount)
             break;
-        }
 
         int         id = m["matchID"] | m["MatchID"] | 0;
         const char* t1 = m["team1"]["teamName"] | m["Team1"]["TeamName"] | "";
@@ -1172,32 +1156,13 @@ int LigaTable::collectLiveMatches(League league, LiveGoalEvent* out, size_t maxC
         e.team1          = String(t1);
         e.team2          = String(t2);
 
-        #ifdef LIGAVERBOSE
-            {
-            TraceScope trace;
-            ligaPrintln("LIVE: %s vs %s (Kickoff %s, MatchID=%d)", e.team1.c_str(), e.team2.c_str(), e.kickOffUTC.c_str(), e.matchID);
-            }
-        #endif
+        ligaPrintln("LIVE: %s vs %s (Kickoff %s, MatchID=%d)", e.team1.c_str(), e.team2.c_str(), e.kickOffUTC.c_str(), e.matchID);
     }
 
-    if (count == 0) {
-        #ifdef LIGAVERBOSE
-            {
-            TraceScope trace;
-            ligaPrintln("no live matches at the moment.");
-            }
-        #endif
-    } else {
-        #ifdef LIGAVERBOSE
-            {
-            TraceScope trace;
-            ligaPrintln("total=%d, live=%d, finished=%d, selected=%d", total, totalLive, totalFinished, (int)count);
-            }
-        #endif
-    }
+    ligaPrintln("collectLiveMatches: total=%d, live=%d, finished=%d, selected=%d", (int)total, (int)totalLive, (int)totalFinished, (int)count);
+
     return (int)count;
 }
-
 /**
  * @brief Fetch goal events for a single live match (lightweight per-match query).
  *
@@ -1222,116 +1187,35 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
 
     WiFiClientSecure client = makeSecureClient();
     HTTPClient       http;
-    http.setReuse(false);
-    http.setConnectTimeout(8000);
-    http.setTimeout(8000);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.useHTTP10(true);                                                       // avoid chunked
-    http.addHeader("Accept", "application/json");
-    http.addHeader("Accept-Encoding", "identity");                              // avoid gzip
-    http.addHeader("Connection", "close");
-    http.setUserAgent("ESP32-Flap/1.0");
 
-    if (!http.begin(client, url)) {
-        ligaPrintln("[goals] http.begin failed: %s", url);
+    // Robust HTTP + JSON
+    GlobalJsonDoc.clear();
+    if (!httpGetJsonRobust(http, client, url, GlobalJsonDoc)) {
+        ligaPrintln("[goals] GET failed: %s", url);
         return 0;
     }
 
-    int code = http.GET();
-    if (code != HTTP_CODE_OK) {
-        #ifdef ERRORVERBOSE
-            {
-            TraceScope trace;
-            ligaPrintln("[goals] GET %s -> %d", url, code);
-            }
-        #endif
-        http.end();
+    if (!GlobalJsonDoc.is<JsonObject>()) {
+        ligaPrintln("[goals] JSON not an object (id=%d)", matchId);
         return 0;
     }
 
-    int expected = http.getSize();                                              // -1 wenn unbekannt
-    // ligaPrintln("(fetchGoals) HTTP %d, Content-Length=%d", code, expected);
+    JsonObject m = GlobalJsonDoc.as<JsonObject>();
 
-    WiFiClient& stream = http.getStream();
-
-    // Warte bis erste Daten anliegen (oder Timeout erreicht)
-    uint32_t       t0          = millis();
-    const uint32_t waitTimeout = 8000;                                          // ms, muss zu http.setTimeout passen
-    while (stream.connected() && !stream.available() && (millis() - t0) < waitTimeout) {
-        delay(1);
+    // --- Debug Info ---
+    size_t jsonSize = measureJson(GlobalJsonDoc);
+    size_t capacity = GlobalJsonDoc.capacity();
+    ligaPrintln("[fetchGoals] JSON size = %u bytes (capacity %u), keys=%u", (unsigned)jsonSize, (unsigned)capacity, (unsigned)m.size());
+    if (jsonSize >= capacity) {
+        ligaPrintln("[fetchGoals][WARN] JSON may be truncated!");
     }
 
-    int avail = stream.available();
-    // ligaPrintln("(fetchGoals) stream.available()=%d", avail);
-
-    // ---- Filter definieren ----
-    StaticJsonDocument<256> filter;
-    filter["Team1"]["TeamName"] = true;
-    filter["team1"]["teamName"] = true;
-    filter["Team2"]["TeamName"] = true;
-    filter["team2"]["teamName"] = true;
-    filter["MatchID"]           = true;
-    filter["matchID"]           = true;
-    filter["MatchDateTimeUTC"]  = true;
-    filter["matchDateTimeUTC"]  = true;
-    filter["MatchDateTime"]     = true;
-    filter["matchDateTime"]     = true;
-
-    // Goals-Subschema
-    StaticJsonDocument<192> goalSchema;
-    goalSchema["GoalGetterName"]     = true;
-    goalSchema["goalGetterName"]     = true;
-    goalSchema["MatchMinute"]        = true;
-    goalSchema["matchMinute"]        = true;
-    goalSchema["IsPenalty"]          = true;
-    goalSchema["isPenalty"]          = true;
-    goalSchema["IsOwnGoal"]          = true;
-    goalSchema["isOwnGoal"]          = true;
-    goalSchema["IsOvertime"]         = true;
-    goalSchema["isOvertime"]         = true;
-    goalSchema["ScoreTeam1"]         = true;
-    goalSchema["scoreTeam1"]         = true;
-    goalSchema["ScoreTeam2"]         = true;
-    goalSchema["scoreTeam2"]         = true;
-    goalSchema["GoalDateTime"]       = true;
-    goalSchema["goalDateTime"]       = true;
-    goalSchema["LastUpdateDateTime"] = true;
-    goalSchema["lastUpdateDateTime"] = true;
-    goalSchema["CreatedAt"]          = true;
-    goalSchema["createdAt"]          = true;
-
-    // Wichtig: als Array-Schema anlegen
-    JsonArray goalsArr = filter.createNestedArray("Goals");
-    goalsArr.add(goalSchema.as<JsonObject>());
-
-    JsonArray goalsArr2 = filter.createNestedArray("goals");
-    goalsArr2.add(goalSchema.as<JsonObject>());
-
-    // ---- JSON direkt aus Stream parsen ----
-    DynamicJsonDocument  doc(12288);                                            // 8–12 KB wie gehabt
-    DeserializationError err = deserializeJson(doc, stream, DeserializationOption::Filter(filter));
-    http.end();
-
-    if (err) {
-        ligaPrintln("[goals] JSON error (id=%d): %s", matchId, err.c_str());
-        return 0;
-    }
-    if (!doc.is<JsonObject>())
-        return 0;
-
-    JsonObject m = doc.as<JsonObject>();
-
-    // Teams & Kickoff
+    // --- Teams, Kickoff ---
     const char* t1 = m["Team1"]["TeamName"] | m["team1"]["teamName"] | "";
     const char* t2 = m["Team2"]["TeamName"] | m["team2"]["teamName"] | "";
     const char* ko = m["MatchDateTimeUTC"] | m["matchDateTimeUTC"] | m["MatchDateTime"] | m["matchDateTime"] | "";
 
-    const bool useCutoff = (sinceUtc.length() > 0);
-    time_t     cutoff    = 0;
-    if (useCutoff)
-        cutoff = toUtcTimeT(sinceUtc);
-
-    // Goals-Array holen
+    // --- Goals Array ---
     JsonArray gArr;
     if (m["Goals"].is<JsonArray>())
         gArr = m["Goals"].as<JsonArray>();
@@ -1340,9 +1224,12 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
     else
         return 0;
 
-    size_t filled = 0;
-    time_t prevS1 = 0, prevS2 = 0;
+    // --- Cutoff ---
+    const bool useCutoff = (sinceUtc.length() > 0);
+    time_t     cutoff    = useCutoff ? toUtcTimeT(sinceUtc) : 0;
 
+    // --- Iterate Goals ---
+    size_t filled = 0;
     for (JsonObject g : gArr) {
         if (filled >= maxCount)
             break;
@@ -1353,7 +1240,7 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
         if (useCutoff) {
             time_t ts = goalUtc ? toUtcTimeT(String(goalUtc)) : 0;
             if (ts == 0 || ts < cutoff)
-                continue;                                                       // no new goals
+                continue;
         }
 
         LiveGoalEvent& e = out[filled++];
@@ -1377,14 +1264,6 @@ int LigaTable::fetchGoalsForLiveMatch(int matchId, const String& sinceUtc, LiveG
         } else {
             e.scoredFor = (e.score1 > e.score2) ? e.team1 : (e.score2 > e.score1 ? e.team2 : String(""));
         }
-
-        // Optional exakter:
-        // if (filled == 1) { prevS1 = 0; prevS2 = 0; }
-        // if (!e.isOwnGoal) {
-        //   if (e.score1 == prevS1 + 1) e.scoredFor = e.team1;
-        //   else if (e.score2 == prevS2 + 1) e.scoredFor = e.team2;
-        // }
-        // prevS1 = e.score1; prevS2 = e.score2;
     }
 
     return (int)filled;
@@ -1456,8 +1335,8 @@ bool LigaTable::detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapsh
     if (newLeaderOut)
         *newLeaderOut = &newL;
         #ifdef LIGAVERBOSE
-            TraceScope trace;
             {
+            TraceScope trace;
             ligaPrintln("leader change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldL.team, newL.team, oldL.pkt, newL.pkt, oldL.diff, newL.diff);
             }
         #endif

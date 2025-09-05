@@ -23,6 +23,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include "esp_sntp.h"
 
 #define maxGoalsPerMatchday 30                                                  // for MatchState buffer s_state
 
@@ -66,7 +67,7 @@ bool        boolOr(JsonObjectConst o, bool def, const char* k1, const char* k2 =
 // -----------------------------------------------------------------------------
 
 WiFiClientSecure makeSecureClient();                                            // Create and configure a secure WiFi client (TLS).
-bool             waitForTime(uint32_t maxMs = 15000);                           // Wait until system time (NTP) is valid, up to maxMs.
+bool             waitForTime(uint32_t maxMs = 15000, bool report = false);      // Wait until system time (NTP) is valid, up to maxMs.
 
 // -----------------------------------------------------------------------------
 // --- Team mapping helpers ---
@@ -88,6 +89,34 @@ static inline void copy_str_bounded(char* dst, size_t dst_sz, const char* src) {
     for (; i + 1 < dst_sz && src[i] != '\0'; ++i)
         dst[i] = src[i];
     dst[i] = '\0';
+}
+
+// -----------------------------------------------------------------------------
+// --- time helpers ---
+// -----------------------------------------------------------------------------
+static inline void printTime(const char* label) {
+    time_t now = time(nullptr);
+    if (now < 100000) {                                                         // kleiner Wert => keine gültige Zeit
+        Liga->ligaPrintln("[%s] time not set (epoch=%ld)", label, (long)now);
+    } else {
+        char* ts              = ctime(&now);
+        ts[strcspn(ts, "\n")] = '\0';                                           // remove newline from time string
+        Liga->ligaPrintln("[%s] %s", label, ts);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// --- API throttle helpers ---
+// -----------------------------------------------------------------------------
+static inline void ligaApiThrottle() {
+    static uint32_t lastRequestMs = 0;
+    const uint32_t  minSpacing    = HTTP_THROTTLE;                              // general break between requests
+
+    uint32_t now = millis();
+    if (lastRequestMs != 0 && (now - lastRequestMs) < minSpacing) {
+        vTaskDelay(pdMS_TO_TICKS(minSpacing - (now - lastRequestMs)));
+    }
+    lastRequestMs = millis();
 }
 
 #endif                                                                          // LigaHelper_h

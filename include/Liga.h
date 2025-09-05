@@ -29,9 +29,15 @@
 
 // --- Configuration -----------------------------------------------------------
 #define LIGA_MAX_TEAMS 18
-#define POLL_10MIN_BEFORE_KICKOFF 60 * 1000                                     // 60 seconds
-#define POLL_DURING_GAME 20 * 1000                                              // 20 seconds
+#define POLL_10MIN_BEFORE_KICKOFF 120 * 1000                                    // 120 seconds
+#define POLL_DURING_GAME 30 * 1000                                              // 30 seconds
 #define POLL_NORMAL 15 * 60 * 1000                                              // 15 minutes
+
+//  Throttling Requests to openLigaDB ------------------------------------------
+#define HTTP_PAUSE_OK 100                                                       // break after success (ms)
+#define HTTP_PAUSE_ERR 300                                                      // break after normale error (ms)
+#define HTTP_PAUSE_RATELIMIT 5000                                               // break after 29-error (ms) rate-limit
+#define HTTP_THROTTLE 1200                                                      // general break between requests
 
 // --- Chooseable league -------------------------------------------------------
 enum class League : uint8_t { BL1 = 1, BL2 = 2 };
@@ -46,8 +52,6 @@ static inline const char* leagueShortcut(League lg) {
 static String s_lastChange;                                                     // dein vorhandener ISO-String
 static time_t s_lastChangeEpoch  = 0;                                           // Epoch zum schnellen Vergleich
 static time_t s_nextKickoffEpoch = 0;                                           // nächster Anstoß (Epoch UTC)
-// static const uint32_t KICKOFF_REFRESH_MS     = 30000;                           // 30 Seconds
-// static uint32_t       s_lastKickoffRefreshMs = KICKOFF_REFRESH_MS;              // wann zuletzt berechnet
 
 // ----- Datatyps -----
 struct DfbMap {
@@ -127,6 +131,8 @@ struct SeasonGroup {
     uint32_t fetchedAtMs = 0;
 };
 
+extern DynamicJsonDocument GlobalJsonDoc;                                       // global JSON Buffer
+
 class LigaTable {
    public:
     // Constructor for LigaTable
@@ -166,7 +172,7 @@ class LigaTable {
     }
 
    private:
-    LigaSnapshot         buf_[2];                                               // two buffer to be switched
+    LigaSnapshot         _buf[2];                                               // two buffer to be switched
     std::atomic<uint8_t> active_{0};                                            // Indice to active buffer
     std::atomic<uint8_t> previous_{0};                                          // Indice to previous buffer
     SeasonGroup          _lastSG;                                               // last fetched season and group
@@ -175,7 +181,7 @@ class LigaTable {
 
     // private member functions
     bool        httpGetJsonRobust(HTTPClient& http, WiFiClientSecure& client, const String& url, JsonDocument& doc, int maxRetry = 2);
-    void        refreshNextKickoffEpoch(League league);
+    bool        refreshNextKickoffEpoch(League league);
     ApiHealth   checkOpenLigaDB(League league, unsigned timeoutMs = 5000);
     SeasonGroup lastSeasonGroup() const;
     time_t      bestFutureKickoffInGroup(League league, int season, int group);

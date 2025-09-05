@@ -320,16 +320,24 @@ WiFiClientSecure makeSecureClient() {
  * @return True if time was successfully synchronized before timeout,
  *         false otherwise.
  */
-bool waitForTime(uint32_t maxMs) {
-    time_t   t  = time(nullptr);
-    uint32_t t0 = millis();
 
-    // wait until epoch time is valid (>= ~2023-11-14) or timeout reached
-    while (t < 1700000000 && (millis() - t0) < maxMs) {
-        delay(200);
-        t = time(nullptr);
+bool waitForTime(uint32_t maxMs, bool report) {
+    time_t    now = 0;
+    struct tm timeinfo;
+    uint32_t  start = millis();
+
+    while ((millis() - start) < maxMs) {
+        now = time(nullptr);
+        if (now > 1600000000 && getLocalTime(&timeinfo)) {                      // Zeit nach 2020 und gültig
+            if (report)
+                printTime("waitForTime");
+            return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
-    return t >= 1700000000;
+    if (report)
+        printTime("waitForTime");
+    return false;
 }
 
 /**

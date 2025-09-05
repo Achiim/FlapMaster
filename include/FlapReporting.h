@@ -15,6 +15,7 @@
 #include <Arduino.h>
 #include <vector>
 #include "SlaveTwin.h"
+#include "FlapTasks.h"
 
 #ifndef FlapReporting_h
     #define FlapReporting_h

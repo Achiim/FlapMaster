@@ -28,6 +28,7 @@
 #include "i2cMaster.h"
 #include "MasterPrint.h"
 #include "MasterSetup.h"
+#include "Liga.h"
 
 /**
  * @brief General setup to start ESP32

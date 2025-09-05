@@ -302,5 +302,6 @@ void createLigaTask() {
         masterPrintln("start freeRTOS task: Liga");
         }
     #endif
+
     xTaskCreate(ligaTask, "Liga", STACK_LIGA, NULL, PRIO_LIGA, &g_ligaHandle);
 }
