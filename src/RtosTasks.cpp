@@ -96,7 +96,7 @@ void ligaTask(void* pvParameters) {
     while (true) {
         switch (currentScope) {
             case CHECK_FOR_CHANGES:
-                pollForChanges(isSomeThingNew);
+                Liga->pollForChanges(isSomeThingNew);
                 if (isSomeThingNew) {
                     isSomeThingNew = false;                                     // reset change flag
                     currentScope   = FETCH_TABLE;
