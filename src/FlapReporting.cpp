@@ -43,12 +43,14 @@ const char* FlapReporting::SPARKLINE_LEVELS[] = {u8"▁", u8"▂", u8"▃", u8"�
  */
 FlapReporting::FlapReporting() {}
 
+/*
 // trace liga tabelle
 void FlapReporting::reportLigaTable() {
     LigaSnapshot snap;                                                          // local copy of liga table (small)
     Liga->get(snap);
     renderLigaTable(snap);
 };
+*/
 
 // ==== UTF-8 helpers: crop by code points (not bytes), pad with spaces ====
 static inline bool isUtf8Cont(uint8_t b) {
@@ -155,6 +157,7 @@ static void printIntRight(int v, uint8_t width) {
     Serial.print(buf);
 }
 
+/*
 static void printLigaHeader() {
     Serial.println("┌─────┬──────────────────────────┬──────────────┬─────┬──────┬────┬──────┬─────┐");
     Serial.println("│ Pos │ Mannschaft               │ Name         │ DFB │ Flap │ Sp │ Diff │ Pkt │");
@@ -186,7 +189,8 @@ void FlapReporting::printTableRow(const LigaRow& r) {
     Serial.printf("%*u", W_PKT, r.pkt);
     Serial.println(" │");
 }
-
+*/
+/*
 // render Bundesliga table:
 void FlapReporting::renderLigaTable(const LigaSnapshot& s) {
     if (s.teamCount == 0) {
@@ -205,7 +209,7 @@ void FlapReporting::renderLigaTable(const LigaSnapshot& s) {
     }
     printLigaFooter();                                                          // UTF-8 Fußzeile
 }
-
+*/
 // -----------------------------------
 // trace print I2C usage statistic
 void FlapReporting::reportI2CStatistic() {

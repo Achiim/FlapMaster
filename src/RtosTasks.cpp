@@ -16,7 +16,9 @@
 #include <freertos/task.h>
 #include <FlapGlobal.h>
 #include <cstdio>
+#include <WiFi.h>
 #include "SlaveTwin.h"
+#include "Liga.h"
 #include "FlapTasks.h"
 #include "i2cMaster.h"
 #include "FlapRegistry.h"
@@ -24,8 +26,6 @@
 #include "FlapReporting.h"
 #include "FlapStatistics.h"
 #include "Parser.h"
-#include "Liga.h"
-#include "LigaHelper.h"
 #include "RemoteControl.h"
 #include "RtosTasks.h"
 // ----------------------------
@@ -36,6 +36,7 @@
 //            |___/
 // Banner created:
 // https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=Liga
+/**
 /**
 /**
  * @brief Main FreeRTOS task to manage periodic Bundesliga updates.
@@ -55,179 +56,84 @@
  * @param pvParameters Unused (FreeRTOS task prototype requirement).
  */
 void ligaTask(void* pvParameters) {
-    int season   = 0;                                                           // Will be determined by pollLastChange()
-    int matchday = 0;                                                           // Will be determined by pollLastChange()
+    ligaSeason          = 0;                                                    // global actual Season
+    ligaMatchday        = 0;                                                    // global actual Matchday
+    bool isSomeThingNew = false;                                                // no changes on liga
 
-    ReportCommand repCmd;                                                       // Command for reporting task
-    repCmd.repCommand   = REPORT_LIGA_TABLE;
-    repCmd.responsQueue = nullptr;
+    if (!initLigaTask()) {
+        {
+            #ifdef ERRORVERBOSE
+                {
+                TraceScope trace;
+                masterPrintln("LigaTask not correct initialized");              // error
+                }
+            #endif
 
-    LiveGoalEvent       evs[maxGoalsPerMatchday];                               // Buffer for live goals
-    static LigaSnapshot snap;                                                   // Current Bundesliga table snapshot
-
-    //    LigaTable Liga;                                                       // Construct LigaTable object
-    Liga = new LigaTable();                                                     // generate object
-    Liga->connect();                                                            // Connect to OpenLigaDB
+            while (true) {
+                vTaskDelay(pdMS_TO_TICKS(30000));                               // halt
+            }
+        }
+    }
 
     #ifdef LIGAVERBOSE
         {
         TraceScope trace;
-        Liga->ligaPrintln("Configure time zone: CET with daylight-saving rules (Berlin style)");
+        Liga->ligaPrintln("LigaTask successfully started");                     // Pure log forvisibility
         }
     #endif
 
-    configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org",
-                 "time.nist.gov");                                              // Configure time zone: CET with daylight-saving rules (Berlin style)
+    /*
 
-    waitForTime(15000, true);                                                   // wait for synch max. 15s and report
+        ReportCommand repCmd;                                                   // Command for reporting task
+        repCmd.repCommand   = REPORT_LIGA_TABLE;                                // Report type: league table
+        repCmd.responsQueue = nullptr;                                          // Fire-and-forget reporting
+        static LigaSnapshot snap;                                               // Current Bundesliga table snapshot (static to avoid task stack
+*/
+    vTaskDelay(pdMS_TO_TICKS(1000));                                            // wait to give init items some time to calm down and get ready
+    Liga->pollCurrentMatchday();                                                // init actual matchday
 
-    // --- Setup FreeRTOS timer (one-shot mode) ---
-    ligaScanTimer = xTimerCreate("LigaScan",                                    // Timer name
-                                 1,                                             // Initial period (dummy, replaced later)
-                                 pdFALSE,                                       // Auto-reload disabled (one-shot)
-                                 nullptr,                                       // Timer ID
-                                 ligaScanCallback);                             // Callback function
-
-    configASSERT(ligaScanTimer != nullptr);
-
-    // Start with a short dummy period so getNextLigaScanRemainingMs() is valid
-    xTimerStart(ligaScanTimer, pdMS_TO_TICKS(2));
-
-    Liga->openLigaDBHealth();                                                   // Perform API health check
-    vTaskDelay(pdMS_TO_TICKS(4000));
-    Liga->pollLastChange(activeLeague, season, matchday);                       // Get last change from openLigaDB
-    vTaskDelay(pdMS_TO_TICKS(4000));
-    snap.clear();                                                               // Reset local snapshot buffer
-    Liga->fetchTable(snap);                                                     // Fetch latest table via HTTP/JSON
-    Liga->commit(snap);                                                         // Atomically publish new snapshot
-
-    // Trigger reporting task with latest table
-    if (g_reportQueue)
-        xQueueOverwrite(g_reportQueue, &repCmd);
-
-    // --- Main loop ---
+    PollScope currentScope = CHECK_FOR_CHANGES;                                 // beginn with check for changes
     while (true) {
-        // --- Phase 0: Wait, before a cycle starts ---
-        uint32_t nextMs = Liga->decidePollMs();
-        if (nextMs < 1)
-            nextMs = 1;
-        TickType_t wait = pdMS_TO_TICKS(nextMs);
-        configASSERT(xTimerChangePeriod(ligaScanTimer, wait, pdMS_TO_TICKS(2)) == pdPASS);
-        vTaskDelay(pdMS_TO_TICKS(nextMs));
-
-        #ifdef LIGAVERBOSE
-            {
-            TraceScope trace;
-            Liga->ligaPrintln("========== Liga Scan Start ==========");
-            }
-        #endif
-
-        TickType_t t0 = xTaskGetTickCount();                                    // Mark work-phase start
-
-        // --- Phase 1: Detect changes in OpenLigaDB ---
-        if (Liga->pollLastChange(activeLeague, season, matchday)) {
-            #ifdef LIGAVERBOSE
-                {
-                TraceScope trace;
-                Liga->ligaPrintln("=Fetch Table=");
+        switch (currentScope) {
+            case CHECK_FOR_CHANGES:
+                pollForChanges(isSomeThingNew);
+                if (isSomeThingNew) {
+                    isSomeThingNew = false;                                     // reset change flag
+                    currentScope   = FETCH_TABLE;
                 }
-            #endif
+                break;
 
-            Liga->fetchTable(snap);                                             // Fetch latest table via HTTP/JSON
-            Liga->commit(snap);                                                 // Atomically publish new snapshot
+            case FETCH_TABLE:
+                Liga->pollTable();
+                currentScope = FETCH_GOALS;
+                break;
 
-            // TODO: Visualization / animation of new table
+            case FETCH_GOALS:
+                // pollGoals();
+                currentScope = CHECK_FOR_CHANGES;
+                break;
 
-            // Trigger reporting task with latest table
-            if (g_reportQueue)
-                xQueueOverwrite(g_reportQueue, &repCmd);
+            case FETCH_NEXT_MATCH:
+                pollNextMatch();
+                break;
 
-            // --- Detect leader changes between snapshots ---
-            const LigaSnapshot& oldSnap = Liga->previousSnapshot();
-            const LigaSnapshot& newSnap = Liga->activeSnapshot();
-            const LigaRow*      oldL    = nullptr;
-            const LigaRow*      newL    = nullptr;
+            case FETCH_CURRENT_MATCHDAY:
+                Liga->pollCurrentMatchday();
+                break;
 
-            #ifdef LIGAVERBOSE
-                {
-                TraceScope trace;
-                Liga->ligaPrintln("=detect new leader=");
-                }
-            #endif
+            case FETCH_NEXT_KICKOFF:
+                // pollNextKickoff();
+                break;
 
-            if (Liga->detectLeaderChange(oldSnap, newSnap, &oldL, &newL)) {
-                // TODO: Visualization / animation of new leader
-            }
+            case FETCH_LIVE_MATCHES:
+                // pollLiveMatches();
+                break;
 
-            #ifdef LIGAVERBOSE
-                {
-                TraceScope trace;
-                Liga->ligaPrintln("=detect new red lantern=");
-                }
-            #endif
-
-            if (Liga->detectRedLanternChange(oldSnap, newSnap, &oldL, &newL)) {
-                // TODO: Visualization / animation of red lantern
-            }
-
-            #ifdef LIGAVERBOSE
-                {
-                TraceScope trace;
-                Liga->ligaPrintln("=detect new relegation ghost=");
-                }
-            #endif
-            std::vector<const LigaRow*> oldZone;
-            std::vector<const LigaRow*> newZone;
-            if (Liga->detectRelegationGhostChange(oldSnap, newSnap, &oldZone, &newZone)) {
-                // TODO: Visualization / animation of relegation ghost
-                /*
-                                                           for (auto* row : oldZone) {
-                                                               Liga->ligaPrintln("old zone: %s (pts %u, diff %d)", row->team, row->pkt, row->diff);
-                                                           }
-                                                           for (auto* row : newZone) {
-                                                               Liga->ligaPrintln("new zone: %s (pts %u, diff %d)", row->team, row->pkt, row->diff);
-                                                           }
-                 */
-            }
-
-// --- Phase 2: Live gate detection ---
-#ifdef LIGAVERBOSE
-    {
-    TraceScope trace;
-    Liga->ligaPrintln("=collect live matches=");
-    }
-#endif
-
-            LiveGoalEvent liveBuf[12];
-            int           liveN = Liga->collectLiveMatches(activeLeague, liveBuf, 12);
-            if (liveN != 0) {
-                for (int i = 0; i < liveN; ++i) {
-                    #ifdef LIGAVERBOSE
-                        {
-                        TraceScope trace;
-                        Liga->ligaPrintln("=collect live goals=");
-                        }
-                    #endif
-
-                    LiveGoalEvent evBuf[8];                                     // Buffer: expected small number of new goals
-                    int           evN = Liga->fetchGoalsForLiveMatch(liveBuf[i].matchID, s_lastChange, evBuf, 8);
-
-                    for (int j = 0; j < evN; ++j) {
-                        const auto& e = evBuf[j];
-                        Liga->ligaPrintln("[goal] %s vs %s | Minute %d | %s | Spielstand %d:%d | Für: %s", e.team1.c_str(), e.team2.c_str(), e.minute,
-                                          e.scorer.c_str(), e.score1, e.score2, e.scoredFor.c_str());
-                        // TODO: Visualization for new goals
-                        // flapAnimateForTeam(e.scoredFor);
-                    }
-                }
-            }
+            default:
+                Serial.println("unknown PollScope");
+                break;
         }
-        #ifdef LIGAVERBOSE
-            {
-            TraceScope trace;
-            Liga->ligaPrintln("========== Liga Scan End ==========");
-            }
-        #endif
+        vTaskDelay(pdMS_TO_TICKS(30000));
     }
 }
 
@@ -473,8 +379,8 @@ void reportTask(void* pvParameters) {
                     Reports->reportSlaveRegistry();                             // show registry
                 if (receivedCmd == REPORT_I2C_STATISTIC)
                     Reports->reportI2CStatistic();                              // show I2C usage
-                if (receivedCmd == REPORT_LIGA_TABLE)
-                    Reports->reportLigaTable();                                 // show liga tabelle
+                                                    //                if (receivedCmd == REPORT_LIGA_TABLE)
+                //                    Reports->reportLigaTable();                                 // show liga tabelle
 
                 Reports->reportPrintln("====== Flap Master Report End ======"); // Report Footer
 

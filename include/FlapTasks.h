@@ -35,18 +35,18 @@
 #define PRIO_STATISTICS 1                                                       // Statistics Task
 
 // Task Stack sizes
-#define STACK_LIGA 15360                                                        // Liga Task 22kB
-#define STACK_TWIN 4096                                                         // Twin Tasks 0-n
-#define STACK_REGISTRY 2048                                                     // Registry Task
-#define STACK_REPORT 3072                                                       // Reportimg Task
-#define STACK_REMOTE 2048                                                       // Remote Control Task
-#define STACK_PARSER 2048                                                       // Remote Parser Task
+#define STACK_LIGA 8 * 1024                                                     // Liga Task 22kB
+#define STACK_TWIN 4 * 1024                                                     // Twin Tasks 0-n
+#define STACK_REGISTRY 2 * 1024                                                 // Registry Task
+#define STACK_REPORT 3 * 1024                                                   // Reportimg Task
+#define STACK_REMOTE 2 * 1024                                                   // Remote Control Task
+#define STACK_PARSER 2 * 1024                                                   // Remote Parser Task
 
 #ifdef STATISTICVERBOSE
-    #define STACK_STATISTICS 2048                                               // Statistics Task
+    #define STACK_STATISTICS 2 * 1024                                           // Statistics Task
 #endif
 #ifndef STATISTICVERBOSE
-    #define STACK_STATISTICS 1024                                               // Statistics Task
+    #define STACK_STATISTICS 1 * 1024                                           // Statistics Task
 #endif
 
 // Task Countdown Timer
