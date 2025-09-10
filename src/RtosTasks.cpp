@@ -83,57 +83,76 @@ void ligaTask(void* pvParameters) {
     #endif
 
     /*
-
         ReportCommand repCmd;                                                   // Command for reporting task
         repCmd.repCommand   = REPORT_LIGA_TABLE;                                // Report type: league table
         repCmd.responsQueue = nullptr;                                          // Fire-and-forget reporting
         static LigaSnapshot snap;                                               // Current Bundesliga table snapshot (static to avoid task stack
-*/
-    vTaskDelay(pdMS_TO_TICKS(1000));                                            // wait to give init items some time to calm down and get ready
-    Liga->pollCurrentMatchday();                                                // init actual matchday
+    */
 
-    PollScope currentScope = CHECK_FOR_CHANGES;                                 // beginn with check for changes
+    mode     = POLL_MODE_RELAXED;
+    nextmode = POLL_MODE_RELAXED;
     while (true) {
-        switch (currentScope) {
-            case CHECK_FOR_CHANGES:
-                Liga->pollForChanges(isSomeThingNew);
-                if (isSomeThingNew) {
-                    isSomeThingNew = false;                                     // reset change flag
-                    currentScope   = FETCH_TABLE;
-                }
-                break;
+        selectPollCycle(mode);                                                  // use actual mode
+        for (size_t i = 0; i < cycleLength; ++i) {
+            PollScope scope = activeCycle[i];
 
-            case FETCH_TABLE:
-                Liga->pollTable();
-                currentScope = FETCH_GOALS;
-                break;
-
-            case FETCH_GOALS:
-                // pollGoals();
-                currentScope = CHECK_FOR_CHANGES;
-                break;
-
-            case FETCH_NEXT_MATCH:
-                pollNextMatch();
-                break;
-
-            case FETCH_CURRENT_MATCHDAY:
-                Liga->pollCurrentMatchday();
-                break;
-
-            case FETCH_NEXT_KICKOFF:
-                // pollNextKickoff();
-                break;
-
-            case FETCH_LIVE_MATCHES:
-                // pollLiveMatches();
-                break;
-
-            default:
-                Serial.println("unknown PollScope");
-                break;
+            switch (scope) {
+                case CHECK_FOR_CHANGES:
+                    Liga->pollForChanges(isSomeThingNew);
+                    break;
+                case FETCH_TABLE:
+                    Liga->pollTable();
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                    break;
+                case FETCH_CURRENT_MATCHDAY:
+                    Liga->pollCurrentMatchday();
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                    break;
+                case FETCH_CURRENT_SEASON:
+                    ligaSeason = getCurrentSeason();
+                    vTaskDelay(pdMS_TO_TICKS(400));
+                    break;
+                case FETCH_NEXT_KICKOFF:
+                    Liga->pollNextKickoff();
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                    break;
+                case FETCH_GOALS:
+                    // optional
+                    break;
+                case CALC_LEADER_CHANGE:
+                    // optional
+                    break;
+                case CALC_RELEGATION_GHOST_CHANGE:
+                    // optional
+                    break;
+                case CALC_RED_LANTERN_CHANGE:
+                    // optional
+                    break;
+            }
         }
-        vTaskDelay(pdMS_TO_TICKS(30000));
+        // change poll mode depending on data
+        if (!nextKickoffFarAway) {
+            nextmode = POLL_MODE_PRELIVE;                                       // change mode 10 minutes before live match
+        } else {
+            if (isSomeThingNew) {                                               // openLigaDB data has changed
+                nextmode = POLL_MODE_REACTIVE;
+            } else if (mode == POLL_MODE_REACTIVE) {
+                nextmode = POLL_MODE_RELAXED;
+            } else if (mode == POLL_MODE_LIVE || mode == POLL_MODE_PRELIVE) {   // match is over
+                nextmode = POLL_MODE_REACTIVE;
+            } else {
+                nextmode = mode;                                                // no chane of mode
+            }
+        }
+        if (mode != nextmode) {
+            Liga->ligaPrintln("PollMode changed from %s to %s", pollModeToString(mode), pollModeToString(nextmode));
+        }
+
+        mode           = nextmode;
+        isSomeThingNew = false;                                                 // reset openLigaDB changed flag
+
+        uint32_t dynamicWait = getPollDelay(mode);                              // wait according to next PollScope that will be active
+        vTaskDelay(pdMS_TO_TICKS(dynamicWait));
     }
 }
 

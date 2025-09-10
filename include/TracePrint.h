@@ -92,14 +92,14 @@ void tracePrintln(const char* prefix, const Args&... args) {
 
 template <typename... Args>
 void tracePrintf(const char* prefix, const char* fmt, const Args&... args) {
-    char buf[128];
+    char buf[200];
     snprintf(buf, sizeof(buf), fmt, args...);
     Serial.print(prefix);
     Serial.print(buf);
 }
 template <typename... Args>
 void tracePrint(const char* prefix, const char* fmt, const Args&... args) {
-    char buf[128];
+    char buf[200];
     snprintf(buf, sizeof(buf), fmt, args...);
     Serial.print(prefix);
     Serial.print(buf);
@@ -107,7 +107,7 @@ void tracePrint(const char* prefix, const char* fmt, const Args&... args) {
 
 template <typename... Args>
 void tracePrintln(const char* prefix, const char* fmt, const Args&... args) {
-    char buf[128];
+    char buf[200];
     snprintf(buf, sizeof(buf), fmt, args...);
     Serial.print(prefix);
     Serial.println(buf);
