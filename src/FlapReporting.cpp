@@ -179,9 +179,9 @@ void FlapReporting::printTableRow(const LigaRow& r) {
     Serial.print(" │ ");
     Serial.printf("%*u", W_W, r.w);
     Serial.print(" │ ");
-    Serial.printf("%*u", W_D, r.l);
+    Serial.printf("%*u", W_D, r.d);
     Serial.print(" │ ");
-    Serial.printf("%*u", W_L, r.d);
+    Serial.printf("%*u", W_L, r.l);
     Serial.print(" │ ");
     Serial.printf("%*u", W_G, r.g);
     Serial.print(" │ ");

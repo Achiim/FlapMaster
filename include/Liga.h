@@ -32,6 +32,15 @@
 // ==== defines ====
 
 // ==== enums ====
+// --- Chooseable league -------------------------------------------------------
+enum class League : uint8_t { BL1 = 1, BL2 = 2 };
+extern League activeLeague;
+
+/** @brief Return OpenLigaDB league shortcut string for the given enum. */
+static inline const char* leagueShortcut(League lg) {
+    return (lg == League::BL2) ? "bl2" : "bl1";
+}
+
 enum PollScope {
     CHECK_FOR_CHANGES,                                                          // only check for changes on openLigaDB
     FETCH_TABLE,                                                                // fetch actualized table

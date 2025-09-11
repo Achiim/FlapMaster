@@ -56,6 +56,7 @@
  * @param pvParameters Unused (FreeRTOS task prototype requirement).
  */
 void ligaTask(void* pvParameters) {
+    activeLeague        = League::BL2;                                          // use default BL1
     ligaSeason          = 0;                                                    // global actual Season
     ligaMatchday        = 0;                                                    // global actual Matchday
     bool isSomeThingNew = false;                                                // no changes on liga

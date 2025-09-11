@@ -40,8 +40,9 @@ String      previousLastChangeOfMatchday = "";                                  
 std::string dateTimeBuffer               = "";                                  // temp buffer to request
 bool        currentMatchdayChanged       = false;                               // no chances
 
-int ligaSeason   = 0;                                                           // global unknown Season
-int ligaMatchday = 0;                                                           // global unknown Matchday
+League activeLeague = League::BL1;                                              // use default BL1
+int    ligaSeason   = 0;                                                        // global unknown Season
+int    ligaMatchday = 0;                                                        // global unknown Matchday
 
 time_t      currentNextKickoffTime  = 0;
 time_t      previousNextKickoffTime = 0;
@@ -393,7 +394,7 @@ esp_err_t _http_event_handler_nextKickoff(esp_http_client_event_t* evt) {
 // Ermittlung des nächsten Anpfiffzeitpunkt
 bool LigaTable::pollNextKickoff() {
     char url[128];                                                              // ausreichend groß für die komplette URL
-    sprintf(url, "https://api.openligadb.de/getnextmatchbyleagueshortcut/bl1");
+    sprintf(url, "https://api.openligadb.de/getnextmatchbyleagueshortcut/%s", leagueShortcut(activeLeague));
     esp_http_client_config_t config = {};
     config.url                      = url;
     config.user_agent               = flapUserAgent;
@@ -454,7 +455,7 @@ esp_err_t _http_event_handler_changes(esp_http_client_event_t* evt) {
 // Ermittlung der letzten Änderung des aktuellen Spieltags
 bool LigaTable::pollForChanges() {
     char url[128];                                                              // ausreichend groß für die komplette URL
-    sprintf(url, "https://api.openligadb.de/getlastchangedate/bl1/%d/%d", ligaSeason, ligaMatchday);
+    sprintf(url, "https://api.openligadb.de/getlastchangedate/%s/%d/%d", leagueShortcut(activeLeague), ligaSeason, ligaMatchday);
     esp_http_client_config_t config = {};
     config.url                      = url;
     config.event_handler            = _http_event_handler_changes;
@@ -561,8 +562,11 @@ esp_err_t _http_event_handler_table(esp_http_client_event_t* evt) {
             LigaSnapshot& snapshot = snap[snapshotIndex];                       // local point to snap to be used
             snapshot.clear();                                                   // Reset actual-Snapshot
 
-            JsonArray table                  = doc.as<JsonArray>();             // read JSON-Data into snap[snapshotIndex]
-            snapshot.teamCount               = table.size();                    // number of teams
+            JsonArray table    = doc.as<JsonArray>();                           // read JSON-Data into snap[snapshotIndex]
+            snapshot.teamCount = table.size();                                  // number of teams
+
+            snap[snapshotIndex].season       = ligaSeason;
+            snap[snapshotIndex].matchday     = ligaMatchday;
             snap[snapshotIndex].fetchedAtUTC = time(nullptr);                   // actual timestamp
             for (uint8_t i = 0; i < snapshot.teamCount && i < LIGA_MAX_TEAMS; ++i) {
                 JsonObject team = table[i];
@@ -598,7 +602,7 @@ esp_err_t _http_event_handler_table(esp_http_client_event_t* evt) {
 // zur Ermittlung der aktuellen Tabelle
 bool LigaTable::pollTable() {
     char url[128];                                                              // ausreichend groß für die komplette URL
-    sprintf(url, "https://api.openligadb.de/getbltable/bl1/2025");
+    sprintf(url, "https://api.openligadb.de/getbltable/%s/%d", leagueShortcut(activeLeague), ligaSeason);
     esp_http_client_config_t config = {};
     config.url                      = url;
     config.user_agent               = flapUserAgent;
@@ -630,7 +634,7 @@ bool LigaTable::pollTable() {
 // zur Ermittlung des aktellen Spieltags
 bool LigaTable::pollCurrentMatchday() {
     char url[128];                                                              // ausreichend groß für die komplette URL
-    sprintf(url, "https://api.openligadb.de/getcurrentgroup/bl1");
+    sprintf(url, "https://api.openligadb.de/getcurrentgroup/%s", leagueShortcut(activeLeague));
     esp_http_client_config_t config = {};
     config.url                      = url;
     config.event_handler            = _http_event_handler_matchday;
