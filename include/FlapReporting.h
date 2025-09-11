@@ -36,6 +36,11 @@ constexpr int W_FLAP  = 4;                                                      
 constexpr int W_SP    = 2;                                                      // Spiele (1..34)
 constexpr int W_DIFF  = 4;                                                      // -99..+99
 constexpr int W_PKT   = 3;                                                      // 0..99
+constexpr int W_W     = 2;                                                      // won 0..99
+constexpr int W_L     = 2;                                                      // lost 0..99
+constexpr int W_D     = 2;                                                      // drawn 0..99
+constexpr int W_OG    = 2;                                                      // own goals 0..99
+constexpr int W_G     = 2;                                                      // goals 0..99
 
 class FlapReporting {
    public:
@@ -64,7 +69,7 @@ class FlapReporting {
     void reportAllTwinStepsByFlap(int wrapWidth = 20);                          // show steps per flap for all Twins
     void reportSlaveRegistry();                                                 // show registry content
     void reportI2CStatistic();                                                  // show I2C usage history
-    // void reportLigaTable();                                                     // show Bundesliga table
+    void reportLigaTable();                                                     // show Bundesliga table
 
    private:
     static const char    BLOCK_LIGHT[];                                         // bar pattern for Access
@@ -78,8 +83,8 @@ class FlapReporting {
     void        printBar(uint32_t value, float scale, const char* symbol, uint8_t maxLength); // print bar with value
     void        printI2CHistory();                                              // print I2C history
     void        printUptime();                                                  // Helper to report up time
-    //    static void printTableRow(const LigaRow& r);                                // Bundesliga table row
-    //    static void renderLigaTable(const LigaSnapshot& s);                         // build Bundesliga tabel trace
+    static void printTableRow(const LigaRow& r);                                // Bundesliga table row
+    static void renderLigaTable(const LigaSnapshot& s);                         // build Bundesliga tabel trace
 
     // box drawing helpers for steps by flap report
     String repeatChar(const String& symbol, int count);                         // Helper for unicode

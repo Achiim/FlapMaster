@@ -23,7 +23,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "ArduinoJson.h"
-// #include <StreamUtils.h>                                                        // 🔧 ChunkedDecodingStream
 #include "secret.h"
 #include "FlapTasks.h"
 #include "Liga.h"
@@ -35,29 +34,31 @@
 #define WIFI_PASS "DEIN_PASS"
 
 // initialize global variables
-std::string currentLastChange  = "";                                            //
-std::string previousLastChange = "";                                            //
-std::string dateTimeBuffer     = "";                                            // special situation last c hange date is not JSON, just sting
+std::string jsonBuffer                   = "";
+String      currentLastChangeOfMatchday  = "";                                  // openLigaDB Matchday change state
+String      previousLastChangeOfMatchday = "";                                  // openLigaDB Matchday change state
+std::string dateTimeBuffer               = "";                                  // temp buffer to request
+bool        currentMatchdayChanged       = false;                               // no chances
 
-String      lastMatchChecksum = "";
-String      currentChecksum   = "";
-std::string jsonBuffer        = "";
+int ligaSeason   = 0;                                                           // global unknown Season
+int ligaMatchday = 0;                                                           // global unknown Matchday
 
-int ligaSeason   = 0;                                                           // global actual Season
-int ligaMatchday = 0;                                                           // global actual Matchday
+time_t      currentNextKickoffTime  = 0;
+time_t      previousNextKickoffTime = 0;
+bool        nextKickoffChanged      = false;
+bool        nextKickoffFarAway      = true;
+double      diffSecondsUntilKickoff = 0;
+std::string nextKickoffString;
 
-time_t currentNextKickoffTime  = 0;
-time_t previousNextKickoffTime = 0;
-bool   nextKickoffChanged      = false;
-bool   nextKickoffFarAway      = true;
+PollMode         currentPollMode   = POLL_MODE_RELAXED;                         // global poll mode of poll mananger
+PollMode         nextPollMode      = POLL_MODE_RELAXED;
+const PollScope* activeCycle       = nullptr;
+size_t           activeCycleLength = 0;
 
-PollMode mode     = POLL_MODE_RELAXED;                                          // global poll mode of poll mananger
-PollMode nextmode = POLL_MODE_RELAXED;
+LigaSnapshot snap[2];                                                           // actual and previous table
+uint8_t      snapshotIndex = 0;                                                 // 0 or 1
 
 // Routines
-const PollScope* activeCycle = nullptr;
-size_t           cycleLength = 0;
-
 const char* pollModeToString(PollMode mode) {
     switch (mode) {
         case POLL_MODE_LIVE:
@@ -120,24 +121,24 @@ String pollCycleToString(const PollScope* cycle, size_t length) {
 void selectPollCycle(PollMode mode) {
     switch (mode) {
         case POLL_MODE_LIVE:
-            activeCycle = liveCycle;
-            cycleLength = sizeof(liveCycle) / sizeof(PollScope);
+            activeCycle       = liveCycle;
+            activeCycleLength = sizeof(liveCycle) / sizeof(PollScope);
             break;
         case POLL_MODE_REACTIVE:
-            activeCycle = reactiveCycle;
-            cycleLength = sizeof(reactiveCycle) / sizeof(PollScope);
+            activeCycle       = reactiveCycle;
+            activeCycleLength = sizeof(reactiveCycle) / sizeof(PollScope);
             break;
         case POLL_MODE_PRELIVE:
-            activeCycle = preLiveCycle;
-            cycleLength = sizeof(preLiveCycle) / sizeof(PollScope);
+            activeCycle       = preLiveCycle;
+            activeCycleLength = sizeof(preLiveCycle) / sizeof(PollScope);
             break;
         case POLL_NORMAL:
         default:
-            activeCycle = relaxedCycle;
-            cycleLength = sizeof(relaxedCycle) / sizeof(PollScope);
+            activeCycle       = relaxedCycle;
+            activeCycleLength = sizeof(relaxedCycle) / sizeof(PollScope);
             break;
     }
-    Liga->ligaPrintln("PollScope = %s", pollCycleToString(activeCycle, cycleLength).c_str());
+    Liga->ligaPrintln("PollScope = %s", pollCycleToString(activeCycle, activeCycleLength).c_str());
 }
 
 PollMode determinePollMode(time_t nextKickoff) {
@@ -153,9 +154,8 @@ PollMode determinePollMode(time_t nextKickoff) {
     return POLL_MODE_RELAXED;
 }
 
-bool checkForChanges() {
-    bool changed = currentLastChange != previousLastChange;
-    return changed;
+bool checkForMatchdayChanges() {
+    return currentMatchdayChanged;
 }
 
 bool tableChanged() {
@@ -164,8 +164,7 @@ bool tableChanged() {
 }
 
 bool kickoffChanged() {
-    // Vergleich mit vorherigem Kickoff-Zeitpunkt
-    return true;                                                                // Dummy
+    return nextKickoffChanged;
 }
 
 uint32_t getPollDelay(PollMode mode) {
@@ -313,34 +312,28 @@ bool waitForTime(uint32_t maxMs, bool report) {
 
 // =========== nicht fertig =======================================
 
-esp_err_t _http_event_handler_match(esp_http_client_event_t* evt) {
-    if (evt->event_id == HTTP_EVENT_ON_DATA && evt->data_len > 0) {
-        Serial.printf("Chunk empfangen: %d Bytes\n", evt->data_len);
-        jsonBuffer.append((char*)evt->data, evt->data_len);
-        Serial.printf("Buffergröße vor JSON: %d\n", jsonBuffer.length());
-    }
-
-    if (evt->event_id == HTTP_EVENT_ON_FINISH) {
-        DynamicJsonDocument  doc(10 * 1024);
-        DeserializationError error = deserializeJson(doc, jsonBuffer);
-        if (!error) {
-            currentChecksum = "";                                               // Reset
-
-            for (JsonObject match : doc.as<JsonArray>()) {
-                String matchId = String((int)match["matchID"]);
-                bool   isLive  = match["matchIsLive"];
-                int    goals   = match["matchResults"].size();
-
-                currentChecksum += matchId + String(isLive) + String(goals);
-            }
-        } else {
-            Serial.printf("JSON-Fehler: %s\n", error.c_str());
+// only show next kickoff from stored data (no openLigaDB access)
+void showNextKickoff() {
+    #ifdef LIGAVERBOSE
+        {
+        TraceScope trace;
+        Liga->ligaPrintln("next Kickoff: %s", nextKickoffString.c_str());
         }
+    #endif
+    time_t now              = time(NULL);
+    diffSecondsUntilKickoff = difftime(currentNextKickoffTime, now);
 
-        jsonBuffer = "";                                                        // Buffer leeren
-    }
+    int totalMinutes = static_cast<int>(diffSecondsUntilKickoff / 60);
+    int days         = totalMinutes / (24 * 60);
+    int hours        = (totalMinutes % (24 * 60)) / 60;
+    int minutes      = totalMinutes % 60;
 
-    return ESP_OK;
+    #ifdef LIGAVERBOSE
+        {
+        TraceScope trace;
+        Liga->ligaPrintln("next Kickoff in %d days, %02d hours, %02d minutes", days, hours, minutes);
+        }
+    #endif
 }
 
 // ---------- getestet und funktioniert----------------------
@@ -356,45 +349,27 @@ esp_err_t _http_event_handler_nextKickoff(esp_http_client_event_t* evt) {
         DeserializationError error = deserializeJson(doc, jsonBuffer);
 
         if (!error) {
-            const char* kickoffStr = doc["matchDateTime"];
-            if (kickoffStr && strlen(kickoffStr) > 0) {
-                #ifdef LIGAVERBOSE
-                    {
-                    TraceScope trace;
-                    Liga->ligaPrintln("next Kickoff: %s", kickoffStr);
-                    }
-                #endif
+            nextKickoffString = doc["matchDateTime"].as<std::string>();         // time string from request
+            if (!nextKickoffString.empty()) {
                 struct tm tmKickoff = {};
-                strptime(kickoffStr, "%Y-%m-%dT%H:%M:%S", &tmKickoff);          //  Umwandlung in time_t
+                strptime(nextKickoffString.c_str(), "%Y-%m-%dT%H:%M:%S", &tmKickoff); //  Umwandlung in time_t
+                currentNextKickoffTime = mktime(&tmKickoff);                    // save next Kickoff time
+                if (currentNextKickoffTime != previousNextKickoffTime)
+                    nextKickoffChanged = true;
+                else
+                    nextKickoffChanged = false;
+
                 previousNextKickoffTime = currentNextKickoffTime;
-                currentNextKickoffTime  = mktime(&tmKickoff);                   // save next Kickoff time
-                time_t now              = time(NULL);
-                double diffSeconds      = difftime(currentNextKickoffTime, now);
+                showNextKickoff();
 
-                int totalMinutes = static_cast<int>(diffSeconds / 60);
-                int days         = totalMinutes / (24 * 60);
-                int hours        = (totalMinutes % (24 * 60)) / 60;
-                int minutes      = totalMinutes % 60;
-
-                #ifdef LIGAVERBOSE
-                    {
-                    TraceScope trace;
-                    Liga->ligaPrintln("next Kickoff in %d days, %02d hours, %02d minutes", days, hours, minutes);
-                    }
-                #endif
-
-                if (diffSeconds >= 0 && diffSeconds <= 600) {
+                if (diffSecondsUntilKickoff >= 0 && diffSecondsUntilKickoff <= 600) {
                     nextKickoffFarAway = false;                                 // kickoff in less then 10 Minutes
-                } else if (diffSeconds < 0 && diffSeconds >= -7200) {
+                } else if (diffSecondsUntilKickoff < 0 && diffSecondsUntilKickoff >= -7200) {
                     nextKickoffFarAway = false;                                 // match is live or even over ( kickoff < 2h)
                 } else {
                     nextKickoffFarAway = true;                                  // kickoff will be far away in the future
                 }
 
-                if (currentNextKickoffTime != previousNextKickoffTime)
-                    nextKickoffChanged = true;
-                else
-                    nextKickoffChanged = false;
             } else {
                 #ifdef LIGAVERBOSE
                     {
@@ -417,8 +392,11 @@ esp_err_t _http_event_handler_nextKickoff(esp_http_client_event_t* evt) {
 
 // Ermittlung des nächsten Anpfiffzeitpunkt
 bool LigaTable::pollNextKickoff() {
+    char url[128];                                                              // ausreichend groß für die komplette URL
+    sprintf(url, "https://api.openligadb.de/getnextmatchbyleagueshortcut/bl1");
     esp_http_client_config_t config = {};
-    config.url                      = "https://api.openligadb.de/getnextmatchbyleagueshortcut/bl1";
+    config.url                      = url;
+    config.user_agent               = flapUserAgent;
     config.event_handler            = _http_event_handler_nextKickoff;
     config.cert_pem                 = OPENLIGA_CA;
     config.buffer_size              = 2048;
@@ -436,8 +414,6 @@ bool LigaTable::pollNextKickoff() {
         return false;
 
     esp_err_t err = esp_http_client_perform(client);
-    esp_http_client_cleanup(client);
-
     if (err != ESP_OK) {
         #ifdef LIGAVERBOSE
             {
@@ -447,6 +423,7 @@ bool LigaTable::pollNextKickoff() {
         #endif
         return false;
     }
+    esp_http_client_cleanup(client);
     if (nextKickoffChanged) {
         #ifdef LIGAVERBOSE
             {
@@ -465,8 +442,9 @@ esp_err_t _http_event_handler_changes(esp_http_client_event_t* evt) {
     }
 
     if (evt->event_id == HTTP_EVENT_ON_FINISH) {
-        previousLastChange = currentLastChange;
-        currentLastChange  = dateTimeBuffer;
+        currentLastChangeOfMatchday = dateTimeBuffer.c_str();
+        currentLastChangeOfMatchday.remove(0, 1);                               // entfernt das erste Zeichen (das Anführungszeichen)
+        currentLastChangeOfMatchday.remove(19);                                 // entfernt alles ab Position 19 (also ".573")
         dateTimeBuffer.clear();
     }
 
@@ -474,13 +452,13 @@ esp_err_t _http_event_handler_changes(esp_http_client_event_t* evt) {
 }
 
 // Ermittlung der letzten Änderung des aktuellen Spieltags
-bool LigaTable::pollForChanges(bool& outchanged) {
-    outchanged = false;
+bool LigaTable::pollForChanges() {
     char url[128];                                                              // ausreichend groß für die komplette URL
     sprintf(url, "https://api.openligadb.de/getlastchangedate/bl1/%d/%d", ligaSeason, ligaMatchday);
     esp_http_client_config_t config = {};
     config.url                      = url;
     config.event_handler            = _http_event_handler_changes;
+    config.user_agent               = flapUserAgent;
     config.cert_pem                 = OPENLIGA_CA;
     config.buffer_size              = 100;
     config.timeout_ms               = 5000;
@@ -493,8 +471,7 @@ bool LigaTable::pollForChanges(bool& outchanged) {
             ligaPrintln("HTTP-Client error");
             }
         #endif
-        outchanged = false;                                                     // no change detected
-
+        currentMatchdayChanged = false;                                         // no change detected
         return false;
     }
 
@@ -506,13 +483,12 @@ bool LigaTable::pollForChanges(bool& outchanged) {
             ligaPrintln("HTTP-Fehler: %s", esp_err_to_name(err));
             }
         #endif
-
-        outchanged = false;                                                     // no change detected
+        currentMatchdayChanged = false;                                         // no change detected
         return false;
     }
     esp_http_client_cleanup(client);
-    if (previousLastChange != currentLastChange) {
-        outchanged = true;
+    if (previousLastChangeOfMatchday != currentLastChangeOfMatchday) {
+        currentMatchdayChanged = true;
         #ifdef LIGAVERBOSE
             {
             TraceScope trace;
@@ -520,7 +496,7 @@ bool LigaTable::pollForChanges(bool& outchanged) {
             }
         #endif
     } else {
-        outchanged = false;
+        currentMatchdayChanged = false;
         #ifdef LIGAVERBOSE
             {
             TraceScope trace;
@@ -528,13 +504,11 @@ bool LigaTable::pollForChanges(bool& outchanged) {
             }
         #endif
     }
+    previousLastChangeOfMatchday = currentLastChangeOfMatchday;                 // remember actual chang as last change
     #ifdef LIGAVERBOSE
-        String cleanTimestamp = String(currentLastChange.c_str());
-        cleanTimestamp.remove(0, 1);                                            // entfernt das erste Zeichen (das Anführungszeichen)
-        cleanTimestamp.remove(19);                                              // entfernt alles ab Position 19 (also ".573")
         struct tm tmLastChange = {};
         tmLastChange.tm_isdst  = -1;                                            // automatische Sommerzeit-Erkennung
-        strptime(cleanTimestamp.c_str(), "%Y-%m-%dT%H:%M:%S", &tmLastChange);
+        strptime(currentLastChangeOfMatchday.c_str(), "%Y-%m-%dT%H:%M:%S", &tmLastChange);
         time_t lastChangeTime = mktime(&tmLastChange);
         time_t now            = time(NULL);
         double diffSeconds    = difftime(now, lastChangeTime);
@@ -545,7 +519,7 @@ bool LigaTable::pollForChanges(bool& outchanged) {
         int    seconds        = static_cast<int>(diffSeconds) % 60;
         {
         TraceScope trace;
-        ligaPrintln("last change date of matchday %d in openLigaDB: %s", ligaMatchday, cleanTimestamp.c_str());
+        ligaPrintln("last change date of matchday %d in openLigaDB: %s", ligaMatchday, currentLastChangeOfMatchday.c_str());
         ligaPrintln("this was was %d days, %d hours, %d minutes, %d seconds ago", days, hours, minutes, seconds);
         }
     #endif
@@ -582,16 +556,35 @@ esp_err_t _http_event_handler_table(esp_http_client_event_t* evt) {
         size_t               jsonSize = jsonBuffer.size();                      // oder evt->data_len aufsummiert
         DynamicJsonDocument  doc(jsonSize * 1.2);
         DeserializationError error = deserializeJson(doc, jsonBuffer);
-        int                  r     = 1;
         if (!error) {
-            JsonArray table = doc.as<JsonArray>();
-            for (JsonObject team : table) {
-                int         rank   = r++;
-                const char* name   = team["teamName"];
-                const char* nick   = team["shortName"];
-                int         points = team["points"];
-                int         td     = team["goalDiff"];
-                Serial.printf("Platz %d: %s - %s Punkte: %d TD: %d\n", rank, name, nick, points, td);
+            snapshotIndex ^= 1;                                                 // Toggle between 0 und 1
+            LigaSnapshot& snapshot = snap[snapshotIndex];                       // local point to snap to be used
+            snapshot.clear();                                                   // Reset actual-Snapshot
+
+            JsonArray table                  = doc.as<JsonArray>();             // read JSON-Data into snap[snapshotIndex]
+            snapshot.teamCount               = table.size();                    // number of teams
+            snap[snapshotIndex].fetchedAtUTC = time(nullptr);                   // actual timestamp
+            for (uint8_t i = 0; i < snapshot.teamCount && i < LIGA_MAX_TEAMS; ++i) {
+                JsonObject team = table[i];
+                LigaRow&   row  = snapshot.rows[i];
+
+                row.pos    = i + 1;
+                row.sp     = team["matches"] | 0;
+                row.pkt    = team["points"] | 0;
+                row.w      = team["won"] | 0;
+                row.l      = team["lost"] | 0;
+                row.d      = team["draw"] | 0;
+                row.g      = team["goals"] | 0;
+                row.og     = team["opponentGoals"] | 0;
+                row.diff   = team["goalDiff"] | 0;
+                row.flap   = i + 1;                                             // Beispiel: Position auf Flap-Display
+                row.dfb[0] = '\0';                                              // erst mal nix
+
+                const char* name = team["teamName"] | "";                       // liefert "" wenn null
+                strncpy(row.team, name ? name : "", sizeof(row.team) - 1);
+                row.team[sizeof(row.team) - 1] = '\0';
+
+                // Serial.printf("Platz %d: %s Punkte: %d TD: %d\n", row.pos, row.team, row.pkt, row.diff);
             }
         } else {
             Serial.printf("JSON-Fehler (Tabelle): %s\n", error.c_str());
@@ -604,8 +597,11 @@ esp_err_t _http_event_handler_table(esp_http_client_event_t* evt) {
 
 // zur Ermittlung der aktuellen Tabelle
 bool LigaTable::pollTable() {
+    char url[128];                                                              // ausreichend groß für die komplette URL
+    sprintf(url, "https://api.openligadb.de/getbltable/bl1/2025");
     esp_http_client_config_t config = {};
-    config.url                      = "https://api.openligadb.de/getbltable/bl1/2025";
+    config.url                      = url;
+    config.user_agent               = flapUserAgent;
     config.event_handler            = _http_event_handler_table;
     config.cert_pem                 = OPENLIGA_CA;
     config.buffer_size              = 2048;
@@ -638,6 +634,7 @@ bool LigaTable::pollCurrentMatchday() {
     esp_http_client_config_t config = {};
     config.url                      = url;
     config.event_handler            = _http_event_handler_matchday;
+    config.user_agent               = flapUserAgent;
     config.cert_pem                 = OPENLIGA_CA;
     config.buffer_size              = 100;
     config.timeout_ms               = 5000;
