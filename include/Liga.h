@@ -51,7 +51,7 @@ enum PollMode {
 };
 
 // global Poll Scopes for actual PollCycle for Poll Manager
-const PollScope relaxedCycle[]  = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, CHECK_FOR_CHANGES};
+const PollScope relaxedCycle[]  = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, FETCH_NEXT_KICKOFF, CHECK_FOR_CHANGES};
 const PollScope reactiveCycle[] = {FETCH_TABLE, FETCH_NEXT_KICKOFF, CHECK_FOR_CHANGES}; // don't ask for nextKickoff during live games
 const PollScope preLiveCycle[]  = {SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};       // don't ask for nextKickoff during live games
 const PollScope liveCycle[]     = {FETCH_TABLE, SHOW_NEXT_KICKOFF, CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, FETCH_GOALS, CHECK_FOR_CHANGES};

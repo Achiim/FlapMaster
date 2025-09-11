@@ -89,13 +89,21 @@ const char* pollScopeToString(PollScope scope) {
             return "FETCH_CURRENT_SEASON";
         case FETCH_NEXT_KICKOFF:
             return "FETCH_NEXT_KICKOFF";
+        case FETCH_NEXT_MATCH:
+            return "FETCH_NEXT_MATCH";
+        case FETCH_LIVE_MATCHES:
+            return "FETCH_NEXT_KICKOFF";
         case FETCH_GOALS:
             return "FETCH_GOALS";
+        case SHOW_NEXT_KICKOFF:
+            return "SHOW_NEXT_KICKOFF";
         case CALC_LEADER_CHANGE:
             return "CALC_LEADER_CHANGE";
         case CALC_RELEGATION_GHOST_CHANGE:
             return "CALC_RELEGATION_GHOST_CHANGE";
         case CALC_RED_LANTERN_CHANGE:
+            return "CALC_RED_LANTERN_CHANGE";
+        case CALC_GOALS:
             return "CALC_RED_LANTERN_CHANGE";
         default:
             return "UNKNOWN_SCOPE";
@@ -186,7 +194,7 @@ uint32_t getPollDelay(PollMode mode) {
     int totalseconds = polltime / 1000;
     int min          = totalseconds / 60;
     int sec          = totalseconds % 60;
-    Liga->ligaPrintln("PollManager will wait for %2d:%2d minutes:seconds", min, sec);
+    Liga->ligaPrintln("PollManager will wait for %d:%02d minutes:seconds", min, sec);
     return polltime;
 }
 
@@ -375,7 +383,7 @@ esp_err_t _http_event_handler_nextKickoff(esp_http_client_event_t* evt) {
                 #ifdef LIGAVERBOSE
                     {
                     TraceScope trace;
-                    Liga->ligaPrintln("next Kickoff in %d days, %d hours, %d minutes", days, hours, minutes);
+                    Liga->ligaPrintln("next Kickoff in %d days, %02d hours, %02d minutes", days, hours, minutes);
                     }
                 #endif
 
@@ -512,7 +520,7 @@ bool LigaTable::pollForChanges(bool& outchanged) {
         #ifdef LIGAVERBOSE
             {
             TraceScope trace;
-            ligaPrintln("OpenLigaDB has changes, please fetch");
+            ligaPrintln("OpenLigaDB has changes against my local data, please fetch actual data");
             }
         #endif
     } else {
@@ -525,9 +533,24 @@ bool LigaTable::pollForChanges(bool& outchanged) {
         #endif
     }
     #ifdef LIGAVERBOSE
+        String cleanTimestamp = String(currentLastChange.c_str());
+        cleanTimestamp.remove(0, 1);                                            // entfernt das erste Zeichen (das Anführungszeichen)
+        cleanTimestamp.remove(19);                                              // entfernt alles ab Position 19 (also ".573")
+        struct tm tmLastChange = {};
+        tmLastChange.tm_isdst  = -1;                                            // automatische Sommerzeit-Erkennung
+        strptime(cleanTimestamp.c_str(), "%Y-%m-%dT%H:%M:%S", &tmLastChange);
+        time_t lastChangeTime = mktime(&tmLastChange);
+        time_t now            = time(NULL);
+        double diffSeconds    = difftime(now, lastChangeTime);
+        int    totalMinutes   = static_cast<int>(diffSeconds / 60);
+        int    days           = totalMinutes / (24 * 60);
+        int    hours          = (totalMinutes % (24 * 60)) / 60;
+        int    minutes        = totalMinutes % 60;
+        int    seconds        = static_cast<int>(diffSeconds) % 60;
         {
         TraceScope trace;
-        ligaPrintln("Letzte Änderung: %s", currentLastChange.c_str());
+        ligaPrintln("last change date of matchday %d in openLigaDB: %s", ligaMatchday, cleanTimestamp.c_str());
+        ligaPrintln("this was was %d days, %d hours, %d minutes, %d seconds ago", days, hours, minutes, seconds);
         }
     #endif
     return err == ESP_OK;
