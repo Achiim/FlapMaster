@@ -20,19 +20,15 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <stdio.h>
+#include <string.h>
 #include "ArduinoJson.h"
-#include <StreamUtils.h>                                                        // 🔧 ChunkedDecodingStream
+// #include <StreamUtils.h>                                                        // 🔧 ChunkedDecodingStream
 #include "secret.h"
 #include "FlapTasks.h"
 #include "Liga.h"
 #include "cert.all"
 
-#include <stdio.h>
-#include <string.h>
-#include "esp_log.h"
-// #include "esp_wifi.h"
-// #include "esp_event.h"
-// #include "nvs_flash.h"
 #include "esp_http_client.h"
 
 #define WIFI_SSID "DEIN_SSID"
