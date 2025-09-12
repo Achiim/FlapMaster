@@ -50,7 +50,8 @@ class ParserClass {                                                             
     void       handleQueueMessage();                                            // read from ParserQueue and filter
     void       analyseClickEvent();                                             // analyse if there is more than a single click
     void       dispatchToTwins();                                               // dispatch key stroke to twins for execution
-    void       dispatchToOther();
+    void       dispatchToOther();                                               // dispatch key stroke to other task for execution
+    void       toggleLeague();                                                  // toggle between BL1 and BL2
 
     // Parser trace
     template <typename... Args>

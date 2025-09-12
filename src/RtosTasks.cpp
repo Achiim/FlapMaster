@@ -56,7 +56,7 @@
  * @param pvParameters Unused (FreeRTOS task prototype requirement).
  */
 void ligaTask(void* pvParameters) {
-    activeLeague        = League::BL2;                                          // use default BL1
+    activeLeague        = League::BL1;                                          // use default BL1
     ligaSeason          = 0;                                                    // global actual Season
     ligaMatchday        = 0;                                                    // global actual Matchday
     bool isSomeThingNew = false;                                                // no changes on liga
@@ -84,13 +84,6 @@ void ligaTask(void* pvParameters) {
         Liga->ligaPrintln("LigaTask successfully started");                     // Pure log forvisibility
         }
     #endif
-
-    /*
-        ReportCommand repCmd;                                                   // Command for reporting task
-        repCmd.repCommand   = REPORT_LIGA_TABLE;                                // Report type: league table
-        repCmd.responsQueue = nullptr;                                          // Fire-and-forget reporting
-        static LigaSnapshot snap;                                               // Current Bundesliga table snapshot (static to avoid task stack
-    */
 
     currentPollMode = POLL_MODE_RELAXED;
     nextPollMode    = POLL_MODE_RELAXED;
@@ -126,9 +119,12 @@ void ligaTask(void* pvParameters) {
                 case FETCH_GOALS:
                     // optional
                     break;
-                case CALC_LEADER_CHANGE:
-                    // optional
+                case CALC_LEADER_CHANGE: {
+                    const LigaRow* oldLeaderOut = nullptr;
+                    const LigaRow* newLeaderOut = nullptr;
+                    Liga->detectLeaderChange(snap[snapshotIndex], snap[snapshotIndex ^ 1], &oldLeaderOut, &newLeaderOut);
                     break;
+                }
                 case CALC_RELEGATION_GHOST_CHANGE:
                     // optional
                     break;

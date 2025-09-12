@@ -196,11 +196,13 @@ void FlapReporting::printTableRow(const LigaRow& r) {
 // render Bundesliga table:
 void FlapReporting::renderLigaTable(const LigaSnapshot& s) {
     if (s.teamCount == 0) {
-        Serial.println(F("(Liga) No data available."));
+        Liga->ligaPrintln("(League %s) No data available.", leagueShortcut(activeLeague));
         return;
     }
 
-    Serial.print(F("Bundesliga Table: Season "));
+    Serial.print(F("Bundesliga "));
+    Serial.print(leagueShortcut(activeLeague));
+    Serial.print(F(" Table: Season "));
     Serial.print(s.season);
     Serial.print(F(", Matchday "));
     Serial.println(s.matchday);

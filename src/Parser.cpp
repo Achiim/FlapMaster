@@ -508,13 +508,16 @@ ReportCommand ParserClass::mapEvent2Report(ClickEvent event) {
 void ParserClass::mapEvent2Parser(ClickEvent event) {
     switch (event.key) {
         case Key21::KEY_CH_MINUS:
-            selectPrevTwin();
+            selectPrevTwin();                                                   // previous twin in UNICAST mode
             break;
         case Key21::KEY_CH:
-            toggleBroadcastMode();
+            toggleBroadcastMode();                                              // toggle MODE_BROADCAST / MODE UNICAST
             break;
         case Key21::KEY_CH_PLUS:
-            selectNextTwin();
+            selectNextTwin();                                                   // next twin in UNICAST mode
+            break;
+        case Key21::KEY_EQ:
+            toggleLeague();                                                     // toggle league BL1 / BL2
             break;
         default: {
             #ifdef ERRORVERBOSE
@@ -528,6 +531,45 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
         }
     }
 }
+
+// -----------------------------
+
+/**
+ * @brief toggle league BL1 / BL2
+ *
+ */
+void ParserClass::toggleLeague() {
+    if (activeLeague == League::BL1) {
+        activeLeague = League::BL2;
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            parserPrintln("switched to League BL2");
+            }
+        #endif
+    } else {
+        activeLeague = League::BL1;
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;
+            parserPrintln("switched to League BL1");
+            }
+        #endif
+    }
+    snap[snapshotIndex].clear();                                                // clear actual snapshot
+    snap[snapshotIndex ^ 1].clear();                                            // clear other snapshot
+    ligaSeason                   = 0;                                           // reset actual Season
+    ligaMatchday                 = 0;                                           // reset actual Matchday
+    currentLastChangeOfMatchday  = "";                                          // openLigaDB Matchday change state
+    previousLastChangeOfMatchday = "";                                          // openLigaDB Matchday change state
+    currentMatchdayChanged       = false;                                       // no chances
+    nextKickoffChanged           = false;                                       // no chances
+    nextKickoffFarAway           = true;                                        // assume far away
+    currentNextKickoffTime       = 0;                                           // reset
+    previousNextKickoffTime      = 0;                                           // reset
+    diffSecondsUntilKickoff      = 0;                                           // reset
+    nextKickoffString            = "";                                          // reset
+};
 
 // -----------------------------
 

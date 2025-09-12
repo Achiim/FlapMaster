@@ -558,8 +558,8 @@ esp_err_t _http_event_handler_table(esp_http_client_event_t* evt) {
         DynamicJsonDocument  doc(jsonSize * 1.2);
         DeserializationError error = deserializeJson(doc, jsonBuffer);
         if (!error) {
-            snapshotIndex ^= 1;                                                 // Toggle between 0 und 1
             LigaSnapshot& snapshot = snap[snapshotIndex];                       // local point to snap to be used
+            snapshotIndex ^= 1;                                                 // Toggle between 0 und 1
             snapshot.clear();                                                   // Reset actual-Snapshot
 
             JsonArray table    = doc.as<JsonArray>();                           // read JSON-Data into snap[snapshotIndex]
@@ -730,4 +730,81 @@ bool connectToWifi() {
         }
     }
     return true;                                                                // success
+}
+
+// ---------------------------
+
+/**
+ * @brief Detect whether the table leader changed between two snapshots.
+ *
+ * Compares row 0 ("leader") of both snapshots. If either snapshot has no
+ * rows, this returns false. Identity check prefers the DFB short code when
+ * both are present; otherwise falls back to an exact team-name comparison.
+ *
+ * @param oldSnap Previously active snapshot.
+ * @param newSnap Newly active snapshot.
+ * @param oldLeaderOut (optional) Receives the previous leader row (row 0).
+ * @param newLeaderOut (optional) Receives the new leader row (row 0).
+ * @return true if the leader team changed; false otherwise.
+ *         Note: Returns false if either snapshot is empty (e.g. on first call). */
+bool LigaTable::detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut,
+                                   const LigaRow** newLeaderOut) {
+    if (oldSnap.teamCount == 0 || newSnap.teamCount == 0) {
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope  trace;
+            const char* leaderTeam = (newSnap.teamCount > 0) ? newSnap.rows[0].team : "(none)";
+            ligaPrintln("no leader change: '%s' -> '%s'", leaderTeam, leaderTeam);
+            }
+        #endif
+        return false;
+    }
+    const LigaRow& oldL = oldSnap.rows[0];
+    const LigaRow& newL = newSnap.rows[0];
+
+    // Prefer DFB code if both present
+    if (oldL.dfb[0] != '\0' && newL.dfb[0] != '\0') {
+        if (strcmp(oldL.dfb, newL.dfb) == 0) {
+            if (oldLeaderOut)
+                *oldLeaderOut = &oldL;
+            if (newLeaderOut)
+                *newLeaderOut = &newL;
+                #ifdef LIGAVERBOSE
+                    {
+                    TraceScope trace;
+                    ligaPrintln("no leader change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldL.team, newL.team, oldL.pkt, newL.pkt, oldL.diff, newL.diff);
+                    }
+                #endif
+            return false;                                                       // same leader
+        }
+    } else {
+        // Fallback: exact team name compare
+        if (strcmp(oldL.team, newL.team) == 0) {
+            if (oldLeaderOut)
+                *oldLeaderOut = &oldL;
+            if (newLeaderOut)
+                *newLeaderOut = &newL;
+                #ifdef LIGAVERBOSE
+                    {
+                    TraceScope trace;
+                    ligaPrintln("no leader change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldL.team, newL.team, oldL.pkt, newL.pkt, oldL.diff, newL.diff);
+                    }
+                #endif
+            return false;                                                       // same leader
+        }
+    }
+
+    // Leader changed
+    if (oldLeaderOut)
+        *oldLeaderOut = &oldL;
+    if (newLeaderOut)
+        *newLeaderOut = &newL;
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope trace;
+            ligaPrintln("leader change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldL.team, newL.team, oldL.pkt, newL.pkt, oldL.diff, newL.diff);
+            }
+        #endif
+
+    return true;
 }
