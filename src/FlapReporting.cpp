@@ -45,7 +45,7 @@ FlapReporting::FlapReporting() {}
 
 // trace liga tabelle
 void FlapReporting::reportLigaTable() {
-    renderLigaTable(snap[snapshotIndex]);
+    renderLigaTable(snap[snapshotIndex ^ 1]);
 };
 
 // ==== UTF-8 helpers: crop by code points (not bytes), pad with spaces ====
@@ -579,16 +579,13 @@ uint32_t FlapReporting::getNextAvailabilityRemainingMs() {
  */
 uint32_t FlapReporting::getNextLigaScanRemainingMs() {
     // Quick outs: no timer or not active → no countdown
-    if (!ligaScanTimer || xTimerIsTimerActive(ligaScanTimer) != pdTRUE) {
-        return 0u;
-    }
+    uint32_t now       = millis();
+    uint32_t remaining = (pollManagerStartOfWaiting + pollManagerDynamicWait) - now;
 
-    const TickType_t now    = xTaskGetTickCount();
-    const TickType_t expiry = xTimerGetExpiryTime(ligaScanTimer);
+    if (remaining < 0)
+        remaining = 0;                                                          // falls schon abgelaufen
 
-    // Signed subtraction is rollover-safe in FreeRTOS tick math
-    const int32_t diff = (int32_t)(expiry - now);
-    return (diff > 0) ? pdTICKS_TO_MS((TickType_t)diff) : 0u;
+    return remaining;                                                           // kein Timer aktiv
 }
 
 // ----------------------------

@@ -51,10 +51,12 @@ bool        nextKickoffFarAway      = true;
 double      diffSecondsUntilKickoff = 0;
 std::string nextKickoffString;
 
-PollMode         currentPollMode   = POLL_MODE_RELAXED;                         // global poll mode of poll mananger
-PollMode         nextPollMode      = POLL_MODE_RELAXED;
-const PollScope* activeCycle       = nullptr;
-size_t           activeCycleLength = 0;
+PollMode         currentPollMode           = POLL_MODE_RELAXED;                 // global poll mode of poll mananger
+PollMode         nextPollMode              = POLL_MODE_RELAXED;
+const PollScope* activeCycle               = nullptr;
+size_t           activeCycleLength         = 0;
+uint32_t         pollManagerDynamicWait    = 0;                                 // wait time according to current poll mode
+uint32_t         pollManagerStartOfWaiting = 0;                                 // time_t when entering waiting
 
 LigaSnapshot snap[2];                                                           // actual and previous table
 uint8_t      snapshotIndex = 0;                                                 // 0 or 1
@@ -227,6 +229,17 @@ void configureTime() {
     // --- Timezone + NTP sync ---------------------------------------------------
     configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov"); // Configure CET/CEST with common NTP servers
     waitForTime();                                                              // Block until system time is synced (bounded wait with logging)
+
+    #ifdef LIGAVERBOSE
+        {
+        time_t     now      = time(NULL);                                       // get local time as time_t
+        struct tm* timeinfo = localtime(&now);                                  // convert to local time structure
+        char       buffer[32];
+        strftime(buffer, sizeof(buffer), "%d.%m.%Y %H:%M:%S", timeinfo);
+        TraceScope trace;
+        Liga->ligaPrintln("actual synchronized time %s", buffer);               // show time
+        }
+    #endif
 }
 
 // --- Init Liga Task  ---------------------------------------------------
@@ -354,6 +367,7 @@ esp_err_t _http_event_handler_nextKickoff(esp_http_client_event_t* evt) {
             if (!nextKickoffString.empty()) {
                 struct tm tmKickoff = {};
                 strptime(nextKickoffString.c_str(), "%Y-%m-%dT%H:%M:%S", &tmKickoff); //  Umwandlung in time_t
+                tmKickoff.tm_isdst     = -1;                                    // System soll Sommerzeit selbst erkennen
                 currentNextKickoffTime = mktime(&tmKickoff);                    // save next Kickoff time
                 if (currentNextKickoffTime != previousNextKickoffTime)
                     nextKickoffChanged = true;
@@ -521,7 +535,7 @@ bool LigaTable::pollForChanges() {
         {
         TraceScope trace;
         ligaPrintln("last change date of matchday %d in openLigaDB: %s", ligaMatchday, currentLastChangeOfMatchday.c_str());
-        ligaPrintln("this was was %d days, %d hours, %d minutes, %d seconds ago", days, hours, minutes, seconds);
+        ligaPrintln("this was %d days, %d hours, %d minutes, %d seconds ago", days, hours, minutes, seconds);
         }
     #endif
     return err == ESP_OK;
@@ -572,21 +586,25 @@ esp_err_t _http_event_handler_table(esp_http_client_event_t* evt) {
                 JsonObject team = table[i];
                 LigaRow&   row  = snapshot.rows[i];
 
-                row.pos    = i + 1;
-                row.sp     = team["matches"] | 0;
-                row.pkt    = team["points"] | 0;
-                row.w      = team["won"] | 0;
-                row.l      = team["lost"] | 0;
-                row.d      = team["draw"] | 0;
-                row.g      = team["goals"] | 0;
-                row.og     = team["opponentGoals"] | 0;
-                row.diff   = team["goalDiff"] | 0;
-                row.flap   = i + 1;                                             // Beispiel: Position auf Flap-Display
-                row.dfb[0] = '\0';                                              // erst mal nix
+                row.pos  = i + 1;
+                row.sp   = team["matches"] | 0;
+                row.pkt  = team["points"] | 0;
+                row.w    = team["won"] | 0;
+                row.l    = team["lost"] | 0;
+                row.d    = team["draw"] | 0;
+                row.g    = team["goals"] | 0;
+                row.og   = team["opponentGoals"] | 0;
+                row.diff = team["goalDiff"] | 0;
 
                 const char* name = team["teamName"] | "";                       // liefert "" wenn null
                 strncpy(row.team, name ? name : "", sizeof(row.team) - 1);
-                row.team[sizeof(row.team) - 1] = '\0';
+                row.team[sizeof(row.team) - 1] = '\0';                          // Teamname
+
+                row.flap = flapForTeamStrict(row.team);                         // Position auf Flap-Display
+
+                String dfb = dfbCodeForTeamStrict(row.team);                    // liefert "" wenn null
+                strncpy(row.dfb, dfb.c_str(), sizeof(row.dfb) - 1);
+                row.dfb[3] = '\0';                                              // manuell nullterminieren
 
                 // Serial.printf("Platz %d: %s Punkte: %d TD: %d\n", row.pos, row.team, row.pkt, row.diff);
             }
@@ -807,4 +825,207 @@ bool LigaTable::detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapsh
         #endif
 
     return true;
+}
+
+/**
+ * @brief Look up the DFB code for a given team name (strict).
+ *
+ * Searches through the team mapping arrays (DFB1 and DFB2) to find a
+ * team with a matching key. If a match is found, its DFB code string
+ * is returned.
+ *
+ * Strict mode: if no team matches, an empty string is returned.
+ *
+ * @param teamName Team name as provided by OpenLigaDB.
+ * @return String containing the DFB code, or empty string if not found.
+ */
+String dfbCodeForTeamStrict(const String& teamName) {
+    String key = teamName;
+    for (auto& e : DFB1)
+        if (key == e.key)
+            return e.code;
+    for (auto& e : DFB2)
+        if (key == e.key)
+            return e.code;
+    return "";                                                                  // strict: no match => return empty string
+}
+
+/**
+ * @brief Look up the flap index for a given team name (strict).
+ *
+ * Searches through the team mapping arrays (DFB1 and DFB2) to find a
+ * team with a matching key. If a match is found, its flap index is
+ * returned.
+ *
+ * Strict mode: if no team matches, -1 is returned.
+ *
+ * @param teamName Team name as provided by OpenLigaDB.
+ * @return Flap index (integer), or -1 if not found.
+ */
+int flapForTeamStrict(const String& teamName) {
+    String key = teamName;
+    for (auto& e : DFB1)
+        if (key == e.key)
+            return e.flap;
+    for (auto& e : DFB2)
+        if (key == e.key)
+            return e.flap;
+    return -1;                                                                  // strict: no match => return -1
+}
+
+/**
+ * @brief Detect whether the "red lantern" (last place) team changed between two snapshots.
+ *
+ * Compares the last row of both snapshots. If either snapshot has no
+ * rows, this returns false. Identity check prefers the DFB short code when
+ * both are present; otherwise falls back to an exact team-name comparison.
+ *
+ * @param oldSnap Previously active snapshot.
+ * @param newSnap Newly active snapshot.
+ * @param oldLanternOut (optional) Receives the previous last-place row.
+ * @param newLanternOut (optional) Receives the new last-place row.
+ * @return true if the last-place team changed; false otherwise.
+ *         Note: Returns false if either snapshot is empty (e.g. on first call).
+ */
+bool LigaTable::detectRedLanternChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLanternOut,
+                                       const LigaRow** newLanternOut) {
+    if (oldSnap.teamCount == 0 || newSnap.teamCount == 0) {
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope  trace;
+            const char* redLantern = (newSnap.teamCount > 0) ? newSnap.rows[newSnap.teamCount - 1].team : "(none)";
+            ligaPrintln("no red lantern change: '%s' -> '%s'", redLantern, redLantern);
+            }
+        #endif
+        return false;
+    }
+
+    const LigaRow& oldB = oldSnap.rows[oldSnap.teamCount - 1];
+    const LigaRow& newB = newSnap.rows[newSnap.teamCount - 1];
+
+    // Prefer DFB code if both present
+    if (oldB.dfb[0] != '\0' && newB.dfb[0] != '\0') {
+        if (strcmp(oldB.dfb, newB.dfb) == 0) {
+            if (oldLanternOut)
+                *oldLanternOut = &oldB;
+            if (newLanternOut)
+                *newLanternOut = &newB;
+                #ifdef LIGAVERBOSE
+                    {
+                    TraceScope trace;
+                    ligaPrintln("no red lantern change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldB.team, newB.team, oldB.pkt, newB.pkt, oldB.diff,
+                    newB.diff);
+                    }
+                #endif
+            return false;                                                       // same last-place team
+        }
+    } else {
+        // Fallback: exact team name compare
+        if (strcmp(oldB.team, newB.team) == 0) {
+            if (oldLanternOut)
+                *oldLanternOut = &oldB;
+            if (newLanternOut)
+                *newLanternOut = &newB;
+                #ifdef LIGAVERBOSE
+                    {
+                    TraceScope trace;
+                    ligaPrintln("no red lantern change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldB.team, newB.team, oldB.pkt, newB.pkt, oldB.diff,
+                    newB.diff);
+                    }
+                #endif
+            return false;                                                       // same last-place team
+        }
+    }
+
+    // Red lantern changed
+    if (oldLanternOut)
+        *oldLanternOut = &oldB;
+    if (newLanternOut)
+        *newLanternOut = &newB;
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope trace;
+            ligaPrintln("red lantern change: '%s' -> '%s' (pts %u→%u, diff %d→%d)", oldB.team, newB.team, oldB.pkt, newB.pkt, oldB.diff, newB.diff);
+            }
+        #endif
+
+    return true;
+}
+
+/**
+ * @brief Detect whether the "relegation ghost" (ranks 16 & 17) changed between two snapshots.
+ *
+ * Compares ranks 16 and 17 of both snapshots. If either snapshot has no rows,
+ * this returns false but logs the current teams as "no change".
+ * Note: Rank 18 ("red lantern") is handled separately.
+ *
+ * @param oldSnap Previously active snapshot.
+ * @param newSnap Newly active snapshot.
+ * @param oldZoneOut (optional) Receives the previous rows for ranks 16 & 17.
+ * @param newZoneOut (optional) Receives the new rows for ranks 16 & 17.
+ * @return true if the set of relegation-zone teams changed; false otherwise.
+ */
+bool LigaTable::detectRelegationGhostChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldZoneOut,
+                                            const LigaRow** newZoneOut) {
+    if (oldSnap.teamCount < 17 || newSnap.teamCount < 17) {
+        #ifdef LIGAVERBOSE
+            {
+            TraceScope trace;
+            ligaPrintln("no relegation ghost change: insufficient teams");
+            }
+        #endif
+        return false;
+    }
+
+    const LigaRow* oldZone[2] = {&oldSnap.rows[15], &oldSnap.rows[16]};
+    const LigaRow* newZone[2] = {&newSnap.rows[15], &newSnap.rows[16]};
+
+    if (oldZoneOut)
+        *oldZoneOut = oldZone[0];                                               // optional: oder beide separat übergeben
+    if (newZoneOut)
+        *newZoneOut = newZone[0];
+
+    auto sameTeam = [](const LigaRow* a, const LigaRow* b) {
+        if (a->dfb[0] != '\0' && b->dfb[0] != '\0')
+            return strcmp(a->dfb, b->dfb) == 0;
+        return strcmp(a->team, b->team) == 0;
+    };
+
+    bool changed = false;
+
+    // Check entrants
+    for (auto* n : newZone) {
+        bool found = false;
+        for (auto* o : oldZone) {
+            if (sameTeam(o, n)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            #ifdef LIGAVERBOSE
+                ligaPrintln("relegation ghost: new entrant '%s'", n->team);
+            #endif
+            changed = true;
+        }
+    }
+
+    // Check exits
+    for (auto* o : oldZone) {
+        bool found = false;
+        for (auto* n : newZone) {
+            if (sameTeam(o, n)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            #ifdef LIGAVERBOSE
+                ligaPrintln("relegation ghost: team left '%s'", o->team);
+            #endif
+            changed = true;
+        }
+    }
+
+    return changed;
 }

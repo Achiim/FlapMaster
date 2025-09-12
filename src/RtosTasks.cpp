@@ -125,12 +125,18 @@ void ligaTask(void* pvParameters) {
                     Liga->detectLeaderChange(snap[snapshotIndex], snap[snapshotIndex ^ 1], &oldLeaderOut, &newLeaderOut);
                     break;
                 }
-                case CALC_RELEGATION_GHOST_CHANGE:
-                    // optional
+                case CALC_RELEGATION_GHOST_CHANGE: {
+                    const LigaRow* oldRZOut = nullptr;
+                    const LigaRow* newRZOut = nullptr;
+                    Liga->detectRelegationGhostChange(snap[snapshotIndex], snap[snapshotIndex ^ 1], &oldRZOut, &newRZOut);
                     break;
-                case CALC_RED_LANTERN_CHANGE:
-                    // optional
+                }
+                case CALC_RED_LANTERN_CHANGE: {
+                    const LigaRow* oldRLOut = nullptr;
+                    const LigaRow* newRLOut = nullptr;
+                    Liga->detectRedLanternChange(snap[snapshotIndex], snap[snapshotIndex ^ 1], &oldRLOut, &newRLOut);
                     break;
+                }
             }
         }
         // change poll mode depending on data
@@ -154,8 +160,9 @@ void ligaTask(void* pvParameters) {
         currentPollMode = nextPollMode;
         isSomeThingNew  = false;                                                // reset openLigaDB changed flag
 
-        uint32_t dynamicWait = getPollDelay(currentPollMode);                   // wait according to next PollScope that will be active
-        vTaskDelay(pdMS_TO_TICKS(dynamicWait));
+        pollManagerDynamicWait    = getPollDelay(currentPollMode);              // wait according to next PollScope that will be active
+        pollManagerStartOfWaiting = millis();                                   // remember start of wait time
+        vTaskDelay(pdMS_TO_TICKS(pollManagerDynamicWait));
     }
 }
 

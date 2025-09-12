@@ -67,8 +67,8 @@ enum PollMode {
 
 // global Poll Scopes for actual PollCycle for Poll Manager
 const PollScope relaxedCycle[]  = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, FETCH_NEXT_KICKOFF, CHECK_FOR_CHANGES};
-const PollScope reactiveCycle[] = {FETCH_TABLE, CALC_LEADER_CHANGE, SHOW_NEXT_KICKOFF,
-                                   CHECK_FOR_CHANGES};                          // don't ask for nextKickoff during live games
+const PollScope reactiveCycle[] = {FETCH_TABLE,       CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, CALC_RED_LANTERN_CHANGE,
+                                   SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};       // don't ask for nextKickoff during live games
 const PollScope preLiveCycle[]  = {SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};       // don't ask for nextKickoff during live games
 const PollScope liveCycle[]     = {FETCH_TABLE, SHOW_NEXT_KICKOFF, CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, FETCH_GOALS, CHECK_FOR_CHANGES};
 // ==== enums ====
@@ -144,6 +144,8 @@ extern const PollScope* activeCycle;                                            
 extern size_t           activeCycleLength;                                      // number of PollSopes in activeCycle
 extern PollMode         currentPollMode;                                        // current poll mode of poll mananger
 extern PollMode         nextPollMode;                                           // poll mode for next PollCycle
+extern uint32_t         pollManagerDynamicWait;                                 // wait time according to current poll mode
+extern uint32_t         pollManagerStartOfWaiting;                              // time_t when entering waiting state
 
 // openLigaDB data
 extern LigaSnapshot snap[2];                                                    // current and previus table snapshot
@@ -176,6 +178,9 @@ bool openLigaDBHealthCheck();
 bool checkForMatchdayChanges();
 void showNextKickoff();
 
+String dfbCodeForTeamStrict(const String& teamName);
+int    flapForTeamStrict(const String& teamName);
+
 class LigaTable {
    public:
     // Constructor for LigaTable
@@ -187,6 +192,9 @@ class LigaTable {
     bool pollCurrentMatchday();
     bool pollNextKickoff();
     bool detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut, const LigaRow** newLeaderOut);
+    bool detectRelegationGhostChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldRGOut, const LigaRow** newRGOut);
+    bool detectRedLanternChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldRLOut, const LigaRow** newRLOut);
+
     // Liga trace
     template <typename... Args>
     void ligaPrint(const Args&... args) {                                       // standard parserPrint
