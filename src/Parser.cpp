@@ -556,6 +556,8 @@ void ParserClass::toggleLeague() {
             }
         #endif
     }
+
+    nextPollMode = PollMode::POLL_MODE_NONE;                                    // start with NONE cycle
     snap[snapshotIndex].clear();                                                // clear actual snapshot
     snap[snapshotIndex ^ 1].clear();                                            // clear other snapshot
     ligaSeason                   = 0;                                           // reset actual Season

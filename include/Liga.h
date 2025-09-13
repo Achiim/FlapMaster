@@ -25,6 +25,7 @@
 #define flapUserAgent "Liga Flap Display V1.0 ESP32"
 #define LIGA_MAX_TEAMS 18
 
+#define POLL_NOWAIT (0)                                                         // no wait at all
 #define POLL_GET_ALL_CHANGES (10 * 1000)                                        // 10 seconds
 #define POLL_DURING_GAME (30 * 1000)                                            // 30 seconds
 #define POLL_10MIN_BEFORE_KICKOFF (2 * 60 * 1000)                               // 2 minutes
@@ -47,7 +48,7 @@ enum PollScope {
     FETCH_CURRENT_MATCHDAY,                                                     // fetch actual matchday
     FETCH_CURRENT_SEASON,                                                       // fetch actuel season
     FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff (don't fetch during game is live)
-    FETCH_LIVE_MATCHES,                                                         //
+    FETCH_LIVE_MATCHES,                                                         // fetch live matches
     FETCH_GOALS,                                                                //
     FETCH_NEXT_MATCH,                                                           //
     SHOW_NEXT_KICKOFF,                                                          // show next kickoff from stored data
@@ -59,6 +60,8 @@ enum PollScope {
 
 // global Poll Modes
 enum PollMode {
+    POLL_MODE_NONE,                                                             // no polling at all
+    POLL_MODE_ONCE,                                                             // poll only once and then switch to relaxed
     POLL_MODE_RELAXED,                                                          // relaxed poll wide outside of live activity
     POLL_MODE_REACTIVE,                                                         // something was changed in openLigaDB data -> get it
     POLL_MODE_PRELIVE,                                                          // shortly befor next live game
@@ -66,11 +69,13 @@ enum PollMode {
 };
 
 // global Poll Scopes for actual PollCycle for Poll Manager
+const PollScope onceCycle[]     = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, FETCH_LIVE_MATCHES, FETCH_NEXT_KICKOFF};
 const PollScope relaxedCycle[]  = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, FETCH_NEXT_KICKOFF, CHECK_FOR_CHANGES};
 const PollScope reactiveCycle[] = {FETCH_TABLE,       CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, CALC_RED_LANTERN_CHANGE,
                                    SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};       // don't ask for nextKickoff during live games
 const PollScope preLiveCycle[]  = {SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};       // don't ask for nextKickoff during live games
-const PollScope liveCycle[]     = {FETCH_TABLE, SHOW_NEXT_KICKOFF, CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, FETCH_GOALS, CHECK_FOR_CHANGES};
+const PollScope liveCycle[]     = {FETCH_TABLE, SHOW_NEXT_KICKOFF, CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, CALC_RED_LANTERN_CHANGE,
+                                   FETCH_GOALS, CHECK_FOR_CHANGES};
 // ==== enums ====
 
 // ==== Structures / Data Types ====
@@ -146,6 +151,7 @@ extern PollMode         currentPollMode;                                        
 extern PollMode         nextPollMode;                                           // poll mode for next PollCycle
 extern uint32_t         pollManagerDynamicWait;                                 // wait time according to current poll mode
 extern uint32_t         pollManagerStartOfWaiting;                              // time_t when entering waiting state
+extern bool             isSomeThingNew;                                         // flag that openLigaDB data has changed
 
 // openLigaDB data
 extern LigaSnapshot snap[2];                                                    // current and previus table snapshot
@@ -159,9 +165,12 @@ extern time_t      currentNextKickoffTime;
 extern time_t      previousNextKickoffTime;
 extern bool        nextKickoffChanged;
 extern bool        nextKickoffFarAway;
+extern bool        matchIsLive;
 extern std::string dateTimeBuffer;                                              // temp buffer to request
 extern String      currentLastChangeOfMatchday;                                 // actual change date
 extern String      previousLastChangeOfMatchday;                                // old change date
+extern int         ligaMatchLiveCount;                                          // number of live matches in current matchday
+
 // ==== global Variables ====
 
 // global Funtions
@@ -173,6 +182,8 @@ void        printTime(const char* label);
 uint32_t    getPollDelay(PollMode mode);
 void        selectPollCycle(PollMode mode);
 const char* pollModeToString(PollMode mode);
+void        processPollScope(PollScope scope);
+PollMode    determineNextPollMode();
 
 bool openLigaDBHealthCheck();
 bool checkForMatchdayChanges();

@@ -55,6 +55,61 @@
  *
  * @param pvParameters Unused (FreeRTOS task prototype requirement).
  */
+
+void ligaTask(void* pvParameters) {
+    activeLeague   = League::BL1;
+    ligaSeason     = 0;
+    ligaMatchday   = 0;
+    isSomeThingNew = false;
+
+    snap[snapshotIndex].clear();
+    snap[snapshotIndex ^ 1].clear();
+
+    if (!initLigaTask()) {
+        #ifdef ERRORVERBOSE
+            {
+            TraceScope trace;
+            masterPrintln("LigaTask not correct initialized");
+            }
+        #endif
+
+        while (true) {
+            vTaskDelay(pdMS_TO_TICKS(30000));
+        }
+    }
+
+    #ifdef LIGAVERBOSE
+        {
+        TraceScope trace;
+        Liga->ligaPrintln("LigaTask successfully started");
+        }
+    #endif
+
+    currentPollMode = POLL_MODE_NONE;                                           // we do not poll now
+
+    while (true) {
+        selectPollCycle(currentPollMode);                                       // setzt activeCycle + activeCycleLength
+
+        for (size_t i = 0; i < activeCycleLength; ++i) {
+            PollScope scope = activeCycle[i];
+            processPollScope(scope);
+        }
+
+        nextPollMode = determineNextPollMode();
+
+        if (currentPollMode != nextPollMode) {
+            Liga->ligaPrintln("PollMode changed from %s to %s", pollModeToString(currentPollMode), pollModeToString(nextPollMode));
+        }
+
+        currentPollMode = nextPollMode;
+        isSomeThingNew  = false;
+
+        pollManagerDynamicWait    = getPollDelay(currentPollMode);
+        pollManagerStartOfWaiting = millis();
+        vTaskDelay(pdMS_TO_TICKS(pollManagerDynamicWait));
+    }
+}
+/*
 void ligaTask(void* pvParameters) {
     activeLeague        = League::BL1;                                          // use default BL1
     ligaSeason          = 0;                                                    // global actual Season
@@ -140,17 +195,21 @@ void ligaTask(void* pvParameters) {
             }
         }
         // change poll mode depending on data
-        if (!nextKickoffFarAway) {
-            nextPollMode = POLL_MODE_PRELIVE;                                   // change mode 10 minutes before live match
+        if (matchIsLive) {                                                      // during live match
+            nextPollMode = POLL_MODE_LIVE;
         } else {
-            if (isSomeThingNew) {                                               // openLigaDB data has changed
-                nextPollMode = POLL_MODE_REACTIVE;
-            } else if (currentPollMode == POLL_MODE_REACTIVE) {
-                nextPollMode = POLL_MODE_RELAXED;
-            } else if (currentPollMode == POLL_MODE_LIVE || currentPollMode == POLL_MODE_PRELIVE) { // match is over
-                nextPollMode = POLL_MODE_REACTIVE;
+            if (!nextKickoffFarAway) {
+                nextPollMode = POLL_MODE_PRELIVE;                               // change mode 10 minutes before live match
             } else {
-                nextPollMode = currentPollMode;                                 // no chane of mode
+                if (isSomeThingNew && !matchIsLive) {                           // openLigaDB data has changed
+                    nextPollMode = POLL_MODE_REACTIVE;
+                } else if (currentPollMode == POLL_MODE_REACTIVE) {
+                    nextPollMode = POLL_MODE_RELAXED;
+                } else if (currentPollMode == POLL_MODE_LIVE || currentPollMode == POLL_MODE_PRELIVE) { // match is over
+                    nextPollMode = POLL_MODE_REACTIVE;
+                } else {
+                    nextPollMode = currentPollMode;                             // no chane of mode
+                }
             }
         }
         if (currentPollMode != nextPollMode) {
@@ -165,7 +224,7 @@ void ligaTask(void* pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(pollManagerDynamicWait));
     }
 }
-
+*/
 // ----------------------------
 //      ___               _        ___         _           _
 //     | _ \___ _ __  ___| |_ ___ / __|___ _ _| |_ _ _ ___| |

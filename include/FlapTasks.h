@@ -35,7 +35,7 @@
 #define PRIO_STATISTICS 1                                                       // Statistics Task
 
 // Task Stack sizes
-#define STACK_LIGA 4.5 * 1024                                                   // Liga Task (18kB)
+#define STACK_LIGA 5.5 * 1024                                                   // Liga Task (18kB)
 #define STACK_TWIN 1.5 * 1024                                                   // Twin Tasks 0-n (6kB per Task)
 #define STACK_REGISTRY 2 * 1024                                                 // Registry Task (8 kB)
 #define STACK_REPORT 2 * 1024                                                   // Reporting Task (8 kB)
