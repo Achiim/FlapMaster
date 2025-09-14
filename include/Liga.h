@@ -48,7 +48,7 @@ enum PollScope {
     FETCH_CURRENT_MATCHDAY,                                                     // fetch actual matchday
     FETCH_CURRENT_SEASON,                                                       // fetch actuel season
     FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff (don't fetch during game is live)
-    FETCH_LIVE_MATCHES,                                                         // fetch live matches
+    FETCH_LIVE_MATCHES,                                                         // fetch live matches, that are in future or kickoff was 2,5 hours ago
     FETCH_GOALS,                                                                //
     FETCH_NEXT_MATCH,                                                           //
     SHOW_NEXT_KICKOFF,                                                          // show next kickoff from stored data
@@ -69,13 +69,14 @@ enum PollMode {
 };
 
 // global Poll Scopes for actual PollCycle for Poll Manager
-const PollScope onceCycle[]     = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, FETCH_LIVE_MATCHES, FETCH_NEXT_KICKOFF};
+const PollScope onceCycle[]     = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, FETCH_TABLE, FETCH_LIVE_MATCHES};
 const PollScope relaxedCycle[]  = {FETCH_CURRENT_SEASON, FETCH_CURRENT_MATCHDAY, FETCH_NEXT_KICKOFF, CHECK_FOR_CHANGES};
 const PollScope reactiveCycle[] = {FETCH_TABLE,       CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, CALC_RED_LANTERN_CHANGE,
-                                   SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};       // don't ask for nextKickoff during live games
-const PollScope preLiveCycle[]  = {SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};       // don't ask for nextKickoff during live games
-const PollScope liveCycle[]     = {FETCH_TABLE, SHOW_NEXT_KICKOFF, CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, CALC_RED_LANTERN_CHANGE,
-                                   FETCH_GOALS, CHECK_FOR_CHANGES};
+                                   SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};
+const PollScope preLiveCycle[]  = {SHOW_NEXT_KICKOFF, CHECK_FOR_CHANGES};
+// don't ask for nextKickoff during live games, you will get kickoff from next live matches
+const PollScope liveCycle[] = {FETCH_TABLE, CALC_LEADER_CHANGE, CALC_RELEGATION_GHOST_CHANGE, CALC_RED_LANTERN_CHANGE,
+                               FETCH_GOALS, CHECK_FOR_CHANGES};
 // ==== enums ====
 
 // ==== Structures / Data Types ====
@@ -116,6 +117,20 @@ struct LigaSnapshot {
         }
     }
 };
+// ==== Live Goal structure ====
+struct LiveMatchGoalInfo {
+    uint32_t matchID;
+    uint8_t  goalMinutes[10];                                                   // Spielminuten der Tore
+    char     scoringTeam[10][32];                                               // Teamnamen (max. 10 Tore, je max. 31 Zeichen + \0)
+    uint8_t  goalCount;
+};
+
+// ==== Live Match structure ====
+struct LiveMatchInfo {
+    uint32_t matchID;
+    time_t   kickoff;
+};
+
 // ==== Structures / Data Types ====
 struct DfbMap {
     const char* key;                                                            // team name
@@ -157,19 +172,23 @@ extern bool             isSomeThingNew;                                         
 extern LigaSnapshot snap[2];                                                    // current and previus table snapshot
 extern uint8_t      snapshotIndex;                                              // 0 oder 1
 
-extern int         ligaSeason;                                                  // global actual Season
-extern int         ligaMatchday;                                                // global actual Matchday
-extern std::string nextKickoffString;
-extern double      diffSecondsUntilKickoff;
-extern time_t      currentNextKickoffTime;
-extern time_t      previousNextKickoffTime;
-extern bool        nextKickoffChanged;
-extern bool        nextKickoffFarAway;
-extern bool        matchIsLive;
-extern std::string dateTimeBuffer;                                              // temp buffer to request
-extern String      currentLastChangeOfMatchday;                                 // actual change date
-extern String      previousLastChangeOfMatchday;                                // old change date
-extern int         ligaMatchLiveCount;                                          // number of live matches in current matchday
+extern int                ligaSeason;                                           // global actual Season
+extern int                ligaMatchday;                                         // global actual Matchday
+extern std::string        nextKickoffString;
+extern double             diffSecondsUntilKickoff;
+extern time_t             currentNextKickoffTime;
+extern time_t             previousNextKickoffTime;
+extern bool               nextKickoffChanged;
+extern bool               nextKickoffFarAway;
+extern bool               matchIsLive;
+extern std::string        dateTimeBuffer;                                       // temp buffer to request
+extern String             currentLastChangeOfMatchday;                          // actual change date
+extern String             previousLastChangeOfMatchday;                         // old change date
+extern int                ligaMatchLiveCount;                                   // number of live matches in current matchday
+extern LiveMatchInfo      liveMatches[30];                                      // max. 10 Live-Spiele
+extern uint8_t            liveMatchCount;                                       // number of live matches in array
+extern LiveMatchGoalInfo  goalsInfos[30];                                       // max. 10 live matches with goals
+extern LiveMatchGoalInfo* currentGoalInfo;
 
 // ==== global Variables ====
 
@@ -199,12 +218,13 @@ class LigaTable {
 
     // public member functions
     bool pollForChanges();
-    bool pollTable();                                                           // get Bundesligatabelle
+    bool pollForTable();                                                        // get Bundesligatabelle
     bool pollCurrentMatchday();
     bool pollNextKickoff();
     bool detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut, const LigaRow** newLeaderOut);
     bool detectRelegationGhostChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldRGOut, const LigaRow** newRGOut);
     bool detectRedLanternChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldRLOut, const LigaRow** newRLOut);
+    bool detectScoringTeams(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow* scorers[], uint8_t& scorerCount);
 
     // Liga trace
     template <typename... Args>
