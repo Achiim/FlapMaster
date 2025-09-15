@@ -517,7 +517,7 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
             selectNextTwin();                                                   // next twin in UNICAST mode
             break;
         case Key21::KEY_EQ:
-            toggleLeague();                                                     // toggle league BL1 / BL2
+            toggleLeague();                                                     // toggle league BL1 / BL2 / DFB
             break;
         default: {
             #ifdef ERRORVERBOSE
@@ -539,23 +539,25 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
  *
  */
 void ParserClass::toggleLeague() {
-    if (activeLeague == League::BL1) {
-        activeLeague = League::BL2;
-        #ifdef MASTERVERBOSE
-            {
-            TraceScope trace;
-            parserPrintln("switched to League BL2");
-            }
-        #endif
-    } else {
-        activeLeague = League::BL1;
-        #ifdef MASTERVERBOSE
-            {
-            TraceScope trace;
-            parserPrintln("switched to League BL1");
-            }
-        #endif
-    }
+    activeLeague = static_cast<League>((static_cast<int>(activeLeague) + 1) % static_cast<int>(League::DFB) + 1);
+
+    #ifdef MASTERVERBOSE
+        TraceScope trace;
+        switch (activeLeague) {
+        case League::BL1:
+        parserPrintln("switched to League BL1");
+        break;
+        case League::BL2:
+        parserPrintln("switched to League BL2");
+        break;
+        case League::DFB:
+        parserPrintln("switched to League DFB");
+        break;
+        default:
+        parserPrintln("switched to unknown League");
+        break;
+        }
+    #endif
 
     snap[snapshotIndex].clear();                                                // clear actual snapshot
     snap[snapshotIndex ^ 1].clear();                                            // clear other snapshot
