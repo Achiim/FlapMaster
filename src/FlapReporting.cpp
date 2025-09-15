@@ -23,6 +23,10 @@
 #include <freertos/task.h>
 #include <FlapGlobal.h>
 #include <i2cFlap.h>
+#include <esp_chip_info.h>
+#include <esp_flash.h>
+#include <esp_system.h>
+#include <esp_wifi.h>
 #include "FlapTasks.h"
 #include "i2cMaster.h"
 #include "TracePrint.h"
@@ -609,10 +613,40 @@ void FlapReporting::printUptime() {
 
 void FlapReporting::reportMemory() {
     Serial.println("╔════════════════════════════════════════════════════════════════╗");
-    Serial.println("║                        FLAP REPORTING - ESP32 RAM              ║");
+    Serial.println("║                        FLAP REPORTING - ESP32 CHIP INFO        ║");
     Serial.println("╠════════════════════════════════════════════════════════════════╣");
 
     char buffer[128];
+    // ESP32 Info
+    esp_chip_info_t chip_info;
+    esp_chip_info(&chip_info);
+
+    snprintf(buffer, sizeof(buffer), "║ Chip Model                              : %1u                    ║", chip_info.revision);
+    Serial.println(buffer);
+
+    snprintf(buffer, sizeof(buffer), "║ Chip Cores                              : %1u                    ║", chip_info.cores);
+    Serial.println(buffer);
+
+    const char* wifi = (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi " : "";
+    const char* bt   = (chip_info.features & CHIP_FEATURE_BT) ? "BT " : "";
+    const char* ble  = (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "";
+
+    snprintf(buffer, sizeof(buffer), "║ Features                                : %s%s%s          ║", wifi, bt, ble);
+    Serial.println(buffer);
+
+    snprintf(buffer, sizeof(buffer), "║ Flash Mode                              : %s                  ║", CONFIG_ESPTOOLPY_FLASHMODE);
+    Serial.println(buffer);
+    snprintf(buffer, sizeof(buffer), "║ Flash Speed                             : %s                  ║", CONFIG_ESPTOOLPY_FLASHFREQ);
+    Serial.println(buffer);
+    snprintf(buffer, sizeof(buffer), "║ Flash Size                              : %s                  ║", CONFIG_ESPTOOLPY_FLASHSIZE);
+    Serial.println(buffer);
+
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(buffer, sizeof(buffer), "║ MAC Address                             : %02X:%02X:%02X:%02X:%02X:%02X    ║", mac[0], mac[1], mac[2], mac[3],
+             mac[4], mac[5]);
+    Serial.println(buffer);
+
     snprintf(buffer, sizeof(buffer), "║ Free RAM now                     (kByte): %7u              ║", ESP.getFreeHeap() / 1024);
     Serial.println(buffer);
 
