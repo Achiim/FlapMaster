@@ -76,7 +76,6 @@ enum PollMode {
 };
 
 // global Poll Scopes for actual PollCycle for Poll Manager
-
 const PollScope onceCycle[] = {
     // do it only once to initiate data
     CALC_CURRENT_SEASON,                                                        // initialize season

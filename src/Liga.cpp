@@ -81,8 +81,6 @@ const char* pollModeToString(PollMode mode) {
             return "POLL_MODE_RELAXED";
         case POLL_MODE_ONCE:
             return "POLL_MODE_ONCE";
-        case POLL_MODE_NONE:
-            return "POLL_MODE_NONE";
         default:
             return "unknown Poll Mode";
     }
@@ -150,10 +148,6 @@ void selectPollCycle(PollMode mode) {
             activeCycle       = onceCycle;
             activeCycleLength = sizeof(onceCycle) / sizeof(PollScope);
             break;
-        case POLL_MODE_NONE:
-            activeCycle       = {};
-            activeCycleLength = 0;
-            break;
         case POLL_MODE_RELAXED:
         default:
             activeCycle       = relaxedCycle;
@@ -192,9 +186,6 @@ bool kickoffChanged() {
 uint32_t getPollDelay(PollMode mode) {
     uint32_t polltime = 0;
     switch (mode) {
-        case POLL_MODE_NONE:
-            polltime = POLL_NOWAIT;
-            break;
         case POLL_MODE_ONCE:
             polltime = POLL_NOWAIT;
             break;
@@ -736,16 +727,14 @@ esp_err_t _http_event_handler_pollForLiveMatches(esp_http_client_event_t* evt) {
                 double delta       = difftime(now, kickoffTime);
 
                 if (delta >= 0 && delta <= maxAge) {
-                    if (match.containsKey("team1") && match.containsKey("team2")) {
-                        const char* name1 = match["team1"]["teamName"];
-                        const char* name2 = match["team2"]["teamName"];
+                    const char* name1 = match["team1"]["teamName"];
+                    const char* name2 = match["team2"]["teamName"];
 
-                        if (name1 && name2) {
-                            Liga->ligaPrintln("LIVE: %s vs %s", name1, name2);
-                            Liga->ligaPrintln("Kickoff: %s", kickoffStr);
-                        } else {
-                            Liga->ligaPrintln("LIVE match recognized, but TeamName missing");
-                        }
+                    if (name1 && name2) {
+                        Liga->ligaPrintln("LIVE: %s vs %s", name1, name2);
+                        Liga->ligaPrintln("Kickoff: %s", kickoffStr);
+                    } else {
+                        Liga->ligaPrintln("LIVE match recognized, but TeamName missing");
                     }
                     ligaMatchLiveCount++;
                 }
@@ -1565,6 +1554,9 @@ bool LigaTable::detectRelegationGhostChange(const LigaSnapshot& oldSnap, const L
 }
 
 void processPollScope(PollScope scope) {
+    #ifdef LIGAVERBOSE
+        Liga->ligaPrintln("PollScope {%s}", pollScopeToString(scope));          // log current scope
+    #endif
     switch (scope) {
         case CALC_CURRENT_SEASON:
             ligaSeason = calcCurrentSeason();                                   // calculate current season
@@ -1665,10 +1657,6 @@ PollMode determineNextPollMode() {
 
     if (currentPollMode == POLL_MODE_LIVE || currentPollMode == POLL_MODE_PRELIVE) {
         return POLL_MODE_REACTIVE;
-    }
-
-    if (currentPollMode == POLL_MODE_NONE) {
-        return POLL_MODE_ONCE;
     }
 
     if (currentPollMode == POLL_MODE_ONCE) {

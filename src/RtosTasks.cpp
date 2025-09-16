@@ -85,7 +85,8 @@ void ligaTask(void* pvParameters) {
         }
     #endif
 
-    currentPollMode = POLL_MODE_NONE;                                           // we do not poll now
+    currentPollMode = POLL_MODE_ONCE;                                           // we start with ONCE cycle
+    Liga->ligaPrintln("current PollMode is %s", pollModeToString(currentPollMode));
 
     while (true) {
         selectPollCycle(currentPollMode);                                       // setzt activeCycle + activeCycleLength

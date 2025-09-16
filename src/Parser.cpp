@@ -573,7 +573,7 @@ void ParserClass::toggleLeague() {
     diffSecondsUntilKickoff      = 0;                                           // reset
     nextKickoffString            = "";                                          // reset
     matchIsLive                  = false;                                       // reset live match detection
-    nextPollMode                 = PollMode::POLL_MODE_NONE;                    // start with NONE cycle
+    nextPollMode                 = PollMode::POLL_MODE_ONCE;                    // start with NONE cycle
     selectPollCycle(nextPollMode);
 };
 
