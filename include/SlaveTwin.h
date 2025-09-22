@@ -68,7 +68,8 @@ enum ReportCommands {
     REPORT_STEPS_BY_FLAP = 340,                                                 // trace actual relative steps by flap
     REPORT_REGISTRY      = 350,                                                 // trace content of registry list
     REPORT_I2C_STATISTIC = 360,                                                 // trace i2c usage history
-    REPORT_LIGA_TABLE    = 370                                                  // trace liga tabelle
+    REPORT_LIGA_TABLE    = 370,                                                 // trace liga tabelle
+    REPORT_POLL_STATUS   = 380                                                  // trace poll manager status
 };                                                                              // list of possible twin commands
 
 // Command that will be accepted byTwin

@@ -82,9 +82,6 @@ extern TimerHandle_t regiScanTimer;                                             
 extern TimerHandle_t availCheckTimer;                                           // device availability check
 extern TimerHandle_t ligaScanTimer;                                             // openLigaDB scan
 
-// Global Task-Handles
-extern TaskHandle_t ligaTaskHandle;                                             // task handle for liga scanner
-
 // Global Timer-Callbacks
 extern void regiScanCallback(TimerHandle_t xTimer);                             // execute short Time i2c bus scan
 extern void availCheckCallback(TimerHandle_t xTimer);                           // execute Availability Check

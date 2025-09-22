@@ -474,7 +474,7 @@ ReportCommand ParserClass::mapEvent2Report(ClickEvent event) {
             break;
         }
         case Key21::KEY_8: {
-            cmd.repCommand = REPORT_NO_COMMAND;
+            cmd.repCommand = REPORT_POLL_STATUS;
             return cmd;
             break;
         }
@@ -539,23 +539,21 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
  *
  */
 void ParserClass::toggleLeague() {
-    activeLeague = static_cast<League>((static_cast<int>(activeLeague) + 1) % static_cast<int>(League::DFB) + 1);
+    if (activeLeague == League::BL1) {
+        activeLeague = League::BL2;
+        ligaMaxTeams = LIGA2_MAX_TEAMS;
+    } else if (activeLeague == League::BL2) {
+        activeLeague = League::BL3;
+        ligaMaxTeams = LIGA3_MAX_TEAMS;
+    } else if (activeLeague == League::BL3) {
+        activeLeague = League::BL1;
+        ligaMaxTeams = LIGA1_MAX_TEAMS;
+    }
 
     #ifdef MASTERVERBOSE
+        {
         TraceScope trace;
-        switch (activeLeague) {
-        case League::BL1:
-        parserPrintln("switched to League BL1");
-        break;
-        case League::BL2:
-        parserPrintln("switched to League BL2");
-        break;
-        case League::DFB:
-        parserPrintln("switched to League DFB");
-        break;
-        default:
-        parserPrintln("switched to unknown League");
-        break;
+        parserPrintln("switched to League %s", leagueName(activeLeague));
         }
     #endif
 
@@ -573,8 +571,8 @@ void ParserClass::toggleLeague() {
     diffSecondsUntilKickoff      = 0;                                           // reset
     nextKickoffString            = "";                                          // reset
     matchIsLive                  = false;                                       // reset live match detection
-    nextPollMode                 = PollMode::POLL_MODE_ONCE;                    // start with NONE cycle
-    selectPollCycle(nextPollMode);
+    currentPollMode              = PollMode::POLL_MODE_ONCE;                    // start with NONE cycle
+    xTaskNotifyGive(g_ligaHandle);                                              // wake ligaTask to perform liga changes emmediately
 };
 
 // -----------------------------

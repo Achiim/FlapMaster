@@ -70,6 +70,7 @@ class FlapReporting {
     void reportSlaveRegistry();                                                 // show registry content
     void reportI2CStatistic();                                                  // show I2C usage history
     void reportLigaTable();                                                     // show Bundesliga table
+    void reportPollStatus();                                                    // show poll manager status
 
    private:
     static const char    BLOCK_LIGHT[];                                         // bar pattern for Access

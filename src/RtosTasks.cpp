@@ -92,8 +92,8 @@ void ligaTask(void* pvParameters) {
         selectPollCycle(currentPollMode);                                       // setzt activeCycle + activeCycleLength
 
         for (size_t i = 0; i < activeCycleLength; ++i) {
-            PollScope scope = activeCycle[i];
-            processPollScope(scope);
+            currentPollScope = activeCycle[i];
+            processPollScope(currentPollScope);
         }
 
         nextPollMode = determineNextPollMode();
@@ -107,7 +107,11 @@ void ligaTask(void* pvParameters) {
 
         pollManagerDynamicWait    = getPollDelay(currentPollMode);
         pollManagerStartOfWaiting = millis();
-        vTaskDelay(pdMS_TO_TICKS(pollManagerDynamicWait));
+        //        vTaskDelay(pdMS_TO_TICKS(pollManagerDynamicWait));
+        uint32_t notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(pollManagerDynamicWait));
+        if (notified > 0) {
+            Liga->ligaPrintln("LigaTask woken up by notification");
+        }
     }
 }
 
@@ -355,6 +359,8 @@ void reportTask(void* pvParameters) {
                     Reports->reportI2CStatistic();                              // show I2C usage
                 if (receivedCmd == REPORT_LIGA_TABLE)
                     Reports->reportLigaTable();                                 // show liga tabelle
+                if (receivedCmd == REPORT_POLL_STATUS)
+                    Reports->reportPollStatus();                                // show poll status
 
                 Reports->reportPrintln("====== Flap Master Report End ======"); // Report Footer
 

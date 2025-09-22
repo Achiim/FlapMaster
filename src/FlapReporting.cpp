@@ -32,6 +32,7 @@
 #include "TracePrint.h"
 #include "FlapReporting.h"
 #include "FlapRegistry.h"
+#include "Liga.h"
 
 // Unicode symbols for reports
 const char  FlapReporting::BLOCK_LIGHT[]      = u8"░";
@@ -204,9 +205,8 @@ void FlapReporting::renderLigaTable(const LigaSnapshot& s) {
         return;
     }
 
-    Serial.print(F("Bundesliga "));
-    Serial.print(leagueShortcut(activeLeague));
-    Serial.print(F(" Table: Season "));
+    Serial.print(leagueName(activeLeague));
+    Serial.print(F(" Standings: Season "));
     Serial.print(s.season);
     Serial.print(F(", Matchday "));
     Serial.println(s.matchday);
@@ -752,6 +752,7 @@ void FlapReporting::printStepsByFlapReport(SlaveTwin& twin, int wrapWidth) {
  */
 String FlapReporting::repeatChar(const String& symbol, int count) {
     String result;
+    result.reserve(symbol.length() * count);                                    // Speicher vorab reservieren
     for (int i = 0; i < count; ++i) {
         result += symbol;
     }
@@ -838,4 +839,95 @@ const char* FlapReporting::selectSparklineLevel(int value, int minValue, int max
     int   index = round(ratio * (SPARKLINE_LEVEL_COUNT - 1));
     index       = std::max(0, std::min(index, SPARKLINE_LEVEL_COUNT - 1));
     return SPARKLINE_LEVELS[index];
+}
+
+/**
+ * @brief report about poll manager status
+ *
+ */
+void FlapReporting::reportPollStatus() {
+    char liga[32];
+    strcpy(liga, leagueName(activeLeague));                                     // current league name
+
+    char       nextKickoff[32];
+    struct tm* kickoff = localtime(&currentNextKickoffTime);
+    strftime(nextKickoff, sizeof(nextKickoff), "%d.%m.%Y %H:%M", kickoff);
+    //                                     1                   2                   3                   4
+    //              123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890
+    Serial.println("┌───────────────────────────────────────────────────────────────────────────────────────────┐");
+    Serial.printf("│ OpenLigaDB Poll Manager Status                         Latest Update: %s │\n", lastScanTimestamp);
+    Serial.println("├──────────────────┬──────────────────────────┬──────────────────┬──────────────────────────┤");
+    Serial.printf("│ Poll Mode        │ %-24s │ Poll Scope       │ %-24s │\n", pollModeToString(currentPollMode),
+                  pollScopeToString(currentPollScope));
+    Serial.println("├──────────────────┼──────────────────────────┼──────────────────┼──────────────────────────┤");
+    Serial.printf("│ active League    │ %s            │ Season/Matchday  │ %4d/%2d                  │\n", liga, ligaSeason, ligaMatchday);
+    if (liveGoalCount > 0)
+        Serial.println("├──────────────────┼──────────────────────────┼──────────────────┼──────────────────────────┤");
+
+    // list off live goals
+    for (int i = 0; i < ligaLiveMatchCount; ++i) {
+        for (int j = 0; j < liveGoalCount; ++j) {
+            if (i == 0 && j == 0)
+                Serial.print("│ live Goals       │ ");
+            else
+                Serial.print("│                  │ ");
+            if (liveMatches[i].matchID == goalsInfos[j].matchID) {
+                Serial.printf("%-24s │ %-5s      (%-2d') │ %-24s │\n", liveMatches[i].team1.c_str(), goalsInfos[j].result, goalsInfos[j].goalMinute,
+                              liveMatches[i].team2.c_str());
+            }
+        }
+    }
+    if (ligaLiveMatchCount > 0)
+        Serial.println("├──────────────────┼──────────────────────────┼──────────────────┼──────────────────────────┤");
+
+    // list off live matches
+    for (int i = 0; i < ligaLiveMatchCount; ++i) {
+        if (i == 0)
+            Serial.print("│ live Matches     │ ");
+        else
+            Serial.print("│                  │ ");
+        printUtf8Padded(liveMatches[i].team1.c_str(), W_TEAM);
+        Serial.printf(" │ %-16s │ ", nextKickoff);
+        printUtf8Padded(liveMatches[i].team2.c_str(), W_TEAM);
+        Serial.println(" │");
+    }
+    if (ligaNextMatchCount > 0)
+        Serial.println("├──────────────────┼──────────────────────────┼──────────────────┼──────────────────────────┤");
+
+    // list off next matches
+    for (int i = 0; i < ligaNextMatchCount; ++i) {
+        char       nextKickoff[32];
+        struct tm* kickoff = localtime(&nextMatches[i].kickoff);
+        strftime(nextKickoff, sizeof(nextKickoff), "%d.%m.%Y %H:%M", kickoff);
+
+        if (i == 0)
+            Serial.print("│ next Matches     │ ");
+        else
+            Serial.print("│                  │ ");
+        printUtf8Padded(nextMatches[i].team1.c_str(), W_TEAM);
+        Serial.printf(" │ %-16s │ ", nextKickoff);
+        printUtf8Padded(nextMatches[i].team2.c_str(), W_TEAM);
+        Serial.println(" │");
+    }
+
+    if (ligaPlanMatchCount > 0)
+        Serial.println("├──────────────────┼──────────────────────────┼──────────────────┼──────────────────────────┤");
+
+    // List off planned matches
+    for (int i = 0; i < ligaPlanMatchCount; ++i) {
+        char       planKickoff[32];
+        struct tm* kickoff = localtime(&planMatches[i].kickoff);
+        strftime(planKickoff, sizeof(planKickoff), "%d.%m.%Y %H:%M", kickoff);
+
+        if (i == 0)
+            Serial.print("│ planned Matches  │ ");
+        else
+            Serial.print("│                  │ ");
+        printUtf8Padded(planMatches[i].team1.c_str(), W_TEAM);
+        Serial.printf(" │ %-16s │ ", planKickoff);
+        printUtf8Padded(planMatches[i].team2.c_str(), W_TEAM);
+        Serial.println(" │");
+    }
+
+    Serial.println("└──────────────────┴──────────────────────────┴──────────────────┴──────────────────────────┘");
 }

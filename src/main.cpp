@@ -29,6 +29,7 @@
 #include "MasterPrint.h"
 #include "MasterSetup.h"
 #include "Liga.h"
+#include "esp_bt.h"
 
 /**
  * @brief General setup to start ESP32
@@ -39,6 +40,12 @@ void setup() {
     g_masterBooted = true;                                                      // true, until first scan_i2c_bus
 
     masterIntroduction();                                                       // Wellcome to the world
+    if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED) {
+        Serial.println("Bluetooth ist aktiv!");
+    } else {
+        Serial.println("Bluetooth ist deaktiviert.");
+        esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+    }
     masterAddressPool();                                                        // define I2C addresses
     masterI2Csetup();                                                           // introduce me as I2C Master
     masterRemoteControl();                                                      // generate remote control object

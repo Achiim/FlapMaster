@@ -33,8 +33,6 @@ TaskHandle_t g_reportHandle        = nullptr;
 TaskHandle_t g_statisticHandle     = nullptr;
 TaskHandle_t g_twinHandle[numberOfTwins];
 
-TaskHandle_t ligaTaskHandle = nullptr;
-
 // Global defines for RTOS Queue handles
 QueueHandle_t g_reportQueue = nullptr;
 QueueHandle_t g_parserQueue = nullptr;

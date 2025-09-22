@@ -23,29 +23,42 @@
 
 // ==== defines ====
 #define flapUserAgent "Liga Flap Display V1.0 ESP32"
-#define LIGA_MAX_TEAMS 18
+#define LIGA1_MAX_TEAMS 18
+#define LIGA2_MAX_TEAMS 18
+#define LIGA3_MAX_TEAMS 20
 
 #define POLL_NOWAIT (0)                                                         // no wait at all
 #define POLL_GET_ALL_CHANGES (10 * 1000)                                        // 10 seconds
-#define POLL_DURING_GAME (30 * 1000)                                            // 30 seconds
-#define POLL_10MIN_BEFORE_KICKOFF (2 * 60 * 1000)                               // 2 minutes
-#define POLL_NORMAL (5 * 60 * 1000)                                             // 30 minutes
+#define POLL_DURING_GAME (20 * 1000)                                            // 20 seconds
+#define POLL_10MIN_BEFORE_KICKOFF (1 * 60 * 1000)                               // 1 minutes
+#define POLL_NORMAL (60 * 60 * 1000)                                            // 60 minutes
 // ==== defines ====
 
 // ==== enums ====
 // --- Chooseable league -------------------------------------------------------
-enum class League : uint8_t { BL1 = 1, BL2 = 2, DFB = 3 };                      // Bundesliga 1, 2, DFB-Pokal
+enum class League : uint8_t { BL1 = 1, BL2 = 2, BL3 = 3 };                      // Bundesliga 1, 2, 3
 extern League activeLeague;
 
 /** @brief Return OpenLigaDB league shortcut string for the given enum. */
 static inline const char* leagueShortcut(League lg) {
-    if (lg == League::DFB)
-        return "dfb";
+    if (lg == League::BL3)
+        return "bl3";
     if (lg == League::BL2)
         return "bl2";
     if (lg == League::BL1)
         return "bl1";
     return "bl1";                                                               // default
+}
+
+/** @brief Return OpenLigaDB league name string for the given enum. */
+static inline const char* leagueName(League lg) {
+    if (lg == League::BL3)
+        return "3. Bundesliga";
+    if (lg == League::BL2)
+        return "2. Bundesliga";
+    if (lg == League::BL1)
+        return "1. Bundesliga";
+    return "-";                                                                 // default
 }
 
 enum PollScope {
@@ -81,15 +94,16 @@ const PollScope onceCycle[] = {
     CALC_CURRENT_SEASON,                                                        // initialize season
     FETCH_CURRENT_MATCHDAY,                                                     // initialize matchday
     FETCH_TABLE,                                                                // get actual table from openLigaDB first time
-    FETCH_TABLE,                                                                // get actual table from openLigaDB second time to have old and new table for comparison
-    FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
     FETCH_NEXT_KICKOFF,                                                         // fetch actual kickoff from openLigaDB
     FETCH_NEXT_MATCH_LIST,                                                      // fetch next matches with nearest kickoff
-    FETCH_GOALS                                                                 // get goals from live matches
+    FETCH_LIVE_MATCHES                                                          // are there actual live matches? to get into live Poll immediately
 };
 
 const PollScope relaxedCycle[] = {
     CHECK_FOR_CHANGES,                                                          // request openLigaDB for changes at current matchday
+    CALC_CURRENT_SEASON,                                                        // initialize season
+    FETCH_CURRENT_MATCHDAY,                                                     // initialize matchday
+    FETCH_TABLE,                                                                // get actual table from openLigaDB first time
     FETCH_NEXT_MATCH_LIST                                                       //
 };
 
@@ -99,8 +113,8 @@ const PollScope reactiveCycle[] = {
 };
 
 const PollScope preLiveCycle[] = {
-    SHOW_NEXT_KICKOFF,                                                          // count down to next kickoff
-    CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
+    CHECK_FOR_CHANGES,                                                          // request openLigaDB for changes at current matchday
+    FETCH_LIVE_MATCHES                                                          // are there actual live matches? to get into live Poll immediately
 };
 
 // don't ask for nextKickoff during live games, you will get kickoff from next live matches
@@ -108,10 +122,11 @@ const PollScope liveCycle[] = {
     FETCH_GOALS,                                                                // get goals from live matches
     CALC_LEADER_CHANGE,                                                         // calculate leader change from goals
     CALC_RELEGATION_GHOST_CHANGE,                                               // calculate relegation ghost change from goals
-    CALC_RED_LANTERN_CHANGE,                                                    // calculate red lantern change from goals
+    CALC_RED_LANTERN_CHANGE                                                     // calculate red lantern change from goals
 };
 
 // ==== enums ====
+extern int ligaMaxTeams;                                                        // max. number of teams in selected league
 
 // ==== Structures / Data Types ====
 // ---------- Liga Table row (ASCII-only snapshot) ----------
@@ -135,15 +150,15 @@ struct LigaSnapshot {
     uint8_t  matchday;                                                          // 0 if unknown
     uint32_t nextKickoffUTC;                                                    // 0 if unknown
     uint32_t fetchedAtUTC;                                                      // epoch-ish
-    uint8_t  teamCount;                                                         // <= 18
-    LigaRow  rows[LIGA_MAX_TEAMS];
+    uint8_t  teamCount;                                                         // <= 20
+    LigaRow  rows[LIGA3_MAX_TEAMS];
     void     clear() {                                                          // clear snapshot
         season         = 0;
         matchday       = 0;
         nextKickoffUTC = 0;
         fetchedAtUTC   = 0;
         teamCount      = 0;
-        for (uint8_t i = 0; i < LIGA_MAX_TEAMS; i++) {
+        for (uint8_t i = 0; i < ligaMaxTeams; i++) {
             rows[i].pos = rows[i].sp = rows[i].pkt = 0;
             rows[i].diff = rows[i].og = rows[i].g = 0;
             rows[i].w = rows[i].l = rows[i].d = 0;
@@ -153,14 +168,19 @@ struct LigaSnapshot {
 };
 // ==== Live Goal structure ====
 struct LiveMatchGoalInfo {
-    uint32_t matchID;
-    uint8_t  goalMinutes[10];                                                   // Spielminuten der Tore
-    char     scoringTeam[10][32];                                               // Teamnamen (max. 10 Tore, je max. 31 Zeichen + \0)
-    uint8_t  goalCount;
+    uint32_t goalID;                                                            // unique ID of goal in openLigaDB
+    uint32_t matchID;                                                           // matchID this goal belongs to
+    uint8_t  goalMinute;                                                        // minute a goal was scored
+    String   result;                                                            // result string like "1:0" after this goal
+    String   scoringTeam;                                                       // team that scored the goal
+    String   scoringPlayer;                                                     // player who scored the goal
+    bool     isOwnGoal;                                                         // own goal?
+    bool     isPenalty;                                                         // penalty?
+    bool     isOvertime;                                                        // overtime?
 };
 
 // ==== Live Match structure ====
-struct LiveMatchInfo {
+struct MatchInfo {
     uint32_t    matchID;
     time_t      kickoff;
     std::string team1;
@@ -199,6 +219,7 @@ extern bool             currentMatchdayChanged;                                 
 extern const PollScope* activeCycle;                                            // PollScope list for active cycle
 extern size_t           activeCycleLength;                                      // number of PollSopes in activeCycle
 extern PollMode         currentPollMode;                                        // current poll mode of poll mananger
+extern PollScope        currentPollScope;                                       // current poll scope of poll mananger
 extern PollMode         nextPollMode;                                           // poll mode for next PollCycle
 extern uint32_t         pollManagerDynamicWait;                                 // wait time according to current poll mode
 extern uint32_t         pollManagerStartOfWaiting;                              // time_t when entering waiting state
@@ -208,24 +229,31 @@ extern bool             isSomeThingNew;                                         
 extern LigaSnapshot snap[2];                                                    // current and previus table snapshot
 extern uint8_t      snapshotIndex;                                              // 0 oder 1
 
-extern int                ligaSeason;                                           // global actual Season
-extern int                ligaMatchday;                                         // global actual Matchday
-extern std::string        nextKickoffString;
-extern double             diffSecondsUntilKickoff;
-extern time_t             currentNextKickoffTime;
-extern time_t             previousNextKickoffTime;
-extern bool               nextKickoffChanged;
-extern bool               nextKickoffFarAway;
-extern bool               matchIsLive;
-extern std::string        dateTimeBuffer;                                       // temp buffer to request
-extern String             currentLastChangeOfMatchday;                          // actual change date
-extern String             previousLastChangeOfMatchday;                         // old change date
-extern int                ligaMatchLiveCount;                                   // number of live matches in current matchday
-extern int                ligaNextMatchCount;                                   // number of next matches in current matchday
-extern LiveMatchInfo      liveMatches[30];                                      // max. 10 Live-Spiele
-extern uint8_t            liveMatchCount;                                       // number of live matches in array
-extern LiveMatchGoalInfo  goalsInfos[30];                                       // max. 10 live matches with goals
-extern LiveMatchGoalInfo* currentGoalInfo;
+extern int               ligaSeason;                                            // global actual Season
+extern int               ligaMatchday;                                          // global actual Matchday
+extern int               liveMatchID;                                           // iD of current live match
+extern char              lastScanTimestamp[32];                                 // last scan timestamp from openLigaDB
+extern std::string       nextKickoffString;
+extern double            diffSecondsUntilKickoff;
+extern time_t            currentNextKickoffTime;
+extern time_t            previousNextKickoffTime;
+extern bool              nextKickoffChanged;
+extern bool              nextKickoffFarAway;
+extern bool              matchIsLive;
+extern std::string       dateTimeBuffer;                                        // temp buffer to request
+extern String            currentLastChangeOfMatchday;                           // actual change date
+extern String            previousLastChangeOfMatchday;                          // old change date
+extern int               ligaPlanMatchCount;                                    // number of planned matches in current matchday
+extern int               ligaNextMatchCount;                                    // number of next matches in current matchday
+extern int               ligaLiveMatchCount;                                    // number of live matches in current matchday
+extern int               ligaFiniMatchCount;                                    // number of live matches in current matchday
+extern int               liveGoalCount;                                         // number of finished live matches in current matchday
+extern int               lastGoalID;                                            // last goal ID to detect new goals
+extern MatchInfo         planMatches[10];                                       // max. 10 next-Spiele
+extern MatchInfo         nextMatches[10];                                       // max. 10 next-Spiele
+extern MatchInfo         liveMatches[10];                                       // max. 10 Live-Spiele
+extern LiveMatchGoalInfo goalsInfos[30];                                        // max. 10 live matches with goals
+// extern LiveMatchGoalInfo* currentGoalInfo;
 
 // ==== global Variables ====
 
@@ -238,8 +266,10 @@ void        printTime(const char* label);
 uint32_t    getPollDelay(PollMode mode);
 void        selectPollCycle(PollMode mode);
 const char* pollModeToString(PollMode mode);
-void        processPollScope(PollScope scope);
-PollMode    determineNextPollMode();
+const char* pollScopeToString(PollScope scope);
+
+void     processPollScope(PollScope scope);
+PollMode determineNextPollMode();
 
 bool openLigaDBHealthCheck();
 bool checkForMatchdayChanges();
