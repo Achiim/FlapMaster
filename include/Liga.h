@@ -27,9 +27,17 @@
 #define LIGA2_MAX_TEAMS 18
 #define LIGA3_MAX_TEAMS 20
 
+#define MAX_TEAMNAME_LENGTH 32                                                  // max. length of team name (ASCII only)
+#define MAX_DFB_SHORT 4                                                         // max. length of DFB short name (3-letter + NUL)
+
+#define MAX_MATCHES_PER_MATCHDAY 10                                             // max. number of matches per matchday to track
+#define MAX_GOALS_PER_MATCHDAY 50                                               // max. number of goals per matchday to track
+#define MAX_MATCH_DURATION 150 * 60                                             // 2,5 hours in seconds
+#define TEN_MINUTES_BEFORE_MATCH 10 * 60                                        // 10 minutes in seconds
+
 #define POLL_NOWAIT (0)                                                         // no wait at all
 #define POLL_GET_ALL_CHANGES (10 * 1000)                                        // 10 seconds
-#define POLL_DURING_GAME (20 * 1000)                                            // 20 seconds
+#define POLL_DURING_GAME (5 * 20 * 1000)                                        // 20 seconds
 #define POLL_10MIN_BEFORE_KICKOFF (1 * 60 * 1000)                               // 1 minutes
 #define POLL_NORMAL (60 * 60 * 1000)                                            // 60 minutes
 // ==== defines ====
@@ -68,10 +76,10 @@ enum PollScope {
     CALC_CURRENT_SEASON,                                                        // calculate actuel season
     FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff (don't fetch during game is live)
     FETCH_LIVE_MATCHES,                                                         // fetch live matches, that are in future or kickoff was 2,5 hours ago
-    FETCH_GOALS,                                                                // fetch goals for live matches by mathchID
+    FETCH_LIVE_GOALS,                                                           // fetch goals for live matches by mathchID
     FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
     SHOW_NEXT_KICKOFF,                                                          // show next kickoff from stored data
-    CALC_TABLE_CHANGE,                                                          // calculate table changes from old and new table
+    CALC_LIVE_TABLE,                                                            // calculate table changes from old and new table
     CALC_LEADER_CHANGE,                                                         // calculate leader change from table
     CALC_RELEGATION_GHOST_CHANGE,                                               // calculate relegation ghost change from table
     CALC_RED_LANTERN_CHANGE,                                                    // calculate red lantern change from table
@@ -119,7 +127,8 @@ const PollScope preLiveCycle[] = {
 
 // don't ask for nextKickoff during live games, you will get kickoff from next live matches
 const PollScope liveCycle[] = {
-    FETCH_GOALS,                                                                // get goals from live matches
+    FETCH_LIVE_GOALS,                                                           // get goals from live matches
+    CALC_LIVE_TABLE,                                                            // calculate table changes from old and new table
     CALC_LEADER_CHANGE,                                                         // calculate leader change from goals
     CALC_RELEGATION_GHOST_CHANGE,                                               // calculate relegation ghost change from goals
     CALC_RED_LANTERN_CHANGE                                                     // calculate red lantern change from goals
@@ -141,8 +150,8 @@ struct LigaRow {
     uint8_t l;                                                                  // matches lost
     uint8_t d;                                                                  // matches drawn
     uint8_t flap;                                                               // number on flap display
-    char    team[32];                                                           // ASCII only (pretransliterated)
-    char    dfb[4];                                                             // ASCII (3-letter + NUL)
+    char    team[MAX_TEAMNAME_LENGTH];                                          // ASCII only (pretransliterated)
+    char    dfb[MAX_DFB_SHORT];                                                 // ASCII (3-letter + NUL)
 };
 
 struct LigaSnapshot {
@@ -177,6 +186,17 @@ struct LiveMatchGoalInfo {
     bool     isOwnGoal;                                                         // own goal?
     bool     isPenalty;                                                         // penalty?
     bool     isOvertime;                                                        // overtime?
+    void     clear() {                                                          // clear MachInfo
+        goalID        = 0;
+        matchID       = 0;
+        goalMinute    = 0;
+        result        = "";
+        scoringTeam   = "";
+        scoringPlayer = "";
+        isOwnGoal     = false;
+        isPenalty     = false;
+        isOvertime    = false;
+    }
 };
 
 // ==== Live Match structure ====
@@ -185,6 +205,12 @@ struct MatchInfo {
     time_t      kickoff;
     std::string team1;
     std::string team2;
+    void        clear() {                                                       // clear MachInfo
+        matchID = 0;
+        kickoff = 0;
+        team1   = "";
+        team2   = "";
+    }
 };
 
 // ==== Structures / Data Types ====
@@ -249,11 +275,10 @@ extern int               ligaLiveMatchCount;                                    
 extern int               ligaFiniMatchCount;                                    // number of live matches in current matchday
 extern int               liveGoalCount;                                         // number of finished live matches in current matchday
 extern int               lastGoalID;                                            // last goal ID to detect new goals
-extern MatchInfo         planMatches[10];                                       // max. 10 next-Spiele
-extern MatchInfo         nextMatches[10];                                       // max. 10 next-Spiele
-extern MatchInfo         liveMatches[10];                                       // max. 10 Live-Spiele
-extern LiveMatchGoalInfo goalsInfos[30];                                        // max. 10 live matches with goals
-// extern LiveMatchGoalInfo* currentGoalInfo;
+extern MatchInfo         planMatches[MAX_MATCHES_PER_MATCHDAY];                 // max. 10 next-Spiele
+extern MatchInfo         nextMatches[MAX_MATCHES_PER_MATCHDAY];                 // max. 10 next-Spiele
+extern MatchInfo         liveMatches[MAX_MATCHES_PER_MATCHDAY];                 // max. 10 Live-Spiele
+extern LiveMatchGoalInfo goalsInfos[MAX_GOALS_PER_MATCHDAY];                    // max. 50 goals per matchday
 
 // ==== global Variables ====
 
@@ -267,6 +292,8 @@ uint32_t    getPollDelay(PollMode mode);
 void        selectPollCycle(PollMode mode);
 const char* pollModeToString(PollMode mode);
 const char* pollScopeToString(PollScope scope);
+void        recalcLiveTable(LigaSnapshot& LiveTable);                           // recalculate table with live goals
+void        printLigaLiveTable(LigaSnapshot& LiveTable);                        // print recalculated live table
 
 void     processPollScope(PollScope scope);
 PollMode determineNextPollMode();
@@ -277,6 +304,7 @@ void showNextKickoff();
 
 String dfbCodeForTeamStrict(const String& teamName);
 int    flapForTeamStrict(const String& teamName);
+bool   sendRequest(const String& url, String& response);
 
 class LigaTable {
    public:
@@ -286,14 +314,18 @@ class LigaTable {
     // public member functions
     bool pollForChanges();
     bool pollForTable();                                                        // get Bundesligatabelle
-    bool pollForCurrentMatchday();
-    bool pollNextKickoff();
-    bool detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldLeaderOut, const LigaRow** newLeaderOut);
-    bool detectRelegationGhostChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldRGOut, const LigaRow** newRGOut);
-    bool detectRedLanternChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow** oldRLOut, const LigaRow** newRLOut);
-    bool detectScoringTeams(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, const LigaRow* scorers[], uint8_t& scorerCount);
+    bool pollForCurrentMatchday();                                              // get current matchday
+    bool pollForNextKickoff();                                                  // get next kickoff
     void pollForLiveMatches();                                                  // get Bundesligatabelle
     bool pollForNextMatchList(int machdayOffset);                               // get list of next matches with nearest kickoff
+    bool detectLeaderChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, //
+                            const LigaRow** oldLeaderOut, const LigaRow** newLeaderOut);
+    bool detectRelegationGhostChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, //
+                                     const LigaRow** oldRGOut, const LigaRow** newRGOut);
+    bool detectRedLanternChange(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, //
+                                const LigaRow** oldRLOut, const LigaRow** newRLOut);
+    bool detectScoringTeams(const LigaSnapshot& oldSnap, const LigaSnapshot& newSnap, //
+                            const LigaRow* scorers[], uint8_t& scorerCount);
 
     // Liga trace
     template <typename... Args>

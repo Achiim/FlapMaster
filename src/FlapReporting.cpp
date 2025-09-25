@@ -861,20 +861,42 @@ void FlapReporting::reportPollStatus() {
                   pollScopeToString(currentPollScope));
     Serial.println("├──────────────────┼──────────────────────────┼──────────────────┼──────────────────────────┤");
     Serial.printf("│ active League    │ %s            │ Season/Matchday  │ %4d/%2d                  │\n", liga, ligaSeason, ligaMatchday);
-    if (liveGoalCount > 0)
+
+    if (ligaLiveMatchCount > 0)
         Serial.println("├──────────────────┼──────────────────────────┼──────────────────┼──────────────────────────┤");
 
     // list off live goals
     for (int i = 0; i < ligaLiveMatchCount; ++i) {
+        MatchInfo& match            = liveMatches[i];
+        bool       hasGoals         = false;
+        bool       hasPrintedHeader = false;
+
         for (int j = 0; j < liveGoalCount; ++j) {
-            if (i == 0 && j == 0)
-                Serial.print("│ live Goals       │ ");
-            else
-                Serial.print("│                  │ ");
-            if (liveMatches[i].matchID == goalsInfos[j].matchID) {
-                Serial.printf("%-24s │ %-5s      (%-2d') │ %-24s │\n", liveMatches[i].team1.c_str(), goalsInfos[j].result, goalsInfos[j].goalMinute,
-                              liveMatches[i].team2.c_str());
+            LiveMatchGoalInfo& goal = goalsInfos[j];
+            if (goal.matchID == match.matchID) {
+                if (!hasPrintedHeader) {
+                    Serial.print("│ live Goals       │ ");
+                    hasPrintedHeader = true;
+                } else {
+                    Serial.print("│                  │ ");
+                }
+
+                if (goal.matchID == match.matchID) {
+                    hasGoals = true;
+                    printUtf8Padded(match.team1.c_str(), W_TEAM);
+                    Serial.printf(" │ %-5s      (%2d') │ ", goal.result, goal.goalMinute);
+                    printUtf8Padded(match.team2.c_str(), W_TEAM);
+                    Serial.println(" │");
+                }
             }
+        }
+        // Optional: Zeige Spiel ohne Tore
+        if (!hasPrintedHeader) {
+            Serial.print("│ live Goals       │ ");
+            printUtf8Padded(match.team1.c_str(), W_TEAM);
+            Serial.printf(" │ %-5s      (%2d') │ ", "0:0", 0);
+            printUtf8Padded(match.team2.c_str(), W_TEAM);
+            Serial.println(" │");
         }
     }
     if (ligaLiveMatchCount > 0)
