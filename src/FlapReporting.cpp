@@ -880,11 +880,11 @@ void FlapReporting::reportPollStatus() {
                 } else {
                     Serial.print("│                  │ ");
                 }
-
-                if (goal.matchID == match.matchID) {
-                    hasGoals = true;
+                if (hasPrintedHeader) {
+                    hasGoals           = true;
+                    char goalProcessed = goal.liveTableActualized ? '*' : '-';
                     printUtf8Padded(match.team1.c_str(), W_TEAM);
-                    Serial.printf(" │ %-5s      (%2d') │ ", goal.result, goal.goalMinute);
+                    Serial.printf(" │ %-5s  %c   (%2d') │ ", goal.result, goalProcessed, goal.goalMinute);
                     printUtf8Padded(match.team2.c_str(), W_TEAM);
                     Serial.println(" │");
                 }

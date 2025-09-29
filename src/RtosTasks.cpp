@@ -107,7 +107,7 @@ void ligaTask(void* pvParameters) {
 
         pollManagerDynamicWait    = getPollDelay(currentPollMode);
         pollManagerStartOfWaiting = millis();
-        //        vTaskDelay(pdMS_TO_TICKS(pollManagerDynamicWait));
+
         uint32_t notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(pollManagerDynamicWait));
         if (notified > 0) {
             Liga->ligaPrintln("LigaTask woken up by notification");

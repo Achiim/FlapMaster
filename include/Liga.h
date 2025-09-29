@@ -33,13 +33,14 @@
 #define MAX_MATCHES_PER_MATCHDAY 10                                             // max. number of matches per matchday to track
 #define MAX_GOALS_PER_MATCHDAY 50                                               // max. number of goals per matchday to track
 #define MAX_MATCH_DURATION 150 * 60                                             // 2,5 hours in seconds
-#define TEN_MINUTES_BEFORE_MATCH 10 * 60                                        // 10 minutes in seconds
+#define TEN_MINUTES_BEFORE_MATCH 10 * 10 * 60                                   // 10 minutes in seconds
 
 #define POLL_NOWAIT (0)                                                         // no wait at all
 #define POLL_GET_ALL_CHANGES (10 * 1000)                                        // 10 seconds
-#define POLL_DURING_GAME (5 * 20 * 1000)                                        // 20 seconds
+#define POLL_DURING_GAME (20 * 1000)                                            // 20 seconds
 #define POLL_10MIN_BEFORE_KICKOFF (1 * 60 * 1000)                               // 1 minutes
 #define POLL_NORMAL (60 * 60 * 1000)                                            // 60 minutes
+
 // ==== defines ====
 
 // ==== enums ====
@@ -102,9 +103,10 @@ const PollScope onceCycle[] = {
     CALC_CURRENT_SEASON,                                                        // initialize season
     FETCH_CURRENT_MATCHDAY,                                                     // initialize matchday
     FETCH_TABLE,                                                                // get actual table from openLigaDB first time
-    FETCH_NEXT_KICKOFF,                                                         // fetch actual kickoff from openLigaDB
-    FETCH_NEXT_MATCH_LIST,                                                      // fetch next matches with nearest kickoff
-    FETCH_LIVE_MATCHES                                                          // are there actual live matches? to get into live Poll immediately
+    FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff (don't fetch during game is live)
+    FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
+    FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
+    SHOW_NEXT_KICKOFF                                                           // show actual kickoff from stored data
 };
 
 const PollScope relaxedCycle[] = {
@@ -112,17 +114,19 @@ const PollScope relaxedCycle[] = {
     CALC_CURRENT_SEASON,                                                        // initialize season
     FETCH_CURRENT_MATCHDAY,                                                     // initialize matchday
     FETCH_TABLE,                                                                // get actual table from openLigaDB first time
-    FETCH_NEXT_MATCH_LIST                                                       //
+    FETCH_NEXT_MATCH_LIST                                                       // fetch list of next matches with nearest kickoff
 };
 
 const PollScope reactiveCycle[] = {
     FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
+    FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
     SHOW_NEXT_KICKOFF                                                           // show actual kickoff from stored data
 };
 
 const PollScope preLiveCycle[] = {
     CHECK_FOR_CHANGES,                                                          // request openLigaDB for changes at current matchday
-    FETCH_LIVE_MATCHES                                                          // are there actual live matches? to get into live Poll immediately
+    FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
+    SHOW_NEXT_KICKOFF                                                           // show actual kickoff from stored data
 };
 
 // don't ask for nextKickoff during live games, you will get kickoff from next live matches
@@ -180,22 +184,42 @@ struct LiveMatchGoalInfo {
     uint32_t goalID;                                                            // unique ID of goal in openLigaDB
     uint32_t matchID;                                                           // matchID this goal belongs to
     uint8_t  goalMinute;                                                        // minute a goal was scored
-    String   result;                                                            // result string like "1:0" after this goal
-    String   scoringTeam;                                                       // team that scored the goal
-    String   scoringPlayer;                                                     // player who scored the goal
-    bool     isOwnGoal;                                                         // own goal?
-    bool     isPenalty;                                                         // penalty?
-    bool     isOvertime;                                                        // overtime?
-    void     clear() {                                                          // clear MachInfo
-        goalID        = 0;
-        matchID       = 0;
-        goalMinute    = 0;
+    uint8_t  scoreTeam1;                                                        // actual score of team 1
+    uint8_t  scoreTeam2;                                                        // actual score of team 2
+
+    int8_t goalsTeam1Delta;                                                     // change of goals for Team 1
+    int8_t goalsTeam2Delta;                                                     // change of goals for Team 2
+    int8_t pointsTeam1Delta;                                                    // change of points for Team 1
+    int8_t pointsTeam2Delta;                                                    // change of points for Team 2
+
+    String result;                                                              // result string like "1:0" after this goal
+    String scoringTeam;                                                         // team that scored the goal
+    String scoringPlayer;                                                       // player who scored the goal
+
+    bool isOwnGoal;                                                             // own goal?
+    bool isPenalty;                                                             // penalty?
+    bool isOvertime;                                                            // overtime?
+    bool liveTableActualized;                                                   // ligaLiveTable actualized
+    void clear() {                                                              // clear MachInfo
+        goalID     = 0;
+        matchID    = 0;
+        goalMinute = 0;
+        scoreTeam1 = 0;
+        scoreTeam2 = 0;
+
+        goalsTeam1Delta  = 0;
+        goalsTeam2Delta  = 0;
+        pointsTeam1Delta = 0;
+        pointsTeam2Delta = 0;
+
         result        = "";
         scoringTeam   = "";
         scoringPlayer = "";
-        isOwnGoal     = false;
-        isPenalty     = false;
-        isOvertime    = false;
+
+        isOwnGoal           = false;
+        isPenalty           = false;
+        isOvertime          = false;
+        liveTableActualized = false;
     }
 };
 
@@ -292,7 +316,7 @@ uint32_t    getPollDelay(PollMode mode);
 void        selectPollCycle(PollMode mode);
 const char* pollModeToString(PollMode mode);
 const char* pollScopeToString(PollScope scope);
-void        recalcLiveTable(LigaSnapshot& LiveTable);                           // recalculate table with live goals
+bool        recalcLiveTable(LigaSnapshot& baseTable, LigaSnapshot& tempTable);  // recalculate table with live goals
 void        printLigaLiveTable(LigaSnapshot& LiveTable);                        // print recalculated live table
 
 void     processPollScope(PollScope scope);
