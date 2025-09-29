@@ -46,6 +46,7 @@ void setup() {
         Serial.println("Bluetooth ist deaktiviert.");
         esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
     }
+    masterFileSystem();                                                         // start SPIFFS filesystem
     masterAddressPool();                                                        // define I2C addresses
     masterI2Csetup();                                                           // introduce me as I2C Master
     masterRemoteControl();                                                      // generate remote control object

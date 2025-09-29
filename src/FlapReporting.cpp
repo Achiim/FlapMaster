@@ -403,6 +403,9 @@ void FlapReporting::reportRtosTasks() {
     if (g_reportHandle != nullptr)
         printTaskInfo(pcTaskGetName(g_reportHandle), uxTaskGetStackHighWaterMark(g_reportHandle), STACK_REPORT, PRIO_REPORT);
 
+    if (g_webServerHandle != nullptr)
+        printTaskInfo(pcTaskGetName(g_webServerHandle), uxTaskGetStackHighWaterMark(g_webServerHandle), STACK_WEB_SERVER, PRIO_WEB_SERVER);
+
     if (g_remoteControlHandle != nullptr)
         printTaskInfo(pcTaskGetName(g_remoteControlHandle), uxTaskGetStackHighWaterMark(g_remoteControlHandle), STACK_REMOTE, PRIO_REMOTE);
 

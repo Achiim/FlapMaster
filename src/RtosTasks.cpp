@@ -16,9 +16,10 @@
 #include <freertos/task.h>
 #include <FlapGlobal.h>
 #include <cstdio>
+#include <WebServer.h>
+#include <SPIFFS.h>
 #include <WiFi.h>
 #include "SlaveTwin.h"
-#include "Liga.h"
 #include "FlapTasks.h"
 #include "i2cMaster.h"
 #include "FlapRegistry.h"
@@ -28,6 +29,56 @@
 #include "Parser.h"
 #include "RemoteControl.h"
 #include "RtosTasks.h"
+// ----------------------------
+//     __      __   _    ___
+//     \ \    / /__| |__/ __| ___ _ ___ _____ _ _
+//      \ \/\/ / -_) '_ \__ \/ -_) '_\ V / -_) '_|
+//       \_/\_/\___|_.__/___/\___|_|  \_/\___|_|
+//
+// Banner created:
+// https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=WebServer
+/*
+ */
+void webServerTask(void* pvParameters) {
+    if (!SPIFFS.begin(true)) {
+        Serial.println("SPIFFS konnte nicht gestartet werden");
+        return;
+    }
+
+    if (!connectToWifi()) {                                                     ///< Ensure WiFi/TLS preconditions for OpenLigaDB are met
+        return;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(300));                                             ///< Short delay before time configuration
+    configureTime();
+
+    server.on("/", []() {
+        server.send(200,                                                        // HTTP Status 200 OK
+                    "text/html; charset=UTF-8",                                 // MIME-Typ
+                    "<html><body><h1>Hallo Achim!</h1><p>Deine ESP32-Webseite läuft.</p></body></html>");
+    });
+
+    server.begin();
+    Serial.print("[FLAP - SERVER  ] Flap Liga Display WebServer address: ");
+    Serial.println(WiFi.localIP());
+
+    const TickType_t oneDay   = 24 * 60 * 60 * 1000 / portTICK_PERIOD_MS;       // background loop only for time-Sync
+    TickType_t       lastSync = xTaskGetTickCount();
+
+    while (true) {
+        server.handleClient();                                                  // poll web client for requests
+        if (xTaskGetTickCount() - lastSync > oneDay) {
+            struct tm timeinfo;
+            if (getLocalTime(&timeinfo)) {
+                Serial.printf("date/time re-synchronized: %s\n", asctime(&timeinfo));
+            }
+            lastSync = xTaskGetTickCount();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));                                        // relaxed sleep/poll mode
+    }
+}
+
 // ----------------------------
 //      _    _
 //     | |  (_)__ _ __ _

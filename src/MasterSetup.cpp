@@ -16,6 +16,7 @@
 
 #include <Arduino.h>
 #include <FlapGlobal.h>
+#include <SPIFFS.h>
 #include "MasterPrint.h"
 #include "i2cMaster.h"
 #include "SlaveTwin.h"
@@ -36,6 +37,27 @@ void masterIntroduction() {
     Serial.print("              I²C-MASTER - FLAP DISPLAY\n");
     Serial.print("              ================(c)=2025=\n");
     Serial.print("\n\n\n");
+}
+
+void masterFileSystem() {
+    if (!SPIFFS.begin(true)) {
+        #ifdef MASTERVERBOSE
+            {
+            TraceScope trace;                                                   // use semaphore to protect this block
+            masterPrintln("SPIFFS could not be started");
+            }
+        #endif
+        return;
+    }
+
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;
+        {                                                                       // use semaphore to protect this block
+        masterPrintln("SPIFFS successfully started");
+        }
+        }
+    #endif
 }
 // ---------------------------
 
@@ -145,6 +167,7 @@ void masterStartRtosTasks() {
     createTwinTasks();                                                          // Create twin tasks
     createRemoteControlTask();                                                  // Create remote control
     createParserTask();                                                         // create parser task
+    createWebServerTask();                                                      // create web server task
     createLigaTask();                                                           // create liga task
     createRegisterTwinsTask();                                                  // Create Register Twins task
 }
@@ -304,4 +327,19 @@ void createLigaTask() {
     #endif
 
     xTaskCreate(ligaTask, "Liga", STACK_LIGA, NULL, PRIO_LIGA, &g_ligaHandle);
+}                                                                               // ---------------------------
+
+/**
+ * @brief Create a Liga Task object and start freeRTOS task: Liga
+ *
+ */
+void createWebServerTask() {
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        masterPrintln("start freeRTOS task: Web Server");
+        }
+    #endif
+
+    xTaskCreate(webServerTask, "Web Server", STACK_WEB_SERVER, NULL, PRIO_WEB_SERVER, &g_webServerHandle);
 }

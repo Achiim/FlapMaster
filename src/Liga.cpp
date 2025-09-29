@@ -24,11 +24,9 @@
 #include <string.h>
 #include "ArduinoJson.h"
 #include "secret.h"
-#include "FlapTasks.h"
 #include "Liga.h"
-#include "cert.all"
-
-#include "esp_http_client.h"
+// #include "esp_http_client.h"
+#include "FlapTasks.h"
 
 #define WIFI_SSID "DEIN_SSID"
 #define WIFI_PASS "DEIN_PASS"
@@ -164,14 +162,8 @@ void configureTime() {
  * @return false If WiFi or API health check failed.
  */
 bool initLigaTask() {
+    waitForTime();                                                              // wait for time to be synchronized
     createLigaInstance();
-
-    if (!connectToWifi()) {                                                     ///< Ensure WiFi/TLS preconditions for OpenLigaDB are met
-        return false;
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(300));                                             ///< Short delay before time configuration
-    configureTime();
 
     if (!openLigaDBHealthCheck()) {
         return false;                                                           ///< Consider retry or fallback to offline mode

@@ -310,6 +310,7 @@ extern LiveMatchGoalInfo goalsInfos[MAX_GOALS_PER_MATCHDAY];                    
 bool        initLigaTask();
 int         calcCurrentSeason();
 bool        connectToWifi();
+void        configureTime();
 bool        waitForTime(uint32_t maxMs = 15000, bool report = false);           // Wait until system time (NTP) is valid, up to maxMs.
 void        printTime(const char* label);
 uint32_t    getPollDelay(PollMode mode);

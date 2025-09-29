@@ -19,9 +19,12 @@
 #define FlapTasks_h
 
 #include <FlapGlobal.h>
+#include <WebServer.h>
+#include "Liga.h"
+#include "cert.all"
+#include "esp_http_client.h"
 #include "RemoteControl.h"
 #include "Parser.h"
-#include "Liga.h"
 #include "FlapStatistics.h"
 #include "FlapRegistry.h"
 
@@ -30,11 +33,13 @@
 #define PRIO_TWIN 5                                                             // Twin Tasks 0-n
 #define PRIO_REGISTRY 4                                                         // Registry Task
 #define PRIO_REPORT 3                                                           // Reportimg Task
+#define PRIO_WEB_SERVER 2                                                       // Web Server task
 #define PRIO_REMOTE 2                                                           // Remote Control Task
 #define PRIO_PARSER 3                                                           // Remote Parser Task
 #define PRIO_STATISTICS 1                                                       // Statistics Task
 
 // Task Stack sizes
+#define STACK_WEB_SERVER 3 * 1024                                               // Web Server Task (12kB)
 #define STACK_LIGA 5.5 * 1024                                                   // Liga Task (18kB)
 #define STACK_TWIN 1.5 * 1024                                                   // Twin Tasks 0-n (6kB per Task)
 #define STACK_REGISTRY 2 * 1024                                                 // Registry Task (8 kB)
@@ -57,9 +62,13 @@
 #define FAST_AVAI_COUNTDOWN 1000UL * 1UL                                        // 1 second
 #define BOOT_WINDOW 1000UL * 30UL                                               // 30 seconds duration of fast mode
 
+// Global Web Server
+extern WebServer server;
+
 // Global variables for RTOS task handles https://www.freertos.org/a00019.html#xTaskHandle
 extern TaskHandle_t g_remoteControlHandle;                                      // RTOS Task Handler
 extern TaskHandle_t g_ligaHandle;                                               // RTOS Task Handler
+extern TaskHandle_t g_webServerHandle;                                          // RTOS Task Handler
 extern TaskHandle_t g_parserHandle;                                             // RTOS Task Handler
 extern TaskHandle_t g_registryHandle;                                           // RTOS Task Handler
 extern TaskHandle_t g_reportHandle;                                             // RTOS Task Handler

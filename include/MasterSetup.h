@@ -17,6 +17,7 @@
 #define MasterSetup_h
 
 void masterIntroduction();                                                      // welcome message
+void masterFileSystem();                                                        // setup SPIFFS file system
 void masterAddressPool();                                                       // usable I2C addresses
 void masterI2Csetup();                                                          // setup i2c for Master
 void masterRemoteControl();                                                     // setup remote control
@@ -29,6 +30,7 @@ void createReportTask();                                                        
 void createRemoteControlTask();                                                 // create Remote Control
 void createRegisterTwinsTask();                                                 // create Registry
 void createParserTask();                                                        // create Parser task
+void createWebServerTask();                                                     // create web server
 void createLigaTask();                                                          // create Liga task
 
 #endif                                                                          // MasterSetup_h

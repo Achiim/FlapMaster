@@ -24,10 +24,14 @@
 #include "FlapRegistry.h"
 #include "MasterPrint.h"
 
+// Global WEb Server
+WebServer server(80);                                                           // ESP32 Web Server at Port 80
+
 // Global defines for RTOS task handles
 TaskHandle_t g_remoteControlHandle = nullptr;                                   // Task handlers https://www.freertos.org/a00019.html#xTaskHandle
 TaskHandle_t g_parserHandle        = nullptr;
 TaskHandle_t g_ligaHandle          = nullptr;
+TaskHandle_t g_webServerHandle     = nullptr;
 TaskHandle_t g_registryHandle      = nullptr;
 TaskHandle_t g_reportHandle        = nullptr;
 TaskHandle_t g_statisticHandle     = nullptr;
