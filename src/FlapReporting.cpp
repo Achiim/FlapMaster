@@ -22,6 +22,9 @@
 #include <freertos/FreeRTOS.h>                                                  // Real Time OS
 #include <freertos/task.h>
 #include <FlapGlobal.h>
+#include <ArduinoJson.h>
+#include <FS.h>
+#include <SPIFFS.h>
 #include <i2cFlap.h>
 #include <esp_chip_info.h>
 #include <esp_flash.h>
@@ -414,16 +417,85 @@ void FlapReporting::reportRtosTasks() {
 
     Serial.println("╚════════════════════════════════════════════════════════════════════════════╝");
 }
+// rechts auffüllen
+String padEnd(const String& text, int width, char fill = ' ') {
+    String out = text;
+    while (out.length() < width) {
+        out += fill;
+    }
+    return out;
+}
 
-// -----------------------------
-/**
- * @brief report memory usage of ESP32
- *
- */
-void FlapReporting::reportTaskStatus() {
+// links auffüllen
+String padStart(const String& text, int width, char fill = ' ') {
+    String out = text;
+    while (out.length() < width) {
+        out = fill + out;
+    }
+    return out;
+}
+
+// ------------------------------
+// render Task Report for consol output
+void FlapReporting::renderTaskReport() {
+    constexpr int CONTENT_WIDTH = 60;                                           // Gesamtbreite (innen zwischen ║ … ║)
+    constexpr int VALUE_COL     = 26;                                           // Spalte ab der der Wert beginnt (1-basiert)
+
+    StaticJsonDocument<2048> doc;
+    if (!Store->readFile("/R01.json", doc)) {
+        server.sendContent("Fehler: JSON konnte nicht geladen werden\n");
+        return;
+    }
+
+    // Rahmenkopf
+    Serial.println("╔══════════════════════════════════════════════════════════╗");
+    // Serial.println("║ FLAP TASKS STATUS REPORT                                 ║");
+    // Serial.println("╠══════════════════════════════════════════════════════════╣");
+
+    // Alle Key/Value-Paare
+    for (JsonPair kv : doc.as<JsonObject>()) {
+        String key   = kv.key().c_str();
+        String value = kv.value().as<String>();
+
+        // Links Schlüssel, rechts Wert
+        String line = "║ ";
+        line += key;
+        // Bis VALUE_COL auffüllen
+        while (line.length() < VALUE_COL)
+            line += ' ';
+        // Wert hinzufügen
+        line += value;
+        // Rest auffüllen
+        while (line.length() < CONTENT_WIDTH + 1)
+            line += ' ';                                                        // +1 wegen linkem ║
+        line += "║";
+        Serial.println(line);
+        if (key == "report")
+            Serial.println("╠══════════════════════════════════════════════════════════╣");
+    }
+
+    // Rahmenfuß
+    Serial.println("╚══════════════════════════════════════════════════════════╝");
+}
+
+/*
+void FlapReporting::renderTaskReport() {
     constexpr int CONTENT_WIDTH = 58;                                           // Breite zwischen den Rahmenlinien
     constexpr int VALUE_COL     = 22;                                           // Spalte (1-basiert) ab der der Wert beginnt
 
+    StaticJsonDocument<2048> doc;
+    Store->readFile("/R01.json", doc);
+
+    // Alle Key/Value-Paare streamen
+    for (JsonPair kv : doc.as<JsonObject>()) {
+        String line;
+        line.reserve(128);
+        line += kv.key().c_str();
+        line += " ";
+        line += kv.value().as<const char*>();
+        line += "\n";
+        server.sendContent(line);
+    }
     auto printTop    = [&]() { Serial.println("╔══════════════════════════════════════════════════════════╗"); };
     auto printSep    = [&]() { Serial.println("╠══════════════════════════════════════════════════════════╣"); };
     auto printBottom = [&]() { Serial.println("╚══════════════════════════════════════════════════════════╝"); };
@@ -536,6 +608,16 @@ void FlapReporting::reportTaskStatus() {
         printKV(" Next OpenLiga scan in:", val);
     }
     printBottom();
+}
+*/
+// -----------------------------
+/**
+ * @brief report memory usage of ESP32
+ *
+ */
+void FlapReporting::reportTaskStatus() {
+    reportTaskStatusJson();                                                     // generate JSON file
+    renderTaskReport();
 }
 
 // ----------------------------
@@ -955,4 +1037,125 @@ void FlapReporting::reportPollStatus() {
     }
 
     Serial.println("└──────────────────┴──────────────────────────┴──────────────────┴──────────────────────────┘");
+}
+
+// -----------------------------
+
+/**
+ * @brief report memory/task status of ESP32 as JSON and save to SPIFFS
+ *
+ */
+
+void FlapReporting::reportTaskStatusJson() {
+    if (!Store->available())
+        return;
+
+    StaticJsonDocument<2048> doc;
+    doc["report"] = "FLAP TASKS STATUS REPORT";
+
+    // Tick count
+    {
+        char val[32];
+        snprintf(val, sizeof(val), "%10lu", (unsigned long)xTaskGetTickCount());
+        doc["Tick count"] = val;
+    }
+
+    // Task count
+    {
+        char val[32];
+        snprintf(val, sizeof(val), "%10u", (unsigned)uxTaskGetNumberOfTasks());
+        doc["Task count"] = val;
+    }
+
+    // Uptime
+    {
+        TickType_t ticks        = xTaskGetTickCount();
+        uint32_t   totalSeconds = ticks * portTICK_PERIOD_MS / 1000;
+        uint32_t   days         = totalSeconds / 86400;
+        uint32_t   hours        = (totalSeconds % 86400) / 3600;
+        uint32_t   minutes      = (totalSeconds % 3600) / 60;
+        uint32_t   seconds      = totalSeconds % 60;
+        char       val[32];
+        snprintf(val, sizeof(val), "%3u Tage, %02u:%02u:%02u", days, hours, minutes, seconds);
+        doc["Uptime"] = val;
+    }
+
+    // Next scan
+    {
+        uint32_t ms = getNextScanRemainingMs();
+        char     val[32];
+        if (ms == 0) {
+            strcpy(val, "inactive");
+        } else {
+            uint32_t m = ms / 60000;
+            uint32_t s = (ms % 60000) / 1000;
+            snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
+        }
+        doc["Next I2C bus scan in"] = val;
+    }
+
+    // Next availability check
+    {
+        uint32_t ms = getNextAvailabilityRemainingMs();
+        char     val[32];
+        if (ms == 0) {
+            strcpy(val, "inactive");
+        } else {
+            uint32_t m = ms / 60000;
+            uint32_t s = (ms % 60000) / 1000;
+            snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
+        }
+        doc["Next device check in"] = val;
+    }
+
+    // Next Liga scan
+    {
+        uint32_t ls = getNextLigaScanRemainingMs();
+        char     val[32];
+        if (ls == 0) {
+            strcpy(val, "inactive");
+        } else {
+            uint32_t m = ls / 60000;
+            uint32_t s = (ls % 60000) / 1000;
+            snprintf(val, sizeof(val), "%02lu:%02lu (mm:ss)", (unsigned long)m, (unsigned long)s);
+        }
+        doc["Next OpenLiga scan in"] = val;
+    }
+
+    Store->saveFile("/R01.json", doc);                                          // store as JSON file
+}
+//
+void sendStatusHtmlStream(const char* filename) {
+    StaticJsonDocument<2048> doc;
+    Store->readFile(filename, doc);
+
+    // Header einmalig senden
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server.send(200, "text/html; charset=UTF-8", "");
+
+    // HTML-Kopf
+    server.sendContent(
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+        "<title>FLAP Task Status</title>"
+        "<style>body{font-family:monospace; background:#f5f5f5; white-space:pre;}</style>"
+        "</head><body>\n");
+
+    // Kopfzeile
+    server.sendContent("FLAP TASK STATUS REPORT\n");
+    server.sendContent("=======================\n\n");
+
+    // Alle Key/Value-Paare streamen
+    for (JsonPair kv : doc.as<JsonObject>()) {
+        String line;
+        line.reserve(128);
+        line += kv.key().c_str();
+        line += " ";
+        line += kv.value().as<const char*>();
+        line += "\n";
+        server.sendContent(line);
+    }
+
+    // HTML-Ende
+    server.sendContent("</body></html>");
+    server.sendContent("");                                                     // EOF
 }

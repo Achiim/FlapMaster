@@ -42,6 +42,9 @@ constexpr int W_D     = 2;                                                      
 constexpr int W_OG    = 2;                                                      // own goals 0..99
 constexpr int W_G     = 2;                                                      // goals 0..99
 
+// globar routines for JSON Format
+void sendStatusHtmlStream(const char* filename);
+
 class FlapReporting {
    public:
     int statistic = 0;
@@ -63,7 +66,10 @@ class FlapReporting {
     // ----------------------------
     uint32_t maxValueFromHistory(uint32_t* history);                            // get maximum value from history
 
+    void reportTaskStatusJson();                                                // generate JSON Format
     void reportTaskStatus();                                                    // show Task status report
+    void renderTaskReport();
+
     void reportMemory();                                                        // show memory usage
     void reportRtosTasks();                                                     // show Tasklist with remaining stack size
     void reportAllTwinStepsByFlap(int wrapWidth = 20);                          // show steps per flap for all Twins

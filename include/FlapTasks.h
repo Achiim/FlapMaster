@@ -20,6 +20,7 @@
 
 #include <FlapGlobal.h>
 #include <WebServer.h>
+#include "FlapFile.h"
 #include "Liga.h"
 #include "cert.all"
 #include "esp_http_client.h"
@@ -43,7 +44,7 @@
 #define STACK_LIGA 5.5 * 1024                                                   // Liga Task (18kB)
 #define STACK_TWIN 1.5 * 1024                                                   // Twin Tasks 0-n (6kB per Task)
 #define STACK_REGISTRY 2 * 1024                                                 // Registry Task (8 kB)
-#define STACK_REPORT 2 * 1024                                                   // Reporting Task (8 kB)
+#define STACK_REPORT 4 * 1024                                                   // Reporting Task (16 kB)
 #define STACK_REMOTE 2 * 1024                                                   // Remote Control Task (8 kB)
 #define STACK_PARSER 2 * 1024                                                   // Remote Parser Task (8 kB)
 
@@ -80,11 +81,12 @@ extern QueueHandle_t g_reportQueue;                                             
 extern QueueHandle_t g_parserQueue;                                             // Queue for remoteParser Task to receive remote control keys
 
 // Global Objects for Tasks
-extern RemoteControl*  Control;                                                 // class to receice key from remote control
-extern ParserClass*    Parser;                                                  // Parser class to filter key from remote control
+extern RemoteControl*  Control;                                                 // class for remote control to receice keys
+extern ParserClass*    Parser;                                                  // class for Parser to filter key from remote control
 extern FlapRegistry*   Register;                                                // class for Registry Task
-extern FlapStatistics* DataEvaluation;                                          // class to collect and evaluate operation statistics
+extern FlapStatistics* DataEvaluation;                                          // class for statistics to collect and evaluate
 extern LigaTable*      Liga;                                                    // class for Bundesliga
+extern FlapFile*       Store;                                                   // class for Flap File System
 
 // Global count down Timer-Handles
 extern TimerHandle_t regiScanTimer;                                             // registry ic2 scan
