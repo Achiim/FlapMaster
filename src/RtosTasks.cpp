@@ -39,23 +39,40 @@
 // https://patorjk.com/software/taag/#p=display&c=c%2B%2B&f=Small&t=WebServer
 /*
  */
-void webServerTask(void* pvParameters) {
-    if (!SPIFFS.begin(true)) {
-        Serial.println("SPIFFS konnte nicht gestartet werden");
+void flapServerTask(void* pvParameters) {
+    if (!Store->available())                                                    ///< check if file system is available
         return;
-    }
-
-    if (!connectToWifi()) {                                                     ///< Ensure WiFi/TLS preconditions for OpenLigaDB are met
+    if (!connectToWifi())                                                       ///< Ensure WiFi/TLS preconditions for OpenLigaDB are met
         return;
-    }
 
     vTaskDelay(pdMS_TO_TICKS(300));                                             ///< Short delay before time configuration
     configureTime();
 
     server.on("/", []() {
+        Serial.println("[FLAP - SERVER  ] Web Client opened");
         server.send(200,                                                        // HTTP Status 200 OK
                     "text/html; charset=UTF-8",                                 // MIME-Typ
                     "<html><body><h1>Hallo Achim!</h1><p>Deine ESP32-Webseite läuft.</p></body></html>");
+    });
+
+    server.on("/status", []() {
+        Serial.println("[FLAP - SERVER  ] Flap Display Task Status requested");
+        sendStatusHtmlStream("/R01.json");
+    });
+
+    // Endpunkt 1: JSON pur
+    server.on("/1", []() {
+        File file = SPIFFS.open("/R01.json", FILE_READ);
+        if (!file) {
+            server.sendHeader("Access-Control-Allow-Origin", "*");
+            server.send(500, "application/json", "{\"error\":\"Datei nicht gefunden\"}");
+            return;
+        }
+        String jsonString = file.readString();
+        file.close();
+
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+        server.send(200, "application/json; charset=UTF-8", jsonString);
     });
 
     server.begin();
@@ -137,7 +154,6 @@ void ligaTask(void* pvParameters) {
     #endif
 
     currentPollMode = POLL_MODE_ONCE;                                           // we start with ONCE cycle
-    Liga->ligaPrintln("current PollMode is %s", pollModeToString(currentPollMode));
 
     while (true) {
         selectPollCycle(currentPollMode);                                       // setzt activeCycle + activeCycleLength

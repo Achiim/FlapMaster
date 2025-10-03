@@ -16,10 +16,10 @@
 
 #include <Arduino.h>
 #include <FlapGlobal.h>
-#include <SPIFFS.h>
 #include "MasterPrint.h"
 #include "i2cMaster.h"
 #include "SlaveTwin.h"
+#include "FlapFile.h"
 #include "FlapTasks.h"
 #include "RemoteControl.h"
 #include "RtosTasks.h"
@@ -39,26 +39,6 @@ void masterIntroduction() {
     Serial.print("\n\n\n");
 }
 
-void masterFileSystem() {
-    if (!SPIFFS.begin(true)) {
-        #ifdef MASTERVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
-            masterPrintln("SPIFFS could not be started");
-            }
-        #endif
-        return;
-    }
-
-    #ifdef MASTERVERBOSE
-        {
-        TraceScope trace;
-        {                                                                       // use semaphore to protect this block
-        masterPrintln("SPIFFS successfully started");
-        }
-        }
-    #endif
-}
 // ---------------------------
 
 /**
@@ -112,6 +92,22 @@ void masterAddressPool() {
 }
 
 // ---------------------------
+/**
+ * @brief create Flap File System  object
+ *
+ */
+
+void masterFileSystem() {
+    #ifdef MASTERVERBOSE
+        {
+        TraceScope trace;                                                       // use semaphore to protect this block
+        masterPrintln("create Flap File System object to store data");
+        }
+    #endif
+    Store = new FlapFile();
+}
+
+// ---------------------------
 
 /**
  * @brief create IR receiver object for Key21 remote control
@@ -121,7 +117,7 @@ void masterRemoteControl() {
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrintln("create IR receiver object for Key21 remote control");
+        masterPrintln("create Receiver object to receive IR Key21 remote control");
         }
     #endif
     // Create IR Receiver
@@ -131,14 +127,14 @@ void masterRemoteControl() {
 // ---------------------------
 
 /**
- * @brief create Master control object, to control TWINs
+ * @brief create Master object to control TWINs
  *
  */
 void masterSlaveControlObject() {
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrintln("create Master control object, to control TWINs");
+        masterPrintln("create Master object to control TWINs");
         }
     #endif
     Master = new FlapTask();                                                    // create Master frame object
@@ -337,9 +333,9 @@ void createWebServerTask() {
     #ifdef MASTERVERBOSE
         {
         TraceScope trace;                                                       // use semaphore to protect this block
-        masterPrintln("start freeRTOS task: Web Server");
+        masterPrintln("start freeRTOS task: Flap Server");
         }
     #endif
 
-    xTaskCreate(webServerTask, "Web Server", STACK_WEB_SERVER, NULL, PRIO_WEB_SERVER, &g_webServerHandle);
+    xTaskCreate(flapServerTask, "Flap Server", STACK_WEB_SERVER, NULL, PRIO_WEB_SERVER, &g_webServerHandle);
 }

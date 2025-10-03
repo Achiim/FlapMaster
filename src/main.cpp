@@ -41,14 +41,14 @@ void setup() {
 
     masterIntroduction();                                                       // Wellcome to the world
     if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED) {
-        Serial.println("Bluetooth ist aktiv!");
+        masterPrintln("Bluetooth is activ");
     } else {
-        Serial.println("Bluetooth ist deaktiviert.");
-        esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+        masterPrintln("Bluetooth is deactivated");
+        esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);                        // release for bluetooth reserved storage
     }
-    masterFileSystem();                                                         // start SPIFFS filesystem
     masterAddressPool();                                                        // define I2C addresses
     masterI2Csetup();                                                           // introduce me as I2C Master
+    masterFileSystem();                                                         // start SPIFFS filesystem
     masterRemoteControl();                                                      // generate remote control object
     masterSlaveControlObject();                                                 // generate control objects
     masterStartRtosTasks();                                                     // start RTOS tasks to do the master job

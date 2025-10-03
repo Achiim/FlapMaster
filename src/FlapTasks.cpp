@@ -47,6 +47,7 @@ LigaTable*      Liga           = nullptr;                                       
 ParserClass*    Parser         = nullptr;                                       // Parser to filter 21 keys and convert to twin commands
 FlapRegistry*   Register       = nullptr;                                       // Object for Registry Task
 FlapStatistics* DataEvaluation = nullptr;                                       // Object for Statistics Task
+FlapFile*       Store          = nullptr;                                       // Object for FlapFile
 FlapTask*       Master         = nullptr;
 
 // Global Timer-Handles
