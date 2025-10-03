@@ -36,7 +36,7 @@
 #define TEN_MINUTES_BEFORE_MATCH 10 * 10 * 60                                   // 10 minutes in seconds
 
 #define POLL_NOWAIT (0)                                                         // no wait at all
-#define POLL_GET_ALL_CHANGES (10 * 1000)                                        // 10 seconds
+#define POLL_GET_ALL_CHANGES (1 * 1000)                                         // 1 seconds
 #define POLL_DURING_GAME (20 * 1000)                                            // 20 seconds
 #define POLL_10MIN_BEFORE_KICKOFF (1 * 60 * 1000)                               // 1 minutes
 #define POLL_NORMAL (60 * 60 * 1000)                                            // 60 minutes
@@ -97,36 +97,34 @@ enum PollMode {
     POLL_MODE_LIVE                                                              // during live games until it's over (2h past kickoff)
 };
 
-// global Poll Scopes for actual PollCycle for Poll Manager
+// global Poll Scopes for actual PollCycle for Poll-Manager
 const PollScope onceCycle[] = {
     // do it only once to initiate data
     CALC_CURRENT_SEASON,                                                        // initialize season
     FETCH_CURRENT_MATCHDAY,                                                     // initialize matchday
-    FETCH_TABLE,                                                                // get actual table from openLigaDB first time
-    FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff (don't fetch during game is live)
-    FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
-    FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
-    SHOW_NEXT_KICKOFF                                                           // show actual kickoff from stored data
+    CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
 };
 
 const PollScope relaxedCycle[] = {
-    CHECK_FOR_CHANGES,                                                          // request openLigaDB for changes at current matchday
     CALC_CURRENT_SEASON,                                                        // initialize season
     FETCH_CURRENT_MATCHDAY,                                                     // initialize matchday
     FETCH_TABLE,                                                                // get actual table from openLigaDB first time
-    FETCH_NEXT_MATCH_LIST                                                       // fetch list of next matches with nearest kickoff
+    FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
+    FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff
+    CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
 };
 
 const PollScope reactiveCycle[] = {
     FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
     FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
-    SHOW_NEXT_KICKOFF                                                           // show actual kickoff from stored data
+    FETCH_TABLE,                                                                // get actual table from openLigaDB first time
+    CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
 };
 
 const PollScope preLiveCycle[] = {
-    CHECK_FOR_CHANGES,                                                          // request openLigaDB for changes at current matchday
     FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
-    SHOW_NEXT_KICKOFF                                                           // show actual kickoff from stored data
+    SHOW_NEXT_KICKOFF,                                                          // show actual kickoff from stored data
+    CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
 };
 
 // don't ask for nextKickoff during live games, you will get kickoff from next live matches
@@ -135,7 +133,9 @@ const PollScope liveCycle[] = {
     CALC_LIVE_TABLE,                                                            // calculate table changes from old and new table
     CALC_LEADER_CHANGE,                                                         // calculate leader change from goals
     CALC_RELEGATION_GHOST_CHANGE,                                               // calculate relegation ghost change from goals
-    CALC_RED_LANTERN_CHANGE                                                     // calculate red lantern change from goals
+    CALC_RED_LANTERN_CHANGE,                                                    // calculate red lantern change from goals
+    FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
+    FETCH_NEXT_KICKOFF                                                          // fetch next kickoff
 };
 
 // ==== enums ====
@@ -263,6 +263,8 @@ static const DfbMap DFB2[] PROGMEM = {{"Hertha BSC", "BSC", 19},           {"VfL
 
 // HTTP request and evaluation
 extern std::string jsonBuffer;                                                  // buffer for deserialization in event-handlers
+extern bool        jsonBufferPrepared;                                          // flag is buffer space allready prepared
+extern int         realJsonBufferSize;                                          // cunked buffers size cummulated
 
 // Poll-Manager Control
 extern bool             currentMatchdayChanged;                                 // actuel state of openLigaDB matchday data
