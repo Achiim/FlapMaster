@@ -20,6 +20,8 @@
 
 #include <Arduino.h>
 #include "TracePrint.h"
+#include "ArduinoJson.h"
+#include "esp_http_client.h"
 
 // ==== defines ====
 #define flapUserAgent "Liga Flap Display V1.0 ESP32"
@@ -33,9 +35,10 @@
 #define MAX_MATCHES_PER_MATCHDAY 10                                             // max. number of matches per matchday to track
 #define MAX_GOALS_PER_MATCHDAY 50                                               // max. number of goals per matchday to track
 #define MAX_MATCH_DURATION 150 * 60                                             // 2,5 hours in seconds
-#define TEN_MINUTES_BEFORE_MATCH 10 * 10 * 60                                   // 10 minutes in seconds
+#define SIXTY_MINUTES_BEFORE_MATCH 6 * 10 * 60                                  // 60 minutes in seconds
 
 #define POLL_NOWAIT (0)                                                         // no wait at all
+#define POLL_WAIT (3 * 60 * 1000)                                               // 3 minutes for next poll
 #define POLL_GET_ALL_CHANGES (1 * 1000)                                         // 1 seconds
 #define POLL_DURING_GAME (20 * 1000)                                            // 20 seconds
 #define POLL_10MIN_BEFORE_KICKOFF (1 * 60 * 1000)                               // 1 minutes
@@ -89,7 +92,7 @@ enum PollScope {
 
 // global Poll Modes
 enum PollMode {
-    POLL_MODE_NONE,                                                             // no polling at all
+    POLL_MODE_NONE,                                                             // no polling at all, but wait
     POLL_MODE_ONCE,                                                             // poll only once and then switch to relaxed
     POLL_MODE_RELAXED,                                                          // relaxed poll wide outside of live activity
     POLL_MODE_REACTIVE,                                                         // something was changed in openLigaDB data -> get it
@@ -98,8 +101,10 @@ enum PollMode {
 };
 
 // global Poll Scopes for actual PollCycle for Poll-Manager
+const PollScope noCycle[] = {};                                                 // no polling
+
+// do it only once to initiate data
 const PollScope onceCycle[] = {
-    // do it only once to initiate data
     CALC_CURRENT_SEASON,                                                        // initialize season
     FETCH_CURRENT_MATCHDAY,                                                     // initialize matchday
     CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
@@ -117,13 +122,14 @@ const PollScope relaxedCycle[] = {
 const PollScope reactiveCycle[] = {
     FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
     FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
+    FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff (don't fetch during game is live)
     FETCH_TABLE,                                                                // get actual table from openLigaDB first time
     CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
 };
 
 const PollScope preLiveCycle[] = {
     FETCH_LIVE_MATCHES,                                                         // are there actual live matches? to get into live Poll immediately
-    SHOW_NEXT_KICKOFF,                                                          // show actual kickoff from stored data
+    FETCH_NEXT_KICKOFF,                                                         // fetch next kickoff
     CHECK_FOR_CHANGES                                                           // request openLigaDB for changes at current matchday
 };
 
@@ -134,8 +140,7 @@ const PollScope liveCycle[] = {
     CALC_LEADER_CHANGE,                                                         // calculate leader change from goals
     CALC_RELEGATION_GHOST_CHANGE,                                               // calculate relegation ghost change from goals
     CALC_RED_LANTERN_CHANGE,                                                    // calculate red lantern change from goals
-    FETCH_NEXT_MATCH_LIST,                                                      // fetch list of next matches with nearest kickoff
-    FETCH_NEXT_KICKOFF                                                          // fetch next kickoff
+    FETCH_LIVE_MATCHES                                                          // are there actual live matches? to get into live Poll immediately
 };
 
 // ==== enums ====
@@ -186,20 +191,13 @@ struct LiveMatchGoalInfo {
     uint8_t  goalMinute;                                                        // minute a goal was scored
     uint8_t  scoreTeam1;                                                        // actual score of team 1
     uint8_t  scoreTeam2;                                                        // actual score of team 2
-
-    int8_t goalsTeam1Delta;                                                     // change of goals for Team 1
-    int8_t goalsTeam2Delta;                                                     // change of goals for Team 2
-    int8_t pointsTeam1Delta;                                                    // change of points for Team 1
-    int8_t pointsTeam2Delta;                                                    // change of points for Team 2
-
-    String result;                                                              // result string like "1:0" after this goal
-    String scoringTeam;                                                         // team that scored the goal
-    String scoringPlayer;                                                       // player who scored the goal
+    String   result;                                                            // result string like "1:0" after this goal
+    String   scoringTeam;                                                       // team that scored the goal
+    String   scoringPlayer;                                                     // player who scored the goal
 
     bool isOwnGoal;                                                             // own goal?
     bool isPenalty;                                                             // penalty?
     bool isOvertime;                                                            // overtime?
-    bool liveTableActualized;                                                   // ligaLiveTable actualized
     void clear() {                                                              // clear MachInfo
         goalID     = 0;
         matchID    = 0;
@@ -207,19 +205,13 @@ struct LiveMatchGoalInfo {
         scoreTeam1 = 0;
         scoreTeam2 = 0;
 
-        goalsTeam1Delta  = 0;
-        goalsTeam2Delta  = 0;
-        pointsTeam1Delta = 0;
-        pointsTeam2Delta = 0;
-
         result        = "";
         scoringTeam   = "";
         scoringPlayer = "";
 
-        isOwnGoal           = false;
-        isPenalty           = false;
-        isOvertime          = false;
-        liveTableActualized = false;
+        isOwnGoal  = false;
+        isPenalty  = false;
+        isOvertime = false;
     }
 };
 
@@ -262,9 +254,10 @@ static const DfbMap DFB2[] PROGMEM = {{"Hertha BSC", "BSC", 19},           {"VfL
                                       {"Preußen Münster", "PRM", 24},      {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
 
 // HTTP request and evaluation
-extern std::string jsonBuffer;                                                  // buffer for deserialization in event-handlers
-extern bool        jsonBufferPrepared;                                          // flag is buffer space allready prepared
-extern int         realJsonBufferSize;                                          // cunked buffers size cummulated
+extern char   jsonBufferChar[32 * 1024];                                        // buffer for deserialization in event-handlers
+extern size_t jsonBufferPos;
+extern bool   jsonBufferPrepared;                                               // flag is buffer space allready prepared
+extern int    realJsonBufferSize;                                               // cunked buffers size cummulated
 
 // Poll-Manager Control
 extern bool             currentMatchdayChanged;                                 // actuel state of openLigaDB matchday data
@@ -291,6 +284,7 @@ extern time_t            currentNextKickoffTime;
 extern time_t            previousNextKickoffTime;
 extern bool              nextKickoffChanged;
 extern bool              nextKickoffFarAway;
+extern bool              ligaConnectionRefused;
 extern bool              matchIsLive;
 extern std::string       dateTimeBuffer;                                        // temp buffer to request
 extern String            currentLastChangeOfMatchday;                           // actual change date
@@ -298,6 +292,7 @@ extern String            previousLastChangeOfMatchday;                          
 extern int               ligaPlanMatchCount;                                    // number of planned matches in current matchday
 extern int               ligaNextMatchCount;                                    // number of next matches in current matchday
 extern int               ligaLiveMatchCount;                                    // number of live matches in current matchday
+extern int               ligaLiveMatchIndex;                                    // index to current live matches
 extern int               ligaFiniMatchCount;                                    // number of live matches in current matchday
 extern int               liveGoalCount;                                         // number of finished live matches in current matchday
 extern int               lastGoalID;                                            // last goal ID to detect new goals
@@ -305,6 +300,11 @@ extern MatchInfo         planMatches[MAX_MATCHES_PER_MATCHDAY];                 
 extern MatchInfo         nextMatches[MAX_MATCHES_PER_MATCHDAY];                 // max. 10 next-Spiele
 extern MatchInfo         liveMatches[MAX_MATCHES_PER_MATCHDAY];                 // max. 10 Live-Spiele
 extern LiveMatchGoalInfo goalsInfos[MAX_GOALS_PER_MATCHDAY];                    // max. 50 goals per matchday
+
+extern uint8_t currScoreTeam1;                                                  // current score of team 1
+extern uint8_t currScoreTeam2;                                                  // current score of team 2
+extern uint8_t prevScoreTeam1;                                                  // previous score of team 1
+extern uint8_t prevScoreTeam2;                                                  // previous score of team 2
 
 // ==== global Variables ====
 
@@ -321,6 +321,11 @@ const char* pollModeToString(PollMode mode);
 const char* pollScopeToString(PollScope scope);
 bool        recalcLiveTable(LigaSnapshot& baseTable, LigaSnapshot& tempTable);  // recalculate table with live goals
 void        printLigaLiveTable(LigaSnapshot& LiveTable);                        // print recalculated live table
+bool        deserializeHttpResult(DynamicJsonDocument& doc);
+bool        readHttpResult(esp_http_client_event_t* evt);
+
+template <typename TFilter>
+bool deserializeHttpResult(DynamicJsonDocument& doc, const TFilter& filter);
 
 void     processPollScope(PollScope scope);
 PollMode determineNextPollMode();

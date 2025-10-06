@@ -38,8 +38,8 @@ class FlapFile {
     // ----------------------------
     // public functions
     bool available();                                                           // check ich filesystem is available
-    bool saveFile(const char* filename, StaticJsonDocument<2048>& doc);         // store a file
-    bool readFile(const char* filename, StaticJsonDocument<2048>& doc);         // read a file
+    bool saveFile(const char* filename, JsonDocument& doc);                     // store a file
+    bool readFile(const char* filename, JsonDocument& doc);                     // read a file
 
     // ----------------------------
     // Trace functions
@@ -56,6 +56,8 @@ class FlapFile {
     // ----------------------------
     // privat functions
     String formatSize(size_t bytes);                                            // Format Bytes to Mb, Kb, B
+    String isoTimestamp();                                                      // Format time stamp
+    void   listPartitions();                                                    // list ESP32 partitions
 };
 
 #endif                                                                          // FlapFile_h

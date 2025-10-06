@@ -66,7 +66,7 @@ class FlapReporting {
     // ----------------------------
     uint32_t maxValueFromHistory(uint32_t* history);                            // get maximum value from history
 
-    void reportTaskStatusJson();                                                // generate JSON Format
+    void createTaskStatusJson();                                                // generate JSON Format
     void reportTaskStatus();                                                    // show Task status report
     void renderTaskReport();
 

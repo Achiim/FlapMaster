@@ -40,27 +40,30 @@
 /*
  */
 void flapServerTask(void* pvParameters) {
-    if (!Store->available())                                                    ///< check if file system is available
+    if (!Store->available())                                                    // check if file system is available
         return;
-    if (!connectToWifi())                                                       ///< Ensure WiFi/TLS preconditions for OpenLigaDB are met
+    if (!connectToWifi())                                                       // Ensure WiFi/TLS preconditions for OpenLigaDB are met
         return;
 
-    vTaskDelay(pdMS_TO_TICKS(300));                                             ///< Short delay before time configuration
+    vTaskDelay(pdMS_TO_TICKS(300));                                             // Short delay before time configuration
     configureTime();
 
+    Serial.println("[FLAP - SERVER  ] Web Client opened");
+
+    // ---- Root endpoint ----
     server.on("/", []() {
-        Serial.println("[FLAP - SERVER  ] Web Client opened");
         server.send(200,                                                        // HTTP Status 200 OK
                     "text/html; charset=UTF-8",                                 // MIME-Typ
                     "<html><body><h1>Hallo Achim!</h1><p>Deine ESP32-Webseite läuft.</p></body></html>");
     });
 
+    // ---- Status endpoint ----
     server.on("/status", []() {
         Serial.println("[FLAP - SERVER  ] Flap Display Task Status requested");
         sendStatusHtmlStream("/R01.json");
     });
 
-    // Endpunkt 1: JSON pur
+    // ---- Raw JSON endpoint ----
     server.on("/1", []() {
         File file = SPIFFS.open("/R01.json", FILE_READ);
         if (!file) {
