@@ -43,7 +43,9 @@ constexpr int W_OG    = 2;                                                      
 constexpr int W_G     = 2;                                                      // goals 0..99
 
 // globar routines for JSON Format
-void sendStatusHtmlStream(const char* filename);
+void   sendStatusHtmlStream(const char* filename);
+String formatIsoTime(time_t t);
+String getIsoTimestamp();
 
 class FlapReporting {
    public:
@@ -69,6 +71,8 @@ class FlapReporting {
     void createTaskStatusJson();                                                // generate JSON Format
     void reportTaskStatus();                                                    // show Task status report
     void renderTaskReport();
+
+    void createPollStatusJson();                                                // generate JSON Format
 
     void reportMemory();                                                        // show memory usage
     void reportRtosTasks();                                                     // show Tasklist with remaining stack size

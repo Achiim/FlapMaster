@@ -571,6 +571,7 @@ void ParserClass::toggleLeague() {
     diffSecondsUntilKickoff      = 0;                                           // reset
     nextKickoffString            = "";                                          // reset
     matchIsLive                  = false;                                       // reset live match detection
+    ligaConnectionRefused        = false;                                       // reset connection refused
     currentPollMode              = PollMode::POLL_MODE_ONCE;                    // start with NONE cycle
     xTaskNotifyGive(g_ligaHandle);                                              // wake ligaTask to perform liga changes emmediately
 };

@@ -60,12 +60,27 @@ void flapServerTask(void* pvParameters) {
     // ---- Status endpoint ----
     server.on("/status", []() {
         Serial.println("[FLAP - SERVER  ] Flap Display Task Status requested");
-        sendStatusHtmlStream("/R01.json");
+        sendStatusHtmlStream("/TaskStatus.json");
     });
 
-    // ---- Raw JSON endpoint ----
+    // ---- Raw JSON endpoint for Task Status ----
     server.on("/1", []() {
-        File file = SPIFFS.open("/R01.json", FILE_READ);
+        File file = SPIFFS.open("/TaskStatus.json", FILE_READ);
+        if (!file) {
+            server.sendHeader("Access-Control-Allow-Origin", "*");
+            server.send(500, "application/json", "{\"error\":\"Datei nicht gefunden\"}");
+            return;
+        }
+        String jsonString = file.readString();
+        file.close();
+
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+        server.send(200, "application/json; charset=UTF-8", jsonString);
+    });
+
+    // ---- Raw JSON endpoint for Poll Status ----
+    server.on("/2", []() {
+        File file = SPIFFS.open("/PollStatus.json", FILE_READ);
         if (!file) {
             server.sendHeader("Access-Control-Allow-Origin", "*");
             server.send(500, "application/json", "{\"error\":\"Datei nicht gefunden\"}");

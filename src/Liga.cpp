@@ -99,23 +99,6 @@ std::map<uint32_t, LiveMatchGoalInfo*> getLatestGoalsPerMatch() {
     return latest;
 }
 
-String getTeam1Name(uint32_t matchID) {
-    for (uint8_t i = 0; i < ligaLiveMatchCount; ++i) {
-        if (liveMatches[i].matchID == matchID) {
-            return String(liveMatches[i].team1.c_str());
-        }
-    }
-    return "???";
-}
-String getTeam2Name(uint32_t matchID) {
-    for (uint8_t i = 0; i < ligaLiveMatchCount; ++i) {
-        if (liveMatches[i].matchID == matchID) {
-            return String(liveMatches[i].team2.c_str());
-        }
-    }
-    return "???";
-}
-
 /**
  * @brief Constructs the global LigaTable instance if not already initialized.
  *
@@ -549,7 +532,11 @@ esp_err_t _http_event_handler_pollForNextMatchList(esp_http_client_event_t* evt)
             break;
         }
         case HTTP_EVENT_ON_FINISH: {
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             StaticJsonDocument<512> filter;
+            #pragma GCC diagnostic pop
+
             filter[0]["matchID"]       = true;
             filter[0]["matchDateTime"] = true;
 
@@ -784,6 +771,8 @@ bool readHttpResult(esp_http_client_event_t* evt) {
 
     return true;
 }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
 // --- Variante 1: ohne Filter ---
 bool deserializeHttpResult(DynamicJsonDocument& doc) {
@@ -818,6 +807,7 @@ bool deserializeHttpResult(DynamicJsonDocument& doc, const TFilter& filter) {
     return true;
 }
 
+#pragma GCC diagnostic pop
 /**
  * @brief HTTP event handler for polling goals in live matches.
  *
@@ -840,15 +830,11 @@ esp_err_t _http_event_handler_pollForGoalsInLiveMatches(esp_http_client_event_t*
             break;
         }
         case HTTP_EVENT_ON_FINISH: {
-            // search matchIndex in liveMatches[i]
-            for (int i = 0; i < ligaLiveMatchCount; i++) {
+            for (int i = 0; i < ligaLiveMatchCount; i++) {                      // search matchIndex in liveMatches[i]
                 if (liveMatches[i].matchID == liveMatchID) {
                     matchIndex = i;
                 }
             }
-
-            // if (matchIndex < 0)
-            //     Liga->ligaPrintln("(_http_event_handler_pollForGoalsInLiveMatches) no live match with matchID %d", liveMatchID);
 
             #pragma GCC diagnostic push
             #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -870,9 +856,7 @@ esp_err_t _http_event_handler_pollForGoalsInLiveMatches(esp_http_client_event_t*
                 return false;                                                   ///< live match not found.
             }
 
-            if (doc["matchID"] != 0) {
-                // for each match generate dummy entry: 0:0
-                // Liga->ligaPrintln("Goal index %d is dummy entry: 0:0 for match %d", liveGoalCount, liveMatchID);
+            if (doc["matchID"] != 0) {                                          // for each match generate dummy entry: 0:0
                 goalsInfos[liveGoalCount].matchID       = doc["matchID"];
                 goalsInfos[liveGoalCount].goalID        = 0;
                 goalsInfos[liveGoalCount].scoreTeam1    = 0;
@@ -912,7 +896,6 @@ esp_err_t _http_event_handler_pollForGoalsInLiveMatches(esp_http_client_event_t*
                 currScoreTeam2          = scoreTeam2;
                 std::string scoringTeam = "";
 
-                // Liga->ligaPrintln("evaluate goals for live match with index  = %d", matchIndex);
                 // Team 1 scored
                 if (currScoreTeam1 > prevScoreTeam1 && liveMatches[matchIndex].team1.length() > 0) {
                     scoringTeam = liveMatches[matchIndex].team1;
@@ -924,7 +907,6 @@ esp_err_t _http_event_handler_pollForGoalsInLiveMatches(esp_http_client_event_t*
 
                 Liga->ligaPrintln("Goal in matchID = %d for %s in minute %u' scored by %s: %s - %s", liveMatchID, scoringTeam.c_str(), minute, scorer,
                                   liveMatches[matchIndex].team1.c_str(), liveMatches[matchIndex].team2.c_str());
-                // Liga->ligaPrintln("Goal in match %d for %s in minute %u' scored by %s", matchID, scoringTeam.c_str(), minute, scorer);
 
                 /// @brief Display goal details if it's a new goal.
                 // if (goalID > lastGoalID) {
@@ -1061,6 +1043,9 @@ void pollForGoalsInLiveMatches() {
 }
 
 esp_err_t _http_event_handler_pollForLiveMatches(esp_http_client_event_t* evt) {
+    const char* kickoffStr  = "";
+    time_t      kickoffTime = {};
+
     switch (evt->event_id) {
         case HTTP_EVENT_ON_DATA: {
             if (readHttpResult(evt)) {
@@ -1072,7 +1057,10 @@ esp_err_t _http_event_handler_pollForLiveMatches(esp_http_client_event_t* evt) {
         }
 
         case HTTP_EVENT_ON_FINISH: {
+            #pragma GCC diagnostic push
+            #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             StaticJsonDocument<512> filter;
+            #pragma GCC diagnostic pop
             filter[0]["matchID"]           = true;
             filter[0]["matchDateTime"]     = true;
             filter[0]["matchIsFinished"]   = true;
@@ -1089,7 +1077,7 @@ esp_err_t _http_event_handler_pollForLiveMatches(esp_http_client_event_t* evt) {
                 break;
             }
 
-            for (int i = 0; i < MAX_MATCHES_PER_MATCHDAY; ++i)
+            for (int i = 0; i < MAX_MATCHES_PER_MATCHDAY; ++i)                  // reset live matches
                 liveMatches[i].clear();
 
             ligaLiveMatchCount  = 0;                                            // init count of live matches
@@ -1100,7 +1088,7 @@ esp_err_t _http_event_handler_pollForLiveMatches(esp_http_client_event_t* evt) {
                 if (match["matchIsFinished"] == true)
                     continue;                                                   // skipp finished matches
 
-                const char* kickoffStr = match["matchDateTime"];
+                kickoffStr = match["matchDateTime"];
                 if (!kickoffStr)
                     continue;                                                   // skip match without kickoff
 
@@ -1111,7 +1099,7 @@ esp_err_t _http_event_handler_pollForLiveMatches(esp_http_client_event_t* evt) {
                 }
 
                 tmKickoff.tm_isdst = -1;
-                time_t kickoffTime = mktime(&tmKickoff);
+                kickoffTime        = mktime(&tmKickoff);
                 double delta       = difftime(now, kickoffTime);
 
                 if (delta >= 0 && delta <= maxAge) {
@@ -2169,7 +2157,7 @@ PollMode determineNextPollMode() {
     // POLL MODE enter conditions
     if (ligaConnectionRefused) {
         Liga->ligaPrintln("switch Poll Mode because: openLigaDB prevents connection");
-        ligaConnectionRefused = true;
+        ligaConnectionRefused = false;
         return POLL_MODE_NONE;
     }
     if (ligaMatchday == 0 || ligaSeason == 0) {                                 // enter ONCE polling because general data missing

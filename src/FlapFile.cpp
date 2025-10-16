@@ -61,23 +61,26 @@ FlapFile::FlapFile() {
  * such as file name, version, timestamp, description and author.
  * The combined JSON is then written to SPIFFS.
  *
- * @param filename Path to the JSON file in SPIFFS (e.g. "/R01.json")
+ * @param filename Path to the JSON file in SPIFFS (e.g. "/TaskStatus.json")
  * @param dataDoc  The JsonDocument containing the actual data payload
  * @return true    If the file was saved successfully
  * @return false   If opening or writing the file failed
  */
 bool FlapFile::saveFile(const char* filename, JsonDocument& dataDoc) {
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     StaticJsonDocument<2048> finalDoc;                                          ///< Final document with metadata + data
 
     // ------------------------------------------------------------
     // 1. Create metadata object first so it will be placed at top
     // ------------------------------------------------------------
-    JsonObject meta     = finalDoc.createNestedObject("_meta");                 ///< JSON header object
+    JsonObject meta = finalDoc.createNestedObject("_meta");                     ///< JSON header object
+    #pragma GCC diagnostic pop
     meta["file"]        = filename;                                             ///< Name of the file in SPIFFS
     meta["version"]     = "1.0";                                                ///< Schema or file version
     meta["created"]     = isoTimestamp();                                       ///< Local MESZ/MEZ timestamp
     meta["description"] = "Flap Master Task Status Report";                     ///< Human readable description
-    meta["author"]      = "Achiim";                                             ///< File author/owner
+    meta["author"]      = "ReportTask";                                         ///< File author/owner
 
     // ------------------------------------------------------------
     // 2. Copy all existing key/value pairs from input document
@@ -114,6 +117,8 @@ bool FlapFile::saveFile(const char* filename, JsonDocument& dataDoc) {
 
 // ---------------------------
 // File open and read
+// (ignores optional _meta section)
+// ---------------------------
 bool FlapFile::readFile(const char* filename, JsonDocument& doc) {
     File file = SPIFFS.open(filename, FILE_READ);
     if (!file) {
@@ -121,13 +126,25 @@ bool FlapFile::readFile(const char* filename, JsonDocument& doc) {
         return false;
     }
 
-    DeserializationError err = deserializeJson(doc, file);
+    JsonDocument         tempDoc;
+    DeserializationError err = deserializeJson(tempDoc, file);
+    file.close();
     if (err) {
-        String msg = "Error while parsing JSON: ";
-        msg += err.c_str();                                                     // z. B. "InvalidInput", "NoMemory", "EmptyInput"
-        filePrintln("%s", msg);
+        filePrintln("Error while parsing JSON: %s", err.c_str());
         return false;
     }
+
+    // Prüfen, ob _meta im Root-Objekt existiert
+    if (tempDoc["_meta"].is<JsonObject>()) {
+        for (JsonPair kv : tempDoc.as<JsonObject>()) {
+            if (strcmp(kv.key().c_str(), "_meta") != 0) {
+                doc[kv.key()] = kv.value();                                     // Nur Nicht-_meta übernehmen
+            }
+        }
+    } else {
+        doc.set(tempDoc);
+    }
+
     return true;
 }
 

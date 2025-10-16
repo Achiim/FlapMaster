@@ -321,11 +321,14 @@ const char* pollModeToString(PollMode mode);
 const char* pollScopeToString(PollScope scope);
 bool        recalcLiveTable(LigaSnapshot& baseTable, LigaSnapshot& tempTable);  // recalculate table with live goals
 void        printLigaLiveTable(LigaSnapshot& LiveTable);                        // print recalculated live table
-bool        deserializeHttpResult(DynamicJsonDocument& doc);
 bool        readHttpResult(esp_http_client_event_t* evt);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 template <typename TFilter>
 bool deserializeHttpResult(DynamicJsonDocument& doc, const TFilter& filter);
+bool deserializeHttpResult(DynamicJsonDocument& doc);
+#pragma GCC diagnostic pop
 
 void     processPollScope(PollScope scope);
 PollMode determineNextPollMode();

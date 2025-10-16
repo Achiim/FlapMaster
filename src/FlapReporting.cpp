@@ -162,7 +162,7 @@ static void printIntRight(int v, uint8_t width) {
 }
 
 static void printLigaHeader() {
-    Serial.println("┌─────┬──────────────────────────┬────────────┬────┬────┬────┬────┬────┬────┬──────┬─────┐");
+    Serial.println("┌─────┬──────────────────────────┬─────┬──────┬────┬────┬────┬────┬────┬────┬──────┬─────┐");
     Serial.println("│ Pos │ Mannschaft               │ DFB │ Flap │ Sp │  S │  U │  N │  T │ GT │ Diff │ Pkt │");
     Serial.println("├─────┼──────────────────────────┼─────┼──────┼────┼────┼────┼────┼────┼────┼──────┼─────┤");
 }
@@ -440,20 +440,24 @@ String padStart(const String& text, int width, char fill = ' ') {
 
 // ------------------------------
 /**
- * @brief render Task Report for consol output
+ * @brief render Task Report without _meta information for consol output
  *
  */
 void FlapReporting::renderTaskReport() {
     constexpr int CONTENT_WIDTH = 60;                                           // Gesamtbreite (innen zwischen ║ … ║)
-    constexpr int VALUE_COL     = 26;                                           // Spalte ab der der Wert beginnt (1-basiert)
+    constexpr int VALUE_COL     = 30;                                           // Spalte ab der der Wert beginnt (1-basiert)
 
-    StaticJsonDocument<1024> doc;
-    if (!Store->readFile("/R01.json", doc)) {
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    DynamicJsonDocument doc(2048);
+    #pragma GCC diagnostic pop
+
+    if (!Store->readFile("/TaskStatus.json", doc)) {
         return;                                                                 // could not read file
     }
 
     // Header
-    Serial.println("╔══════════════════════════════════════════════════════════╗");
+    Serial.println("┌──────────────────────────────────────────────────────────┐");
 
     // evaluate key-value pairs
     for (JsonPair kv : doc.as<JsonObject>()) {
@@ -461,7 +465,7 @@ void FlapReporting::renderTaskReport() {
         String value = kv.value().as<String>();
 
         // Links Schlüssel, rechts Wert
-        String line = "║ ";
+        String line = "│ ";
         line += key;
         // Bis VALUE_COL auffüllen
         while (line.length() < VALUE_COL)
@@ -471,14 +475,14 @@ void FlapReporting::renderTaskReport() {
         // Rest auffüllen
         while (line.length() < CONTENT_WIDTH + 1)
             line += ' ';                                                        // +1 wegen linkem ║
-        line += "║";
+        line += "│";
         Serial.println(line);
-        if (key == "report")
-            Serial.println("╠══════════════════════════════════════════════════════════╣");
+        if (key == "FLAP REPORT")
+            Serial.println("├──────────────────────────────────────────────────────────┤");
     }
 
     // Footer
-    Serial.println("╚══════════════════════════════════════════════════════════╝");
+    Serial.println("└──────────────────────────────────────────────────────────┘");
 }
 
 // -----------------------------
@@ -796,12 +800,133 @@ const char* FlapReporting::selectSparklineLevel(int value, int minValue, int max
     index       = std::max(0, std::min(index, SPARKLINE_LEVEL_COUNT - 1));
     return SPARKLINE_LEVELS[index];
 }
+void FlapReporting::createPollStatusJson() {
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    DynamicJsonDocument doc(12288);                                             // genug Platz für alle Matches & Goals
+    #pragma GCC diagnostic pop
+
+    // --- Meta ---
+    JsonObject meta     = doc["_meta"].to<JsonObject>();
+    meta["file"]        = "/PollStatus.json";
+    meta["version"]     = "1.0";
+    meta["created"]     = getIsoTimestamp();
+    meta["description"] = "Poll Manager Status for OpenLigaDB ";
+    meta["author"]      = "FlapReport";
+
+    // --- Report-Struktur ---
+    JsonObject report      = doc["report"].to<JsonObject>();
+    report["title"]        = "Flap Display Liga Bot";
+    report["latestUpdate"] = getIsoTimestamp();
+
+    // --- Poll / League Info ---
+    JsonObject poll = report["poll"].to<JsonObject>();
+    poll["mode"]    = pollModeToString(currentPollMode);
+    poll["scope"]   = pollScopeToString(currentPollScope);
+
+    JsonObject league  = report["league"].to<JsonObject>();
+    league["name"]     = leagueName(activeLeague);
+    league["season"]   = ligaSeason;
+    league["matchday"] = ligaMatchday;
+
+    // --- Live Matches + Goals ---
+    JsonArray live = report["liveMatches"].to<JsonArray>();
+    for (int i = 0; i < ligaLiveMatchCount; ++i) {
+        JsonObject lm = live.add<JsonObject>();
+        lm["team1"]   = liveMatches[i].team1;
+        lm["team2"]   = liveMatches[i].team2;
+        lm["kickoff"] = formatIsoTime(liveMatches[i].kickoff);
+
+        // Nested goals
+        JsonArray goals = lm["goals"].to<JsonArray>();
+        for (int j = 0; j < liveGoalCount; ++j) {
+            LiveMatchGoalInfo& goal = goalsInfos[j];
+            if (goal.matchID == liveMatches[i].matchID) {
+                JsonObject g = goals.add<JsonObject>();
+                g["minute"]  = goal.goalMinute;
+                g["team"]    = goal.scoringTeam;
+                g["scorer"]  = goal.scoringPlayer;
+                g["result"]  = goal.result;
+            }
+        }
+    }
+
+    // --- Next Matches ---
+    JsonArray next = report["nextMatches"].to<JsonArray>();
+    for (int i = 0; i < ligaNextMatchCount; ++i) {
+        JsonObject nm = next.add<JsonObject>();
+        nm["team1"]   = nextMatches[i].team1;
+        nm["team2"]   = nextMatches[i].team2;
+        nm["kickoff"] = formatIsoTime(nextMatches[i].kickoff);
+    }
+
+    // --- Planned Matches ---
+    JsonArray planned = report["plannedMatches"].to<JsonArray>();
+    for (int i = 0; i < ligaPlanMatchCount; ++i) {
+        JsonObject pm = planned.add<JsonObject>();
+        pm["team1"]   = planMatches[i].team1;
+        pm["team2"]   = planMatches[i].team2;
+        pm["kickoff"] = formatIsoTime(planMatches[i].kickoff);
+    }
+
+    // --- Speichern ---
+    Store->saveFile("/PollStatus.json", doc);
+
+    #ifdef LIGAVERBOSE
+        Liga->ligaPrintln("PollStatus.json created (%u bytes used)", (unsigned)measureJson(doc));
+    #endif
+}
+
+/**
+ * @brief Returns current local time as ISO-8601 timestamp with timezone.
+ * @example "2025-10-07T15:29:01+02:00"
+ */
+String getIsoTimestamp() {
+    time_t now;
+    time(&now);
+
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);                                               // threadsafe
+
+    // 32 Bytes sind absolut sicher
+    char   buf[32];
+    size_t len = strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S%z", &timeinfo);
+
+    if (len == 0)
+        return "1970-01-01T00:00:00+00:00";
+
+    String ts(buf);
+    if (ts.length() > 2) {
+        ts = ts.substring(0, ts.length() - 2) + ":" + ts.substring(ts.length() - 2);
+    }
+    return ts;
+}
+/**
+ * @brief Formats a given time_t as ISO-8601 timestamp with timezone.
+ * @param t  UNIX timestamp (e.g. kickoff)
+ * @return String like "2025-10-18T15:30:00+02:00"
+ */
+String formatIsoTime(time_t t) {
+    struct tm timeinfo;
+    localtime_r(&t, &timeinfo);
+
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S%z", &timeinfo);
+
+    String ts(buf);
+    if (ts.length() > 2) {
+        ts = ts.substring(0, ts.length() - 2) + ":" + ts.substring(ts.length() - 2);
+    }
+    return ts;
+}
 
 /**
  * @brief report about poll manager status
  *
  */
 void FlapReporting::reportPollStatus() {
+    createPollStatusJson();
+
     char liga[32];
     strcpy(liga, leagueName(activeLeague));                                     // current league name
 
@@ -916,11 +1041,16 @@ void FlapReporting::reportPollStatus() {
  *
  */
 void FlapReporting::createTaskStatusJson() {
-    if (!Store->available())
+    if (!Store->available()) {
         return;
+    }
 
-    StaticJsonDocument<1024> doc;
-    doc["report"] = "FLAP TASK STATUS REPORT";
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    DynamicJsonDocument doc(2048);
+    #pragma GCC diagnostic pop
+
+    doc["FLAP REPORT"] = "TASK STATUS";
 
     // Tick count
     doc["Tick count"] = String(xTaskGetTickCount());
@@ -977,7 +1107,7 @@ void FlapReporting::createTaskStatusJson() {
         doc["Next OpenLiga scan in"] = buf;
     }
 
-    Store->saveFile("/R01.json", doc);
+    Store->saveFile("/TaskStatus.json", doc);
 }
 
 // -----------------------------
@@ -986,45 +1116,44 @@ void FlapReporting::createTaskStatusJson() {
  * @brief render flat JSON file as html
  *
  */
-
 void sendStatusHtmlStream(const char* filename) {
-    StaticJsonDocument<1024> doc;
-    Store->readFile(filename, doc);
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    DynamicJsonDocument doc(1024);
+    #pragma GCC diagnostic pop
 
-    // send header once
+    if (!Store->readFile(filename, doc))
+        return;
+
     server.setContentLength(CONTENT_LENGTH_UNKNOWN);
     server.send(200, "text/html; charset=UTF-8", "");
 
-    // HTML-header
     server.sendContent(
         "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
         "<title>FLAP Task Status</title>"
         "<style>body{font-family:monospace; background:#f5f5f5; white-space:pre;}</style>"
         "</head><body>\n");
 
-    // Report Header
-    // server.sendContent("FLAP TASK STATUS REPORT\n");
-    // server.sendContent("=======================\n\n");
+    char line[128];
+    bool headerPrinted = false;
 
-    // stream all Key/Value-pairs
     for (JsonPair kv : doc.as<JsonObject>()) {
-        String line;
-        line.reserve(128);
-        if (kv.key() == "report") {
-            line += kv.value().as<const char*>();
-            line += "\n";
+        const char* key   = kv.key().c_str();
+        const char* value = kv.value().as<const char*>();
+
+        if (strcmp(key, "report") == 0) {
+            snprintf(line, sizeof(line), "%s\n=======================\n", value);
             server.sendContent(line);
-            server.sendContent("=======================\n");
+            headerPrinted = true;
         } else {
-            line += kv.key().c_str();
-            line += " ";
-            line += kv.value().as<const char*>();
-            line += "\n";
+            snprintf(line, sizeof(line), "%-24s %s\n", key, value);
             server.sendContent(line);
         }
     }
 
-    // HTML-End
+    if (!headerPrinted)
+        server.sendContent("=======================\n");
+
     server.sendContent("</body></html>");
-    server.sendContent("");                                                     // EOF
+    server.sendContent("");
 }
