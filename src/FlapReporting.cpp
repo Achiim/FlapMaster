@@ -964,7 +964,7 @@ void FlapReporting::reportPollStatus() {
                 if (hasPrintedHeader) {
                     hasGoals = true;
                     printUtf8Padded(match.team1.c_str(), W_TEAM);
-                    Serial.printf(" │ %-5s      (%2d') │ ", goal.result, goal.goalMinute);
+                    Serial.printf(" │ %-5s      (%2d') │ ", goal.result.c_str(), goal.goalMinute);
                     printUtf8Padded(match.team2.c_str(), W_TEAM);
                     Serial.println(" │");
                 }
