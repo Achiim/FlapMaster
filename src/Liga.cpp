@@ -835,6 +835,10 @@ esp_err_t _http_event_handler_pollForGoalsInLiveMatches(esp_http_client_event_t*
                     matchIndex = i;
                 }
             }
+            if (matchIndex < 0) {                                               // liveMatchID nicht in liveMatches[] -> sonst liveMatches[-1]
+                Liga->ligaPrintln("(pollForGoals) matchID %d nicht in liveMatches[] - uebersprungen", liveMatchID);
+                break;
+            }
 
             #pragma GCC diagnostic push
             #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -856,7 +860,7 @@ esp_err_t _http_event_handler_pollForGoalsInLiveMatches(esp_http_client_event_t*
                 return false;                                                   ///< live match not found.
             }
 
-            if (doc["matchID"] != 0) {                                          // for each match generate dummy entry: 0:0
+            if (doc["matchID"] != 0 && liveGoalCount < MAX_GOALS_PER_MATCHDAY) {  // Dummy-Eintrag 0:0 (mit Bounds-Check)
                 goalsInfos[liveGoalCount].matchID       = doc["matchID"];
                 goalsInfos[liveGoalCount].goalID        = 0;
                 goalsInfos[liveGoalCount].scoreTeam1    = 0;
@@ -926,10 +930,9 @@ esp_err_t _http_event_handler_pollForGoalsInLiveMatches(esp_http_client_event_t*
                                     */
                 //}
 
-                auto& liveGoal = goalsInfos[liveGoalCount];
-
                 /// @brief Optionally store goal data if within matchday limit.
                 if (liveGoalCount < MAX_GOALS_PER_MATCHDAY) {
+                    auto& liveGoal         = goalsInfos[liveGoalCount];          // Referenz erst nach dem Bounds-Check bilden
                     liveGoal.goalID        = goalID;
                     liveGoal.matchID       = matchID;
                     liveGoal.goalMinute    = minute;
