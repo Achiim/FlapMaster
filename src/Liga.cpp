@@ -667,9 +667,11 @@ esp_err_t _http_event_handler_pollForNextMatchList(esp_http_client_event_t* evt)
  */
 bool LigaTable::pollForNextMatchList(int matchdayOffset) {
     int offset = matchdayOffset;                                                // to be transfered to event handler
-    // Validate matchday range (1–34 inclusive)
-    if (ligaMatchday + matchdayOffset > 34 || ligaMatchday + matchdayOffset < 1) {
-        Liga->ligaPrintln("pollForNextMatchList: invalide %d (current matchday %d)", ligaMatchday + matchdayOffset, ligaMatchday);
+    // Validate matchday range (1..ligaMaxMatchday inclusive); matchdays = (teams - 1) * 2 -> BL1/BL2: 34, BL3: 38
+    int ligaMaxMatchday = (ligaMaxTeams - 1) * 2;
+    if (ligaMatchday + matchdayOffset > ligaMaxMatchday || ligaMatchday + matchdayOffset < 1) {
+        Liga->ligaPrintln("pollForNextMatchList: invalide %d (current matchday %d, max %d)", ligaMatchday + matchdayOffset, ligaMatchday,
+                          ligaMaxMatchday);
         return false;
     }
 
