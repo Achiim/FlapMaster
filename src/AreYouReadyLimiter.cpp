@@ -107,8 +107,7 @@ uint32_t SlaveTwin::estimateAYRdurationMs(uint8_t longCmd, uint16_t param) const
                 margin_ms = 300u;                                               // apply cap
 
             eta = scaled_ms + margin_ms;                                        // ETA = scaled motion time + tail
-            // NOTE: no 'break' here → this will FALL THROUGH to 'default' if left as-is.
-            // If you do NOT intend fall-through, add 'break;' above.
+            break;                                                             // done with SENSOR_CHECK (eigene ETA, kein Fall-through)
         }
         case STEP_MEASURE: {                                                    // 3 forward measurements
             const uint16_t off_steps = (param != 0) ? param : offset;           // treat param as offset_steps if provided
