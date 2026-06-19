@@ -31,6 +31,8 @@
 #include "TracePrint.h"
 #include <cstdint>
 #include <climits>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #ifndef FlapRegistry_h
     #define FlapRegistry_h
@@ -44,6 +46,27 @@ struct I2CSlaveDevice {
 
 // ----------------------------
 extern std::map<I2Caddress, I2CSlaveDevice*> g_slaveRegistry;
+
+// ----------------------------
+// Concurrency guard for g_slaveRegistry: the map is touched by many tasks (twins, registry task,
+// timer callbacks, reporting). A recursive mutex serializes every access; flapRegistryMutexInit()
+// must run once in setup() BEFORE any task starts. Use RegistryLock as an RAII scope guard.
+extern SemaphoreHandle_t g_registryMutex;
+void                     flapRegistryMutexInit();                               // create the recursive mutex (call once in setup)
+
+class RegistryLock {                                                            // RAII lock for g_slaveRegistry
+   public:
+    RegistryLock() {
+        if (g_registryMutex)
+            xSemaphoreTakeRecursive(g_registryMutex, portMAX_DELAY);
+    }
+    ~RegistryLock() {
+        if (g_registryMutex)
+            xSemaphoreGiveRecursive(g_registryMutex);
+    }
+    RegistryLock(const RegistryLock&)            = delete;                      // non-copyable
+    RegistryLock& operator=(const RegistryLock&) = delete;
+};
 
 /**
  * @brief Flap Registry class

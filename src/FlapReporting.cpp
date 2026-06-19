@@ -347,6 +347,7 @@ void FlapReporting::reportSlaveRegistry() {
     Serial.println("│ I²C  │ Device           │Flaps│rpm│ms/Rev│St/Rev│ Offset │ Pos  │ Sensor  │ State  │");
     Serial.println("├──────┼──────────────────┼─────┼───┼──────┼──────┼────────┼──────┼─────────┼────────┤");
 
+    RegistryLock _lock;                                                         // protect map iteration against concurrent deRegisterDevice (UAF)
     for (const auto& [address, device] : g_slaveRegistry) {
         const char* sensorStatus = device->parameter.sensorworking ? "WORKING" : "BROKEN";
         const char* deviceStatus = device->bootFlag ? "boot" : "online";

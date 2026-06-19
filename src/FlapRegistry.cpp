@@ -42,6 +42,21 @@ std::map<I2Caddress, I2CSlaveDevice*> g_slaveRegistry;
 // -----------------------------------
 
 /**
+ * @brief recursive mutex protecting all access to g_slaveRegistry
+ */
+SemaphoreHandle_t g_registryMutex = nullptr;
+
+/**
+ * @brief create the registry mutex once; call from setup() before any task starts
+ */
+void flapRegistryMutexInit() {
+    if (!g_registryMutex)
+        g_registryMutex = xSemaphoreCreateRecursiveMutex();
+}
+
+// -----------------------------------
+
+/**
  * @brief Will be called cyclic by Registry Task with the help of a countdown timer
  * and will trigger the twins of all registered devices to ping them and:
  *
@@ -102,6 +117,7 @@ void FlapRegistry::availabilityCheck() {
  *
  */
 void FlapRegistry::deRegisterDevice(I2Caddress slaveAddress) {
+    RegistryLock _lock;                                                         // protect map mutation
     auto it = g_slaveRegistry.find(slaveAddress);
     if (it != g_slaveRegistry.end()) {                                          // only attempt erase if registry is not empty
         delete it->second;                                                      // release memory
@@ -202,6 +218,8 @@ void FlapRegistry::updateRegistry(I2Caddress address, slaveParameter parameter) 
     int n = indexOfAddress(address);
     if (n < 0 || Twin[n] == nullptr)
         return;                                                                 // no Twin exists
+
+    RegistryLock _lock;                                                         // protect find/insert + device read-modify
 
     I2CSlaveDevice* device      = nullptr;                                      // generate new device
     bool            deviceIsNew = false;
@@ -355,6 +373,7 @@ int FlapRegistry::capacity() const {
  * @return int number of registered devices
  */
 int FlapRegistry::size() const {
+    RegistryLock _lock;                                                         // protect map read
     return static_cast<int>(g_slaveRegistry.size());
 }
 
@@ -406,6 +425,7 @@ int FlapRegistry::indexOfAddress(I2Caddress addr) const {                       
  * @return false
  */
 bool FlapRegistry::isAddressRegistered(I2Caddress addr) const {
+    RegistryLock _lock;                                                         // protect map read
     return g_slaveRegistry.find(addr) != g_slaveRegistry.end();
 }
 
@@ -448,6 +468,7 @@ I2Caddress FlapRegistry::getNextFreeAddress() {
  * @return I2Caddress = 0, if no address is free
  */
 I2Caddress FlapRegistry::findFreeAddress(I2Caddress minAddr, I2Caddress maxAddr) { //  I²C Range for slaves
+    RegistryLock _lock;                                                         // protect map read during scan
     for (I2Caddress addr = minAddr; addr <= maxAddr; ++addr) {
         if (g_slaveRegistry.find(addr) == g_slaveRegistry.end()) {
             return addr;                                                        // free address found

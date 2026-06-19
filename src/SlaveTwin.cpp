@@ -1634,7 +1634,8 @@ void SlaveTwin::printSlaveReadyInfo() {
  * updates Registry with Twin's actual member variable: _parameter
  */
 void SlaveTwin::synchSlaveRegistry() {
-    auto it = g_slaveRegistry.find(_slaveAddress);                              // search in registry
+    RegistryLock _lock;                                                         // protect device pointer against concurrent deRegisterDevice
+    auto         it = g_slaveRegistry.find(_slaveAddress);                      // search in registry
     if (it != g_slaveRegistry.end() && it->second != nullptr) {                 // fist check if device is registered
 
         I2CSlaveDevice* device = it->second;
