@@ -32,6 +32,7 @@
 #include "esp_bt.h"
 
 void flapRegistryMutexInit();                                                   // defined in FlapRegistry.cpp; create registry mutex before tasks start
+void ligaSnapshotMutexInit();                                                   // defined in Liga.cpp; create snapshot mutex before tasks start
 
 /**
  * @brief General setup to start ESP32
@@ -40,6 +41,7 @@ void flapRegistryMutexInit();                                                   
 void setup() {
     traceSemaphore = xSemaphoreCreateMutex();                                   // Semaphore for trace messages
     flapRegistryMutexInit();                                                    // protect g_slaveRegistry before any task starts
+    ligaSnapshotMutexInit();                                                    // protect snap[]/snapshotIndex before any task starts
     g_masterBooted = true;                                                      // true, until first scan_i2c_bus
 
     masterIntroduction();                                                       // Wellcome to the world

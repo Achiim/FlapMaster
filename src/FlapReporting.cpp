@@ -53,7 +53,12 @@ FlapReporting::FlapReporting() {}
 
 // trace liga tabelle
 void FlapReporting::reportLigaTable() {
-    renderLigaTable(snap[snapshotIndex ^ 1]);
+    LigaSnapshot local;
+    {
+        LigaSnapshotLock _lock;                                                 // copy under lock, render outside (short critical section)
+        local = snap[snapshotIndex ^ 1];
+    }
+    renderLigaTable(local);
 };
 
 // ==== UTF-8 helpers: crop by code points (not bytes), pad with spaces ====

@@ -555,8 +555,11 @@ void ParserClass::toggleLeague() {
         }
     #endif
 
-    snap[snapshotIndex].clear();                                                // clear actual snapshot
-    snap[snapshotIndex ^ 1].clear();                                            // clear other snapshot
+    {
+        LigaSnapshotLock _lock;                                                 // protect snapshot reset against Liga/Report/Web tasks
+        snap[snapshotIndex].clear();                                            // clear actual snapshot
+        snap[snapshotIndex ^ 1].clear();                                        // clear other snapshot
+    }
     ligaSeason                   = 0;                                           // reset actual Season
     ligaMatchday                 = 0;                                           // reset actual Matchday
     currentLastChangeOfMatchday  = "";                                          // openLigaDB Matchday change state

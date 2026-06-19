@@ -84,6 +84,19 @@ uint32_t         pollManagerStartOfWaiting = 0;                                 
 LigaSnapshot snap[2];                                                           // actual and previous table
 uint8_t      snapshotIndex = 0;                                                 // 0 or 1
 
+/**
+ * @brief mutex protecting snap[]/snapshotIndex against concurrent task access
+ */
+SemaphoreHandle_t g_ligaSnapshotMutex = nullptr;
+
+/**
+ * @brief create the snapshot mutex once; call from setup() before any task starts
+ */
+void ligaSnapshotMutexInit() {
+    if (!g_ligaSnapshotMutex)
+        g_ligaSnapshotMutex = xSemaphoreCreateMutex();
+}
+
 uint8_t currScoreTeam1 = 0;                                                     // current score of team 1
 uint8_t currScoreTeam2 = 0;                                                     // current score of team 2
 uint8_t prevScoreTeam1 = 0;                                                     // previous score of team 1
@@ -1553,11 +1566,11 @@ esp_err_t _http_event_handler_pollForTable(esp_http_client_event_t* evt) {
                 break;
             }
 
-            LigaSnapshot& snapshot = snap[snapshotIndex];                       // local point to snap to be used
-            snapshotIndex ^= 1;                                                 // Toggle between 0 und 1
-            snapshot.clear();                                                   // Reset actual-Snapshot
+            LigaSnapshotLock _lock;                                             // serialize fill+publish against Report/Web readers
+            LigaSnapshot&    snapshot = snap[snapshotIndex];                    // fill the back buffer (the one readers are NOT reading)
+            snapshot.clear();                                                   // Reset back-buffer (flip happens AFTER the fill)
 
-            JsonArray table    = doc.as<JsonArray>();                           // read JSON-Data into snap[snapshotIndex]
+            JsonArray table    = doc.as<JsonArray>();                           // read JSON-Data into the back buffer
             snapshot.teamCount = (table.size() > (size_t)ligaMaxTeams)          // auf gefuellte Zeilen begrenzen (rows[LIGA3_MAX_TEAMS])
                                      ? (uint8_t)ligaMaxTeams
                                      : (uint8_t)table.size();
@@ -1591,6 +1604,8 @@ esp_err_t _http_event_handler_pollForTable(esp_http_client_event_t* evt) {
 
                 // Serial.printf("Platz %d: %s Punkte: %d TD: %d\n", row.pos, row.team, row.pkt, row.diff);
             }
+
+            snapshotIndex ^= 1;                                                // publish: flip only AFTER the back buffer is fully filled
 
             jsonBufferPrepared = false;
             realJsonBufferSize = 0;
@@ -2137,7 +2152,10 @@ void processPollScope(PollScope scope) {
         case CALC_LIVE_TABLE: {
             LigaSnapshot baseTable;
             LigaSnapshot tempLiveTable;
-            memcpy(&baseTable, &snap[snapshotIndex ^ 1], sizeof(LigaSnapshot));
+            {
+                LigaSnapshotLock _lock;                                         // consistent read against concurrent fill/clear
+                memcpy(&baseTable, &snap[snapshotIndex ^ 1], sizeof(LigaSnapshot));
+            }
             if (recalcLiveTable(baseTable, tempLiveTable))                      // recalculate table with live goals
                 printLigaLiveTable(tempLiveTable);                              // print recalculated live table
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -2145,22 +2163,25 @@ void processPollScope(PollScope scope) {
         }
 
         case CALC_LEADER_CHANGE: {
-            const LigaRow* oldLeaderOut = nullptr;
-            const LigaRow* newLeaderOut = nullptr;
+            const LigaRow*   oldLeaderOut = nullptr;
+            const LigaRow*   newLeaderOut = nullptr;
+            LigaSnapshotLock _lock;                                             // consistent read against toggleLeague clear
             Liga->detectLeaderChange(snap[snapshotIndex], snap[snapshotIndex ^ 1], &oldLeaderOut, &newLeaderOut);
             break;
         }
 
         case CALC_RELEGATION_GHOST_CHANGE: {
-            const LigaRow* oldRZOut = nullptr;
-            const LigaRow* newRZOut = nullptr;
+            const LigaRow*   oldRZOut = nullptr;
+            const LigaRow*   newRZOut = nullptr;
+            LigaSnapshotLock _lock;                                             // consistent read against toggleLeague clear
             Liga->detectRelegationGhostChange(snap[snapshotIndex], snap[snapshotIndex ^ 1], &oldRZOut, &newRZOut);
             break;
         }
 
         case CALC_RED_LANTERN_CHANGE: {
-            const LigaRow* oldRLOut = nullptr;
-            const LigaRow* newRLOut = nullptr;
+            const LigaRow*   oldRLOut = nullptr;
+            const LigaRow*   newRLOut = nullptr;
+            LigaSnapshotLock _lock;                                             // consistent read against toggleLeague clear
             Liga->detectRedLanternChange(snap[snapshotIndex], snap[snapshotIndex ^ 1], &oldRLOut, &newRLOut);
             break;
         }

@@ -148,8 +148,11 @@ void ligaTask(void* pvParameters) {
     ligaMatchday   = 0;
     isSomeThingNew = false;
 
-    snap[snapshotIndex].clear();
-    snap[snapshotIndex ^ 1].clear();
+    {
+        LigaSnapshotLock _lock;                                                 // protect snapshot reset against Report/Web readers
+        snap[snapshotIndex].clear();
+        snap[snapshotIndex ^ 1].clear();
+    }
 
     if (!initLigaTask()) {
         #ifdef ERRORVERBOSE

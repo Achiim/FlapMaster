@@ -22,6 +22,8 @@
 #include "TracePrint.h"
 #include "ArduinoJson.h"
 #include "esp_http_client.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // ==== defines ====
 #define flapUserAgent "Liga Flap Display V1.0 ESP32"
@@ -272,6 +274,27 @@ extern bool             isSomeThingNew;                                         
 // openLigaDB data
 extern LigaSnapshot snap[2];                                                    // current and previus table snapshot
 extern uint8_t      snapshotIndex;                                              // 0 oder 1
+
+// ----------------------------
+// Concurrency guard for snap[]/snapshotIndex: written by the Liga task (table fill + index flip) and the
+// Parser task (toggleLeague clear), read by the Report/Web tasks. A mutex serializes every access so readers
+// never see a half-filled table. ligaSnapshotMutexInit() must run once in setup() before any task starts.
+extern SemaphoreHandle_t g_ligaSnapshotMutex;
+void                     ligaSnapshotMutexInit();                               // create the snapshot mutex (call once in setup)
+
+class LigaSnapshotLock {                                                        // RAII lock for snap[]/snapshotIndex
+   public:
+    LigaSnapshotLock() {
+        if (g_ligaSnapshotMutex)
+            xSemaphoreTake(g_ligaSnapshotMutex, portMAX_DELAY);
+    }
+    ~LigaSnapshotLock() {
+        if (g_ligaSnapshotMutex)
+            xSemaphoreGive(g_ligaSnapshotMutex);
+    }
+    LigaSnapshotLock(const LigaSnapshotLock&)            = delete;              // non-copyable
+    LigaSnapshotLock& operator=(const LigaSnapshotLock&) = delete;
+};
 
 extern int               ligaSeason;                                            // global actual Season
 extern int               ligaMatchday;                                          // global actual Matchday
