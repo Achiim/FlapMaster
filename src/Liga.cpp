@@ -32,7 +32,7 @@
 #define WIFI_PASS "DEIN_PASS"
 
 // initialize global variables
-char   jsonBuffer[24 * 1024];                                                   // buffer for deserialization in event-handlers
+char   jsonBuffer[32 * 1024];                                                   // buffer for deserialization in event-handlers
 size_t jsonBufferPos                = 0;                                        // write position in json buffer
 bool   jsonBufferPrepared           = false;                                    // bupper not preparted
 int    realJsonBufferSize           = 0;                                        // cunked buffers size cummulated

@@ -254,7 +254,6 @@ static const DfbMap DFB2[] PROGMEM = {{"Hertha BSC", "BSC", 19},           {"VfL
                                       {"Preußen Münster", "PRM", 24},      {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
 
 // HTTP request and evaluation
-extern char   jsonBufferChar[32 * 1024];                                        // buffer for deserialization in event-handlers
 extern size_t jsonBufferPos;
 extern bool   jsonBufferPrepared;                                               // flag is buffer space allready prepared
 extern int    realJsonBufferSize;                                               // cunked buffers size cummulated
