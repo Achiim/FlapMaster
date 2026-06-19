@@ -41,14 +41,14 @@ decode_results results;
  *
  */
 RemoteControl::RemoteControl() {
-    #ifdef IRVERBOSE
-        {
-        TraceScope trace;                                                       // use semaphore to protect this block
+#ifdef IRVERBOSE
+    {
+        TraceScope trace;  // use semaphore to protect this block
         controlPrintln("RemoteControl instance created");
-        }
-    #endif
-    _lastKey   = Key21::UNKNOWN;                                                // no key pressed on remote control
-    _actualKey = Key21::NONE;                                                   // no key pressed on remote control
+    }
+#endif
+    _lastKey   = Key21::UNKNOWN;  // no key pressed on remote control
+    _actualKey = Key21::NONE;     // no key pressed on remote control
 };
 
 // ---------------------
@@ -59,13 +59,13 @@ RemoteControl::RemoteControl() {
 void RemoteControl::getRemote() {
     sendIRcodeToParser();
     if (_lastGetKeyCode != 0) {
-        #ifdef IRVERBOSE
-            {
+#ifdef IRVERBOSE
+        {
             TraceScope trace;
             controlPrint("IR code received ");
-            Serial.println(_lastGetKeyCode);                                    // trace all raw data
-            }
-        #endif
+            Serial.println(_lastGetKeyCode);  // trace all raw data
+        }
+#endif
         _lastGetKeyCode = 0;
     }
 };
@@ -78,11 +78,11 @@ void RemoteControl::getRemote() {
 void RemoteControl::sendIRcodeToParser() {
     if (irController.decode(&results)) {
         _lastGetKeyCode = results.value;
-        if (g_parserQueue != nullptr) {                                         // if queue exists
+        if (g_parserQueue != nullptr) {  // if queue exists
             xQueueOverwrite(g_parserQueue,
-                            &_lastGetKeyCode);                                  // send all other keys to all registered twin queues
+                            &_lastGetKeyCode);  // send all other keys to all registered twin queues
         }
-        irController.resume();                                                  // prepare next ir receive
+        irController.resume();  // prepare next ir receive
     }
 }
 
@@ -98,39 +98,39 @@ Key21 RemoteControl::ircodeToKey21(uint64_t ircode) {
     Key21    key;
     uint32_t now = millis();
 
-    if (ircode == 0xFFFFFFFFFFFFFFFF)                                           // Filter repeat signal FFFFF...FFF
+    if (ircode == 0xFFFFFFFFFFFFFFFF)  // Filter repeat signal FFFFF...FFF
         return Key21::NONE;
 
-    if (ircode == _lastCode && (now - _lastTime) < DEBOUNCE_CONTROL_REMOTE) {   // Filter debouncing
+    if (ircode == _lastCode && (now - _lastTime) < DEBOUNCE_CONTROL_REMOTE) {  // Filter debouncing
         return Key21::NONE;
     }
 
-    key = Control->decodeIR(ircode);                                            // convert to Key21
+    key = Control->decodeIR(ircode);  // convert to Key21
     if ((int)key < (int)Key21::NONE || (int)key > (int)Key21::UNKNOWN) {
-        _lastTime = now;                                                        // remember presstime
-        _lastCode = ircode;                                                     // rember this pressed code as last one
+        _lastTime = now;     // remember presstime
+        _lastCode = ircode;  // rember this pressed code as last one
         return Key21::NONE;
     }
 
     if (key != Key21::UNKNOWN && key != Key21::NONE) {
-        #ifdef IRVERBOSE
-            {
-            TraceScope trace;                                                   // use semaphore to protect this block
+#ifdef IRVERBOSE
+        {
+            TraceScope trace;  // use semaphore to protect this block
             controlPrint("RemoteControl::key recognized: ");
             Serial.print((int)key);
             Serial.print(" (0x");
             Serial.print(ircode, HEX);
             Serial.print(") - ");
-            Serial.println(Control->key21ToString(key));                        // make it visable
-            }
-        #endif
+            Serial.println(Control->key21ToString(key));  // make it visable
+        }
+#endif
         _lastTime = now;
         _lastCode = ircode;
-        return key;                                                             // this is the valide key21::key
+        return key;  // this is the valide key21::key
     }
     _lastTime = now;
     _lastCode = ircode;
-    return Key21::NONE;                                                         // filter unknown to NONE
+    return Key21::NONE;  // filter unknown to NONE
 }
 
 // ---------------------
