@@ -444,7 +444,7 @@ uint32_t getPollDelay(PollMode mode) {
     int sec          = totalseconds % 60;
 
     // Log the current polling mode and delay in minutes and seconds
-    Liga->ligaPrintln("PollManager is in mode %S and will wait for %d minutes %02d seconds", pollModeToString(currentPollMode), min, sec);
+    Liga->ligaPrintln("PollManager is in mode %s and will wait for %d minutes %02d seconds", pollModeToString(currentPollMode), min, sec);
     return pollWaitTime;
 }
 
