@@ -1483,6 +1483,8 @@ bool LigaTable::pollForChanges() {
     client = nullptr;
 
     if (err != ESP_OK) {
+        if (err == ESP_ERR_HTTP_CONNECT)
+            ligaConnectionRefused = true;                                       // back off 3-4 min instead of busy-looping while offline
         #ifdef ERRORVERBOSE
             {
             TraceScope trace;
@@ -1702,6 +1704,8 @@ bool LigaTable::pollForCurrentMatchday() {
     client = nullptr;
 
     if (err != ESP_OK) {
+        if (err == ESP_ERR_HTTP_CONNECT)
+            ligaConnectionRefused = true;                                       // back off 3-4 min instead of busy-looping while offline
         #ifdef ERRORVERBOSE
             {
             TraceScope trace;
