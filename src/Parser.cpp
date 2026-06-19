@@ -21,8 +21,6 @@
 // ---------------------
 // Constructor for Parser
 ParserClass::ParserClass() {
-    TwinCommand _mappedCommand;
-
     _receivedEvent.key           = Key21::NONE;                                 // reset received key
     _receivedEvent.type          = CLICK_NONE;                                  // reset received type
     _mappedCommand.twinCommand   = TWIN_NO_COMMAND;                             // init with no command
