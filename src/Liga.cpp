@@ -2104,8 +2104,8 @@ void processPollScope(PollScope scope) {
         case FETCH_NEXT_MATCH_LIST:
             Liga->pollForNextMatchList(0);                                      // fetch actual live matches from openLigaDB current matchday
             vTaskDelay(pdMS_TO_TICKS(1000));
-            if (ligaNextMatchCount <= 0)
-                Liga->pollForNextMatchList(1);                                  // fetch actual live matches from openLigaDB next matchday
+            if (ligaNextMatchCount <= 0 && ligaMatchday + 1 <= (ligaMaxTeams - 1) * 2)
+                Liga->pollForNextMatchList(1);                                  // only probe next matchday if it exists (not past season end)
             break;
 
         case FETCH_NEXT_KICKOFF: {
