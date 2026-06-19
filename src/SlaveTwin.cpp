@@ -699,7 +699,11 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
     prepareI2Cdata(mess, data);
     esp_err_t error = ESP_FAIL;
 
-    takeI2CSemaphore();                                                         // take semaphore
+    if (!takeI2CSemaphore()) {                                                  // bus busy -> do NOT access unsynchronized and do NOT give a mutex we never took
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // count as I2C error
+        return;
+    }
 
     #ifdef I2CMASTERVERBOSE
         {
@@ -717,7 +721,7 @@ void SlaveTwin::i2cLongCommand(LongMessage mess) {
     i2c_master_write_byte(cmd, (_slaveAddress << 1) | I2C_MASTER_WRITE, true);  // set i2c address of flap module
     i2c_master_write(cmd, data, sizeof(LongMessage), true);                     // send buffer to slave
     i2c_master_stop(cmd);                                                       // set i2c stop condition
-    error = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(1));             // send command chain
+    error = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(30));            // send command chain (was 1ms: too tight, slave clock-stretch caused spurious timeouts)
     i2c_cmd_link_delete(cmd);                                                   // delete command chain
 
     giveI2CSemaphore();                                                         // give semaphore
@@ -782,7 +786,17 @@ esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int
 
     logShortRequest(shortCmd);
     i2c_cmd_handle_t cmd = buildShortCommand(shortCmd, answer, size);
-    takeI2CSemaphore();
+    if (cmd == nullptr) {                                                       // OOM building command link -> failed transaction (no systemHalt)
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // count as I2C error
+        return ESP_ERR_NO_MEM;
+    }
+    if (!takeI2CSemaphore()) {                                                  // bus busy -> do NOT access unsynchronized
+        i2c_cmd_link_delete(cmd);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // count as I2C error
+        return ESP_ERR_TIMEOUT;
+    }
     ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(30));
     giveI2CSemaphore();
     i2c_cmd_link_delete(cmd);
@@ -815,13 +829,11 @@ esp_err_t SlaveTwin::i2cShortCommand(ShortMessage shortCmd, uint8_t* answer, int
  */
 i2c_cmd_handle_t SlaveTwin::buildShortCommand(ShortMessage shortCmd, uint8_t* answer, int size) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    if (cmd == nullptr)                                                         // OOM -> caller treats as failed transaction instead of halting the whole system
+        return nullptr;
 
-    if (i2c_master_start(cmd) != ESP_OK)
-        systemHalt("FATAL ERROR: I2C start failed", 3);
-
-    if (i2c_master_write_byte(cmd, (_slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
-        systemHalt("FATAL ERROR: write address failed", 3);
-
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (_slaveAddress << 1) | I2C_MASTER_WRITE, true);
     i2c_master_write_byte(cmd, shortCmd, true);
 
     i2c_master_start(cmd);                                                      // repeated start
@@ -907,15 +919,24 @@ void SlaveTwin::logShortError(ShortMessage cmd, esp_err_t err) {
  */
 esp_err_t SlaveTwin::i2cMidCommand(MidMessage midCmd, I2Caddress slaveaddress, uint8_t* answer, int size) {
     esp_err_t ret = ESP_FAIL;
-    takeI2CSemaphore();
 
     logMidRequest(midCmd, slaveaddress);
 
     i2c_cmd_handle_t cmd = buildMidCommand(midCmd, slaveaddress, answer, size);
-    ret                  = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
-    i2c_cmd_link_delete(cmd);
-
+    if (cmd == nullptr) {                                                       // OOM building command link -> failed transaction (no systemHalt)
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // count as I2C error
+        return ESP_ERR_NO_MEM;
+    }
+    if (!takeI2CSemaphore()) {                                                  // bus busy -> do NOT access unsynchronized
+        i2c_cmd_link_delete(cmd);
+        if (DataEvaluation)
+            DataEvaluation->increment(0, 0, 0, 1);                              // count as I2C error
+        return ESP_ERR_TIMEOUT;
+    }
+    ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(200));
     giveI2CSemaphore();
+    i2c_cmd_link_delete(cmd);
     if (DataEvaluation)
         DataEvaluation->increment(2, 1, 0);                                     // 2 accesses, 1 byte sent
 
@@ -945,12 +966,11 @@ esp_err_t SlaveTwin::i2cMidCommand(MidMessage midCmd, I2Caddress slaveaddress, u
  */
 i2c_cmd_handle_t SlaveTwin::buildMidCommand(MidMessage midCmd, I2Caddress slaveAddress, uint8_t* answer, int size) {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    if (cmd == nullptr)                                                         // OOM -> caller treats as failed transaction instead of halting the whole system
+        return nullptr;
 
-    if (i2c_master_start(cmd) != ESP_OK)
-        Master->systemHalt("FATAL ERROR: I2C midCommand start failed", 2);
-
-    if (i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true) != ESP_OK)
-        Master->systemHalt("FATAL ERROR: write address failed", 2);
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, (slaveAddress << 1) | I2C_MASTER_WRITE, true);
 
     uint8_t data[2];
     data[0] = midCmd.command;
