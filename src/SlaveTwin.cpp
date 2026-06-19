@@ -618,8 +618,8 @@ void SlaveTwin::setOffset() {
     if (_parameter.offset + _adjustOffset >= 0 && _parameter.offset + _adjustOffset <= _parameter.steps) {
         _parameter.offset += _adjustOffset;                                     // add adjustment to stored offset
     }
-    if (_parameter.offset < 0 || _parameter.offset > _parameter.steps)
-        _parameter.offset = 0;                                                  // reset parameter.offset to zero
+    if (_parameter.offset > _parameter.steps)                                   // (unterer Rand schon oben geprueft; offset ist uint16_t)
+        _parameter.offset = 0;                                                  // ueber Maximum -> auf 0 zuruecksetzen
     _adjustOffset = 0;                                                          // reset adjustement to zero
     twinPrintln("reset adjustment offset to 0");
     twinPrintln("save: offset = %d | ms/Rev = %d | St/Rev = %d", _parameter.offset, _parameter.speed, _parameter.steps);
