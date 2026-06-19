@@ -2113,6 +2113,13 @@ void processPollScope(PollScope scope) {
                 Liga->ligaPrintln("no need to fetch next kickoff if a match is live");
                 break;                                                          // no need to fetch next kickoff if a match is live
             }
+            // At season end (last matchday reached, no upcoming/planned matches) the league has no next match;
+            // skip the query to avoid a meaningless InvalidInput response. Keep relaxed polling via nextKickoffFarAway.
+            if (ligaMatchday >= (ligaMaxTeams - 1) * 2 && ligaNextMatchCount <= 0 && ligaPlanMatchCount <= 0) {
+                Liga->ligaPrintln("no next kickoff: season has ended (matchday %d is the last)", ligaMatchday);
+                nextKickoffFarAway = true;                                      // no upcoming match -> stay in relaxed polling
+                break;
+            }
             Liga->pollForNextKickoff();                                         // get next kickoff time from openLigaDB
             vTaskDelay(pdMS_TO_TICKS(2000));
             break;
