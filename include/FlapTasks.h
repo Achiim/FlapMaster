@@ -72,6 +72,7 @@ extern TaskHandle_t g_ligaHandle;                                               
 extern TaskHandle_t g_webServerHandle;                                          // RTOS Task Handler
 extern TaskHandle_t g_parserHandle;                                             // RTOS Task Handler
 extern TaskHandle_t g_registryHandle;                                           // RTOS Task Handler
+extern TaskHandle_t g_availCheckHandle;                                         // RTOS Task Handler (availability worker, off the timer daemon)
 extern TaskHandle_t g_reportHandle;                                             // RTOS Task Handler
 extern TaskHandle_t g_statisticHandle;                                          // RTOS Task Handler
 extern TaskHandle_t g_twinHandle[numberOfTwins];                                // RTOS Task Handler
@@ -95,8 +96,11 @@ extern TimerHandle_t ligaScanTimer;                                             
 
 // Global Timer-Callbacks
 extern void regiScanCallback(TimerHandle_t xTimer);                             // execute short Time i2c bus scan
-extern void availCheckCallback(TimerHandle_t xTimer);                           // execute Availability Check
+extern void availCheckCallback(TimerHandle_t xTimer);                           // notify availCheckTask (runs the blocking check off the timer daemon)
 extern void ligaScanCallback(TimerHandle_t xTimer);                             // notify liga scan check
+
+// Availability worker task (does availabilityCheck/registerUnregistered/repair off the timer daemon)
+extern void availCheckTask(void* pvParameters);
 
 // Global Scan modes
 enum scanModes { SCAN_FAST, SCAN_SHORT, SCAN_LONG, NO_SCAN };

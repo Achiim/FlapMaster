@@ -33,6 +33,7 @@ TaskHandle_t g_parserHandle        = nullptr;
 TaskHandle_t g_ligaHandle          = nullptr;
 TaskHandle_t g_webServerHandle     = nullptr;
 TaskHandle_t g_registryHandle      = nullptr;
+TaskHandle_t g_availCheckHandle    = nullptr;
 TaskHandle_t g_reportHandle        = nullptr;
 TaskHandle_t g_statisticHandle     = nullptr;
 TaskHandle_t g_twinHandle[numberOfTwins];
@@ -143,39 +144,59 @@ void regiScanCallback(TimerHandle_t xTimer) {
  * @param xTimer associated timer
  */
 void availCheckCallback(TimerHandle_t xTimer) {
-    #ifdef AVAILABILITYVERBOSE
-        {
-        TraceScope trace;
-        Register->registerPrintln("======= Device-Availability Check =============");
-        }
-    #endif
+    // Runs in the FreeRTOS timer-service (daemon) task. Do NOT block here (the original body used
+    // vTaskDelay + blocking I2C, which stalled all software timers). Just trigger the worker task.
+    if (g_availCheckHandle)
+        xTaskNotifyGive(g_availCheckHandle);
+}
 
-    Register->availabilityCheck();
-    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
-    Register->registerUnregistered();                                           // register devices that are known but not yet registered
-    vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
-    Register->repairOutOfPoolDevices();                                         // reassign devices that are outside the address pool
+// ----------------------------
 
-    if (Register->size() >= Register->capacity()) {
-        if (g_scanMode != SCAN_LONG) {
-            xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), 0);
-            #ifdef MASTERVERBOSE
-                {
-                TraceScope trace;
-                masterPrintln("all devices %d from %d registered- Registry is going back to long scan", Register->size(), Register->capacity());
-                }
-            #endif
-        }
-    } else {
-        if (g_scanMode != SCAN_SHORT) {
-            xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), 0);
-            #ifdef MASTERVERBOSE
-                {
-                TraceScope trace;
-                masterPrintln("missing devices %d from %d - Registry is going back to short scan", Register->capacity() - Register->size(),
-                Register->capacity());
-                }
-            #endif
+/**
+ * @brief Availability worker task. Triggered by availCheckCallback via task notification, it runs the
+ * device-availability check, registers known-but-unregistered devices and repairs out-of-pool devices.
+ * Moved out of the timer daemon so its vTaskDelay grace periods and blocking I2C no longer stall timers.
+ *
+ * @param pvParameters Unused (FreeRTOS task prototype requirement).
+ */
+void availCheckTask(void* pvParameters) {
+    while (true) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);                                // wait for trigger from availCheckCallback
+
+        #ifdef AVAILABILITYVERBOSE
+            {
+            TraceScope trace;
+            Register->registerPrintln("======= Device-Availability Check =============");
+            }
+        #endif
+
+        Register->availabilityCheck();
+        vTaskDelay(pdMS_TO_TICKS(200));                                         // short grace period
+        Register->registerUnregistered();                                       // register devices that are known but not yet registered
+        vTaskDelay(pdMS_TO_TICKS(200));                                         // short grace period
+        Register->repairOutOfPoolDevices();                                     // reassign devices that are outside the address pool
+
+        if (Register->size() >= Register->capacity()) {
+            if (g_scanMode != SCAN_LONG) {
+                xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(LONG_SCAN_COUNTDOWN), 0);
+                #ifdef MASTERVERBOSE
+                    {
+                    TraceScope trace;
+                    masterPrintln("all devices %d from %d registered- Registry is going back to long scan", Register->size(), Register->capacity());
+                    }
+                #endif
+            }
+        } else {
+            if (g_scanMode != SCAN_SHORT) {
+                xTimerChangePeriod(regiScanTimer, pdMS_TO_TICKS(SHORT_SCAN_COUNTDOWN), 0);
+                #ifdef MASTERVERBOSE
+                    {
+                    TraceScope trace;
+                    masterPrintln("missing devices %d from %d - Registry is going back to short scan", Register->capacity() - Register->size(),
+                    Register->capacity());
+                    }
+                #endif
+            }
         }
     }
 }

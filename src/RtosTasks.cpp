@@ -287,6 +287,9 @@ void twinRegister(void* pvParameters) {
 
     Register = new FlapRegistry();
 
+    // worker task that runs the (blocking) availability check off the timer daemon; must exist before availCheckTimer fires
+    xTaskCreate(availCheckTask, "AvailCheck", STACK_REGISTRY, NULL, PRIO_REGISTRY, &g_availCheckHandle);
+
     Register->registerDevice();                                                 // initial full scan for known devices
     vTaskDelay(pdMS_TO_TICKS(200));                                             // short grace period
     Register->registerUnregistered();                                           // register devices that are known but not yet registered
