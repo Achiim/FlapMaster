@@ -121,6 +121,7 @@ void masterRemoteControl() {
         masterPrintln("create Receiver object to receive IR Key21 remote control");
         }
     #endif
+    Control = new RemoteControl();                                              // create object BEFORE the RTOS tasks (Parser) use it
     // Create IR Receiver
     irController.enableIRIn();                                                  // start remote control receiver
 }

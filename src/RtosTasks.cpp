@@ -214,7 +214,7 @@ void ligaTask(void* pvParameters) {
  * @param pvParameters
  */
 void remoteControl(void* pvParameters) {
-    Control = new RemoteControl();                                              // create object for task
+    // Control wird bereits in masterRemoteControl() (setup) erzeugt -> hier kein new mehr
     while (true) {
         Control->getRemote();
         vTaskDelay(pdMS_TO_TICKS(10));                                          // Delay for 10ms
