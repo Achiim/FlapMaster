@@ -599,7 +599,7 @@ esp_err_t _http_event_handler_pollForNextMatchList(esp_http_client_event_t* evt)
                 if (kickoff <= now)
                     continue;                                                   ///< Ignore matches in the past
 
-                if (diff == minDiff && ligaNextMatchCount < ligaMaxTeams) {
+                if (diff == minDiff && ligaNextMatchCount < MAX_MATCHES_PER_MATCHDAY) {
                     // Store match as "next" match
                     nextMatches[ligaNextMatchCount].matchID = matchID;
                     nextMatches[ligaNextMatchCount].kickoff = kickoff;
@@ -611,7 +611,7 @@ esp_err_t _http_event_handler_pollForNextMatchList(esp_http_client_event_t* evt)
 
                     Liga->ligaPrintln("next Match %u: Kickoff %s | %s vs %s", matchID, kickoffStr, team1, team2);
                     ligaNextMatchCount++;
-                } else {
+                } else if (ligaPlanMatchCount < MAX_MATCHES_PER_MATCHDAY) {
                     // Store match as "planned" match
                     planMatches[ligaPlanMatchCount].matchID = matchID;
 
@@ -1556,7 +1556,9 @@ esp_err_t _http_event_handler_pollForTable(esp_http_client_event_t* evt) {
             snapshot.clear();                                                   // Reset actual-Snapshot
 
             JsonArray table    = doc.as<JsonArray>();                           // read JSON-Data into snap[snapshotIndex]
-            snapshot.teamCount = table.size();                                  // number of teams
+            snapshot.teamCount = (table.size() > (size_t)ligaMaxTeams)          // auf gefuellte Zeilen begrenzen (rows[LIGA3_MAX_TEAMS])
+                                     ? (uint8_t)ligaMaxTeams
+                                     : (uint8_t)table.size();
 
             snapshot.season       = ligaSeason;
             snapshot.matchday     = ligaMatchday;
