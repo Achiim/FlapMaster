@@ -544,12 +544,12 @@ uint32_t FlapReporting::getNextAvailabilityRemainingMs() {
 uint32_t FlapReporting::getNextLigaScanRemainingMs() {
     // Quick outs: no timer or not active → no countdown
     uint32_t now       = millis();
-    uint32_t remaining = (pollManagerStartOfWaiting + pollManagerDynamicWait) - now;
+    int32_t  remaining = (int32_t)(pollManagerStartOfWaiting + pollManagerDynamicWait - now);  // signed Delta (tick-wrap-sicher)
 
     if (remaining < 0)
-        remaining = 0;                                                          // falls schon abgelaufen
+        remaining = 0;                                                          // schon abgelaufen -> kein Countdown
 
-    return remaining;                                                           // kein Timer aktiv
+    return (uint32_t)remaining;
 }
 
 // ----------------------------
