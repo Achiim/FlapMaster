@@ -32,7 +32,7 @@
 #include "freertos/semphr.h"
 #include "TracePrint.h"
 
-#define IR_RECEIVER_PIN 14                                                      // The ESP32 pin GPIO14 connected to IR controller
+#define IR_RECEIVER_PIN 13                                                      // The ESP32 pin GPIO13 connected to IR controller (per schematic, verified by test)
 #define DEBOUNCE_CONTROL_REMOTE 50                                              // ms
 #define DOUBLE_CLICK_THRESHOLD 300                                              // ms
 #define REPEAT_WINDOW 200                                                       // ms
