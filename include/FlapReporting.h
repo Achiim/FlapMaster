@@ -39,8 +39,8 @@ constexpr int W_PKT   = 3;                                                      
 constexpr int W_W     = 2;                                                      // won 0..99
 constexpr int W_L     = 2;                                                      // lost 0..99
 constexpr int W_D     = 2;                                                      // drawn 0..99
-constexpr int W_OG    = 2;                                                      // own goals 0..99
-constexpr int W_G     = 2;                                                      // goals 0..99
+constexpr int W_OG    = 3;                                                      // goals against 0..999 (3-stellig, z.B. 122)
+constexpr int W_G     = 3;                                                      // goals 0..999 (3-stellig, z.B. 122)
 
 // globar routines for JSON Format
 void   sendStatusHtmlStream(const char* filename);
