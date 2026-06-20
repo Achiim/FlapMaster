@@ -42,7 +42,7 @@
 // Task Stack sizes
 #define STACK_WEB_SERVER 5 * 1024                                               // Web Server Task (20kB)
 #define STACK_LIGA 5.5 * 1024                                                   // Liga Task (22kB)
-#define STACK_TWIN 3 * 1024                                                     // Twin Tasks 0-n (3 kB per Task, in bytes)
+#define STACK_TWIN 2 * 1024                                                     // Twin Tasks 0-n (2 kB per Task, in bytes; 1.5k reichte ohne REGISTRYVERBOSE knapp)
 #define STACK_REGISTRY 2 * 1024                                                 // Registry Task (8 kB)
 #define STACK_REPORT 8 * 1024                                                   // Reporting Task (32 kB)
 #define STACK_REMOTE 2 * 1024                                                   // Remote Control Task (8 kB)
