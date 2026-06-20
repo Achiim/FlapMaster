@@ -587,7 +587,17 @@ void FlapReporting::reportMemory() {
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
 
-    snprintf(buffer, sizeof(buffer), "║ Chip Model                              : %1u                    ║", chip_info.revision);
+    const char* chipModel;
+    switch (chip_info.model) {
+        case CHIP_ESP32:   chipModel = "ESP32";    break;
+        case CHIP_ESP32S2: chipModel = "ESP32-S2"; break;
+        case CHIP_ESP32S3: chipModel = "ESP32-S3"; break;
+        case CHIP_ESP32C3: chipModel = "ESP32-C3"; break;
+        default:           chipModel = "ESP32?";   break;
+    }
+    char chipModelStr[24];
+    snprintf(chipModelStr, sizeof(chipModelStr), "%s rev %u", chipModel, chip_info.revision);
+    snprintf(buffer, sizeof(buffer), "║ Chip Model                              : %-21s║", chipModelStr);
     Serial.println(buffer);
 
     snprintf(buffer, sizeof(buffer), "║ Chip Cores                              : %1u                    ║", chip_info.cores);
