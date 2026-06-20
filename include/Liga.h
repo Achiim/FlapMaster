@@ -255,6 +255,15 @@ static const DfbMap DFB2[] PROGMEM = {{"Hertha BSC", "BSC", 19},           {"VfL
                                       {"SC Paderborn 07", "SCP", 23},      {"Holstein Kiel", "KSV", 29},      {"FC Schalke 04", "S04", 34},
                                       {"Preußen Münster", "PRM", 24},      {"DSC Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
 
+// 3. Liga (DFB-Kürzel gepflegt; Flap = -1 = Platzhalter -> erscheint im Report/Web, NICHT auf dem physischen Flap-Display)
+static const DfbMap DFB3[] PROGMEM = {{"VfL Osnabrück", "OSN", -1},          {"Energie Cottbus", "COT", -1},         {"Rot-Weiss Essen", "RWE", -1},
+                                      {"MSV Duisburg", "MSV", -1},           {"Hansa Rostock", "HRO", -1},           {"SC Verl", "SCV", -1},
+                                      {"Alemannia Aachen", "AAC", -1},       {"TSV 1860 München", "M60", -1},        {"SV Wehen Wiesbaden", "WEH", -1},
+                                      {"SV Waldhof Mannheim", "WAL", -1},    {"Viktoria Köln", "VIK", -1},           {"FC Ingolstadt 04", "FCI", -1},
+                                      {"Jahn Regensburg", "REG", -1},        {"VfB Stuttgart II", "VB2", -1},        {"1. FC Saarbrücken", "SAA", -1},
+                                      {"TSG 1899 Hoffenheim II", "HO2", -1}, {"TSV Havelse", "HAV", -1},             {"Erzgebirge Aue", "AUE", -1},
+                                      {"SSV Ulm 1846", "ULM", -1},           {"1. FC Schweinfurt 05", "SFT", -1}};
+
 // HTTP request and evaluation
 extern size_t jsonBufferPos;
 extern bool   jsonBufferPrepared;                                               // flag is buffer space allready prepared

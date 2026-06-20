@@ -1896,6 +1896,9 @@ String dfbCodeForTeamStrict(const String& teamName) {
     for (auto& e : DFB2)
         if (key == e.key)
             return e.code;
+    for (auto& e : DFB3)
+        if (key == e.key)
+            return e.code;
     return "";                                                                  // strict: no match => return empty string
 }
 
@@ -1917,6 +1920,9 @@ int flapForTeamStrict(const String& teamName) {
         if (key == e.key)
             return e.flap;
     for (auto& e : DFB2)
+        if (key == e.key)
+            return e.flap;
+    for (auto& e : DFB3)
         if (key == e.key)
             return e.flap;
     return -1;                                                                  // strict: no match => return -1
