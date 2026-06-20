@@ -539,7 +539,10 @@ bool FlapRegistry::sendToIndex(int idx, const TwinCommand& cmd) const {
         #ifdef ERRORVERBOSE
             {
             TraceScope trace;
-            registerPrintln("sendToIndex: invalid/unregistered index=%d", idx);
+            if (idx < 0)
+                registerPrintln("kein Flap-Device verbunden - Kommando verworfen");
+            else
+                registerPrintln("Flap-Device Index %d nicht registriert - Kommando verworfen", idx);
             }
         #endif
         return false;

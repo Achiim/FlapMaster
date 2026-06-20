@@ -105,7 +105,10 @@ void ParserClass::dispatchToTwins() {
             #ifdef ERRORVERBOSE
                 {
                 TraceScope trace;
-                parserPrintln("UNICAST: send failed (index=%d)", _ds.currentIndex);
+                if (_ds.currentIndex < 0)
+                    parserPrintln("kein Flap-Device verbunden - UNICAST-Kommando verworfen");
+                else
+                    parserPrintln("UNICAST an Index %d fehlgeschlagen - Flap-Device nicht registriert", _ds.currentIndex);
                 }
             #endif
         }
@@ -537,6 +540,7 @@ void ParserClass::mapEvent2Parser(ClickEvent event) {
  *
  */
 void ParserClass::toggleLeague() {
+    const char* fromLeague = leagueName(activeLeague);                          // Ausgangsliga merken (vor dem Umschalten)
     if (activeLeague == League::BL1) {
         activeLeague = League::BL2;
         ligaMaxTeams = LIGA2_MAX_TEAMS;
@@ -548,12 +552,10 @@ void ParserClass::toggleLeague() {
         ligaMaxTeams = LIGA1_MAX_TEAMS;
     }
 
-    #ifdef MASTERVERBOSE
-        {
+    {
         TraceScope trace;
-        parserPrintln("switched to League %s", leagueName(activeLeague));
-        }
-    #endif
+        parserPrintln("Liga gewechselt: %s -> %s", fromLeague, leagueName(activeLeague));
+    }
 
     {
         LigaSnapshotLock _lock;                                                 // protect snapshot reset against Liga/Report/Web tasks

@@ -253,7 +253,7 @@ static const DfbMap DFB2[] PROGMEM = {{"Hertha BSC", "BSC", 19},           {"VfL
                                       {"SpVgg Greuther Fürth", "SGF", 21}, {"Hannover 96", "H96", 27},        {"1. FC Kaiserslautern", "FCK", 32},
                                       {"Karlsruher SC", "KSC", 22},        {"1. FC Magdeburg", "FCM", 28},    {"1. FC Nürnberg", "FCN", 33},
                                       {"SC Paderborn 07", "SCP", 23},      {"Holstein Kiel", "KSV", 29},      {"FC Schalke 04", "S04", 34},
-                                      {"Preußen Münster", "PRM", 24},      {"Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
+                                      {"Preußen Münster", "PRM", 24},      {"DSC Arminia Bielefeld", "DSC", 35},  {"Dynamo Dresden", "DYN", 0}};
 
 // HTTP request and evaluation
 extern size_t jsonBufferPos;
